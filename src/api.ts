@@ -28,12 +28,18 @@ async function httpPostJson<T>(url: string, body: any): Promise<T> {
     return (await res.json()) as T;
 }
 
-export async function apiGetBook(): Promise<ApiBookResponse> {
+/*export async function apiGetBook(): Promise<ApiBookResponse> {
     return httpGetJson<ApiBookResponse>(CFG.BOOK_URL);
+}/**/
+export async function apiGetBook(): Promise<any> {
+    return httpGetJson<any>(CFG.BOOK_URL);
 }
 
-export async function apiGetPending(): Promise<ApiPendingResponse> {
+/*export async function apiGetPending(): Promise<ApiPendingResponse> {
     return httpGetJson<ApiPendingResponse>(CFG.PENDING_URL);
+}/**/
+export async function apiGetPending(): Promise<any> {
+    return httpGetJson<any>(CFG.PENDING_URL);
 }
 
 export async function apiSendOrder(order: { side: Side; price: number; size: number }) {

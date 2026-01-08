@@ -30,9 +30,9 @@ async function main() {
         loopBookRefresh(),
         loopPendingRefresh(),
         loopQuoteMaintenance(),
-        loopCancelRebalance(),
-        loopAggression(),
-    ]);
+        //loopCancelRebalance(),
+        //loopAggression(),
+    ]);/**/
 }
 
 main().catch((e) => {

@@ -22,28 +22,28 @@ export const CFG = {
     ORDERS_URL: envStr("ORDERS_URL", "https://exchange-api.gammaswap.com/api/orders"),
     CANCELS_URL: envStr("CANCELS_URL", "https://exchange-api.gammaswap.com/api/cancels"),
     BOOK_URL: envStr("BOOK_URL", "https://exchange-api.gammaswap.com/api/book/1"),
-    PENDING_URL: envStr("PENDING_URL", "https://exchange-api.gammaswap.com/api/book/1/useraddress"),
+    USER_ADDRESS: envStr("USER_ADDRESS", "0xa829c1D4542F70714B35fFe95a247373329131df"),
+    PENDING_URL: envStr("PENDING_URL", "https://exchange-api.gammaswap.com/api/book/1/0xa829c1D4542F70714B35fFe95a247373329131df"),
 
-    USER_ADDRESS: envStr("USER_ADDRESS", "useraddress"),
     API_KEY: envStr("API_KEY", ""),
     API_SECRET: envStr("API_SECRET", ""),
 
-    HARD_MIN_PRICE: envNum("HARD_MIN_PRICE", 0.01),
-    HARD_MAX_PRICE: envNum("HARD_MAX_PRICE", 0.99),
-    SOFT_MIN_PRICE: envNum("SOFT_MIN_PRICE", 0.10),
-    SOFT_MAX_PRICE: envNum("SOFT_MAX_PRICE", 0.90),
-    CENTER_PRICE: envNum("CENTER_PRICE", 0.50),
+    HARD_MIN_PRICE: envNum("HARD_MIN_PRICE", 10000), // 0.01
+    HARD_MAX_PRICE: envNum("HARD_MAX_PRICE", 990000), // 0.99
+    SOFT_MIN_PRICE: envNum("SOFT_MIN_PRICE", 100000), // 0.1
+    SOFT_MAX_PRICE: envNum("SOFT_MAX_PRICE", 900000), // 0.9
+    CENTER_PRICE: envNum("CENTER_PRICE", 500000), // 0.5
 
-    TICK_SIZE: envNum("TICK_SIZE", 0.001),
+    TICK_SIZE: envNum("TICK_SIZE", 1000),// 0.001
 
     LEVELS_PER_SIDE: Math.max(1, Math.floor(envNum("LEVELS_PER_SIDE", 5))),
-    LEVEL_SPACING_NEAR: envNum("LEVEL_SPACING_NEAR", 0.002),
-    LEVEL_SPACING_GROWTH: envNum("LEVEL_SPACING_GROWTH", 1.25),
+    LEVEL_SPACING_NEAR: envNum("LEVEL_SPACING_NEAR", 2000), // 0.002
+    LEVEL_SPACING_GROWTH: envNum("LEVEL_SPACING_GROWTH", 1.5),
     VARIABILITY_MIN: envNum("VARIABILITY_MIN", 0.85),
     VARIABILITY_MAX: envNum("VARIABILITY_MAX", 1.20),
 
-    QUOTE_BASE_SIZE_MIN: envNum("QUOTE_BASE_SIZE_MIN", 10),
-    QUOTE_BASE_SIZE_MAX: envNum("QUOTE_BASE_SIZE_MAX", 50),
+    QUOTE_BASE_SIZE_MIN: envNum("QUOTE_BASE_SIZE_MIN", 10*1000000), // 10
+    QUOTE_BASE_SIZE_MAX: envNum("QUOTE_BASE_SIZE_MAX", 50*1000000), // 50
     DEPTH_GROWTH: envNum("DEPTH_GROWTH", 1.35),
 
     MAX_PENDING_ORDERS: Math.max(2, Math.floor(envNum("MAX_PENDING_ORDERS", 40))),
@@ -53,7 +53,7 @@ export const CFG = {
     BOOK_REFRESH_MS: envNum("BOOK_REFRESH_MS", 1500),
     PENDING_REFRESH_MS: envNum("PENDING_REFRESH_MS", 4000),
 
-    QUOTE_LOOP_MS: envNum("QUOTE_LOOP_MS", 30000),
+    QUOTE_LOOP_MS: envNum("QUOTE_LOOP_MS", 5000),//30000
     QUOTE_JITTER_MS: envNum("QUOTE_JITTER_MS", 5000),
 
     CANCEL_LOOP_MS: envNum("CANCEL_LOOP_MS", 30000),
@@ -69,14 +69,14 @@ export const CFG = {
     MEANREV_K: envNum("MEANREV_K", 2.0),
 
     USE_LOCAL_LEDGER: envBool("USE_LOCAL_LEDGER", true),
-    START_BASE_BAL: envNum("START_BASE_BAL", 10000),
-    START_QUOTE_BAL: envNum("START_QUOTE_BAL", 10000),
+    START_BASE_BAL: envNum("START_BASE_BAL", 10000 * 1000000),
+    START_QUOTE_BAL: envNum("START_QUOTE_BAL", 10000 * 1000000),
 
-    BASE_RESERVE_MIN: envNum("BASE_RESERVE_MIN", 1500),
-    QUOTE_RESERVE_MIN: envNum("QUOTE_RESERVE_MIN", 1500),
+    BASE_RESERVE_MIN: envNum("BASE_RESERVE_MIN", 1500 * 1000000),
+    QUOTE_RESERVE_MIN: envNum("QUOTE_RESERVE_MIN", 1500 * 1000000),
 
     INV_TARGET: envNum("INV_TARGET", 0),
-    INV_MAX_ABS: envNum("INV_MAX_ABS", 5000),
+    INV_MAX_ABS: envNum("INV_MAX_ABS", 5000 * 1000000),
     INV_SKEW_STRENGTH: envNum("INV_SKEW_STRENGTH", 0.35),
 
     LOG_VERBOSE: envBool("LOG_VERBOSE", true),

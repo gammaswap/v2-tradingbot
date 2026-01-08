@@ -40,11 +40,15 @@ export function nearestOrderAtPrice(pending: Map<string, PendingOrder>, side: Si
 }
 
 export function buildTargetLadderPrices(mid: number): { bids: number[]; asks: number[] } {
+    console.log("===============buildTargetLadderPrices:start==================");
     const bids: number[] = [];
     const asks: number[] = [];
     let spacing = CFG.LEVEL_SPACING_NEAR;
+    console.log("mid:", mid);
+    console.log("spacing:", spacing);
 
     for (let i = 0; i < CFG.LEVELS_PER_SIDE; i++) {
+        console.log("level:i:",i,"spacing:",spacing)
         const bidP = clamp(roundToTick(mid - spacing, "buy"), CFG.HARD_MIN_PRICE, CFG.HARD_MAX_PRICE);
         const askP = clamp(roundToTick(mid + spacing, "sell"), CFG.HARD_MIN_PRICE, CFG.HARD_MAX_PRICE);
         bids.push(bidP);
@@ -52,18 +56,21 @@ export function buildTargetLadderPrices(mid: number): { bids: number[]; asks: nu
         spacing *= CFG.LEVEL_SPACING_GROWTH;
     }
 
+    console.log("===============buildTargetLadderPrices:end==================");
     return { bids, asks };
 }
 
 export function buildTargetSizes(): { bidSizes: number[]; askSizes: number[] } {
+    console.log("===============buildTargetSizes:start==================");
     const base0 = randBetween(CFG.QUOTE_BASE_SIZE_MIN, CFG.QUOTE_BASE_SIZE_MAX);
     const sizes: number[] = [];
     let s = base0;
     for (let i = 0; i < CFG.LEVELS_PER_SIDE; i++) {
         const varMul = randBetween(CFG.VARIABILITY_MIN, CFG.VARIABILITY_MAX);
-        sizes.push(Math.max(0, s * varMul));
+        sizes.push(Math.floor(Math.max(0, s * varMul)));
         s *= CFG.DEPTH_GROWTH;
     }
+    console.log("===============buildTargetSizes:end==================");
     return { bidSizes: sizes.slice(), askSizes: sizes.slice() };
 }
 
@@ -82,7 +89,8 @@ export function canPlaceAsk(size: number): boolean {
 }
 
 export function canPlaceBid(size: number, price: number): boolean {
-    return size * price <= availableQuote();
+    console.log("availableQuote():", availableQuote(), "size:", size, "price:", price, " =>")
+    return Math.floor((size * price) / 1000000) <= availableQuote();
 }
 
 export function canAggressBuy(qty: number, estPrice: number): boolean {

@@ -18,7 +18,7 @@ export function roundToTick(price: number, side: Side): number {
     if (t <= 0) return price;
     const q = price / t;
     const r = side === "buy" ? Math.floor(q) : Math.ceil(q);
-    return r * t;
+    return Math.floor(r * t);
 }
 
 export function jitter(baseMs: number, jitterMs: number) {

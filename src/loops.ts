@@ -19,8 +19,10 @@ export async function loopBookRefresh() {
     while (true) {
         try {
             const book = await apiGetBook();
+            console.log("book refresh:", book);//.asks.length, book.bids.length);
             STATE.book = book;
             const mid = midPrice(book);
+            console.log("mid:", mid);
             STATE.lastMid = mid;
         } catch (e: any) {
             warn("book refresh error:", e?.message ?? e);
@@ -33,6 +35,7 @@ export async function loopPendingRefresh() {
     while (true) {
         try {
             const pendingResp = await apiGetPending();
+            console.log("pending refresh:", pendingResp);
             const next = new Map<string, any>();
             for (const o of pendingResp.orders ?? []) {
                 const order = {
@@ -42,6 +45,7 @@ export async function loopPendingRefresh() {
                     size: Number(o.size),
                     ts: o.ts ? Number(o.ts) : undefined,
                 };
+                console.log("order:", order);
                 next.set(order.id, order);
                 if (!STATE.localOrderTs.has(order.id)) STATE.localOrderTs.set(order.id, nowMs());
             }
@@ -49,7 +53,7 @@ export async function loopPendingRefresh() {
             for (const id of STATE.pending.keys()) {
                 if (!next.has(id)) STATE.localOrderTs.delete(id);
             }
-            STATE.pending = next;
+            STATE.pending = next;/**/
         } catch (e: any) {
             warn("pending refresh error:", e?.message ?? e);
         }
@@ -63,31 +67,46 @@ export async function loopQuoteMaintenance() {
         const book = STATE.book;
         if (!book) continue;
 
+        console.log("quote maintenance:", book);
         const mid = midPrice(book);
         const { bids: targetBidPrices, asks: targetAskPrices } = buildTargetLadderPrices(mid);
         const { bidSizes, askSizes } = buildTargetSizes();
 
+        console.log("targetBids:", targetBidPrices);
+        console.log("targetAsks:", targetAskPrices);
+        console.log("bidSizes:", bidSizes);
+        console.log("askSizes:", askSizes);
         // inventory skew: long => bias asks; short => bias bids
         const invNorm = clamp((STATE.invBase - CFG.INV_TARGET) / Math.max(1e-9, CFG.INV_MAX_ABS), -1, 1);
+        console.log("invNorm:", invNorm);
         const askSkewMul = 1 + 0.30 * Math.max(0, invNorm);
         const bidSkewMul = 1 + 0.30 * Math.max(0, -invNorm);
+        console.log("askSkewMul:", askSkewMul);
+        console.log("bidSkewMul:", bidSkewMul);
 
         for (let i = 0; i < CFG.LEVELS_PER_SIDE; i++) {
+            console.log("========bidLevel[i]:", i);
             const price = targetBidPrices[i];
-            if (nearestOrderAtPrice(STATE.pending, "buy", price)) continue;
+            console.log("price:", price);
+            const _nearestOrderAtPrice = nearestOrderAtPrice(STATE.pending, "buy", price);
+            console.log("_nearestOrderAtPrice:", _nearestOrderAtPrice);
+            if (_nearestOrderAtPrice) continue;
             const size = bidSizes[i] * bidSkewMul;
-            if (!canPlaceBid(size, price)) continue;
-
-            try {
+            console.log("size:", size);
+            const _canPlaceBid = canPlaceBid(size, price);
+            console.log("canPlaceBid:", _canPlaceBid);
+            if (!_canPlaceBid) continue;
+            console.log("here");
+            /*try {
                 await apiSendOrder({ side: "buy", price, size });
                 log("placed bid", { price, size });
                 if (CFG.USE_LOCAL_LEDGER) STATE.quoteBal -= size * price;
             } catch (e: any) {
                 warn("place bid error:", e?.message ?? e);
-            }
+            }/**/
         }
 
-        for (let i = 0; i < CFG.LEVELS_PER_SIDE; i++) {
+        /*for (let i = 0; i < CFG.LEVELS_PER_SIDE; i++) {
             const price = targetAskPrices[i];
             if (nearestOrderAtPrice(STATE.pending, "sell", price)) continue;
             const size = askSizes[i] * askSkewMul;
@@ -100,7 +119,7 @@ export async function loopQuoteMaintenance() {
             } catch (e: any) {
                 warn("place ask error:", e?.message ?? e);
             }
-        }
+        }/**/
     }
 }
 
