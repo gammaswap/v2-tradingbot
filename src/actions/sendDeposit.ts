@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { CFG } from "../config.js";
 import { Wallet } from "ethers";
 import axios from "axios";
 import {
@@ -10,19 +11,11 @@ import {
 import { Eip712Deposit } from "../types.js";
 import { getPermit2Allowance, isPermit2NonceUsed } from "../blockchain.js";
 
-const CHAIN_ID = process.env.CHAIN_ID || "31337";
-const LEDGER_ADDRESS = process.env.LEDGER_CONTRACT || "0x0000000000000000000000000000000000000000";
-const SETTLEMENT_TOKEN_ADDRESS = process.env.SETTLEMENT_TOKEN || "0x0000000000000000000000000000000000000000";
-const MNEMONIC = process.env.TEST_MNEMONIC || "test test test test test test test test test test test junk";
-const PERMIT2_ADDRESS = process.env.PERMIT2_CONTRACT || "0x000000000022D473030F116dDEE9F6B43aC78BA3";
-const DEPOSITS_ENDPOINT = process.env.DEPOSITS_ENDPOINT || "http://localhost:3000/deposits";
-const WALLET_INDEX = Number(process.env.WALLET_INDEX || "0")
-
 async function createPermit2Signature(wallet: Wallet, chainId: number, deposit: Eip712Deposit) : Promise<string> {
     const domain = {
         name: "Permit2",             // fixed in Permit2’s EIP712.sol
         chainId,
-        verifyingContract: PERMIT2_ADDRESS,
+        verifyingContract: CFG.PERMIT2_ADDRESS,
     };
 
     const types = {
@@ -56,11 +49,12 @@ async function createPermit2Signature(wallet: Wallet, chainId: number, deposit: 
 
 // run with "npx ts-node ./src/sendDeposit.ts"
 async function main() {
-    console.log("CHAIN_ID:", CHAIN_ID);
-    console.log("LEDGER_ADDRESS:", LEDGER_ADDRESS);
-    console.log("SETTLEMENT_TOKEN_ADDRESS:", SETTLEMENT_TOKEN_ADDRESS);
+    console.log("CHAIN_ID:", CFG.CHAIN_ID);
+    console.log("WALLET_INDEX:", CFG.WALLET_INDEX);
+    console.log("LEDGER_ADDRESS:", CFG.LEDGER_ADDRESS);
+    console.log("SETTLEMENT_TOKEN:", CFG.SETTLEMENT_TOKEN);
 
-    const account = deriveAccountsFromMnemonic(MNEMONIC, WALLET_INDEX + 1)[WALLET_INDEX];
+    const account = deriveAccountsFromMnemonic(CFG.MNEMONIC, CFG.WALLET_INDEX + 1)[CFG.WALLET_INDEX];
     console.log("Using address:", account.address);
 
     const now = Math.floor(Date.now() / 1000);
@@ -73,9 +67,9 @@ async function main() {
         signatureType: 0n,
         sender: account.address,
         expiration: BigInt(expiry),
-        amount: 19000000000n,
-        token: SETTLEMENT_TOKEN_ADDRESS,
-        ledger: LEDGER_ADDRESS,
+        amount: 10000000000n,
+        token: CFG.SETTLEMENT_TOKEN,
+        ledger: CFG.LEDGER_ADDRESS,
         permitNonce: BigInt(Date.now()), // must be unique for every permit (needs to be put in the hash of the contract)
         permitSignature: "0x"
     }
@@ -91,7 +85,7 @@ async function main() {
         return
     }
 
-    const chainId = BigInt(CHAIN_ID)
+    const chainId = BigInt(CFG.CHAIN_ID)
     deposit.permitSignature = await createPermit2Signature(new Wallet(account.privateKey), Number(chainId), deposit);
     console.log("permitSignature:", deposit.permitSignature);
 
@@ -128,10 +122,10 @@ async function main() {
     };
 
     console.log("signedDepositMessage:", signedMessage);
-    console.log("DEPOSITS_ENDPOINT:", DEPOSITS_ENDPOINT);
+    console.log("DEPOSITS_URL:", CFG.DEPOSITS_URL);
 
     try {
-        const res = await axios.post(DEPOSITS_ENDPOINT, signedMessage, {
+        const res = await axios.post(CFG.DEPOSITS_URL, signedMessage, {
             headers: {
                 "Content-Type": "application/json",
             },

@@ -6,8 +6,8 @@ import { clamp, randBetween, roundToTick, tanh } from "./utils.js";
 export function bestBidAsk(book: BookSnapshot | null): { bid: number | null; ask: number | null } {
     if (!book) return { bid: null, ask: null };
     return {
-        bid: book.bids?.length ? book.bids[0].price : null,
-        ask: book.asks?.length ? book.asks[0].price : null,
+        bid: book.bids?.length ? Number(book.bids[0].price) : null,
+        ask: book.asks?.length ? Number(book.asks[0].price) : null,
     };
 }
 
@@ -90,7 +90,7 @@ export function canPlaceAsk(size: number): boolean {
 
 export function canPlaceBid(size: number, price: number): boolean {
     console.log("availableQuote():", availableQuote(), "size:", size, "price:", price, " =>")
-    return Math.floor((size * price) / 1000000) <= availableQuote();
+    return Math.floor(size * price / 1000000) <= availableQuote();
 }
 
 export function canAggressBuy(qty: number, estPrice: number): boolean {

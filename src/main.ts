@@ -7,6 +7,8 @@ import {
     loopPendingRefresh,
     loopQuoteMaintenance,
 } from "./loops.js";
+import { deriveAccountsFromMnemonic } from "./eip712.js";
+import { Wallet } from "ethers";
 
 async function main() {
     log("starting bot", {
@@ -20,16 +22,20 @@ async function main() {
             cancels: CFG.CANCELS_URL,
             book: CFG.BOOK_URL,
             pending: CFG.PENDING_URL,
-        },
+        }
     });
 
     if (CFG.START_BASE_BAL < CFG.BASE_RESERVE_MIN) warn("START_BASE_BAL < BASE_RESERVE_MIN; bot may refuse asks.");
     if (CFG.START_QUOTE_BAL < CFG.QUOTE_RESERVE_MIN) warn("START_QUOTE_BAL < QUOTE_RESERVE_MIN; bot may refuse bids.");
 
+    const account = deriveAccountsFromMnemonic(CFG.MNEMONIC, CFG.WALLET_INDEX + 1)[CFG.WALLET_INDEX];
+    const wallet = new Wallet(account.privateKey);
+    console.log("Using address :", wallet.address);
+
     await Promise.allSettled([
         loopBookRefresh(),
         loopPendingRefresh(),
-        loopQuoteMaintenance(),
+        loopQuoteMaintenance(wallet),
         //loopCancelRebalance(),
         //loopAggression(),
     ]);/**/

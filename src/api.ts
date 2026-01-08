@@ -1,7 +1,9 @@
 import crypto from "crypto";
 import { CFG, type Side } from "./config.js";
 import { idempotencyKey } from "./utils.js";
-import type { ApiBookResponse, ApiPendingResponse } from "./types.js";
+import type { ApiBookResponse, ApiPendingResponse, Eip712Order } from "./types.js";
+import { Wallet } from "ethers";
+import { hashFillOrderJS, signOrderJS, validateSignatureJS } from "./eip712.js";
 
 function buildHeaders(body?: any): Record<string, string> {
     const h: Record<string, string> = { "Content-Type": "application/json" };
@@ -42,16 +44,56 @@ export async function apiGetPending(): Promise<any> {
     return httpGetJson<any>(CFG.PENDING_URL);
 }
 
-export async function apiSendOrder(order: { side: Side; price: number; size: number }) {
-    // Generic payload — adjust to match your API schema
-    const payload = {
-        user: CFG.USER_ADDRESS,
-        side: order.side,
-        price: order.price,
-        size: order.size,
-        clientId: idempotencyKey("order"),
+export async function apiSendOrder(wallet: Wallet, order: { side: Side; price: number; size: number }) {
+
+    const eip712Order: Eip712Order = {
+        nonce: BigInt(Date.now()), // must be unique in every transaction the user sends
+        salt: 1n, // this is used to generate a hash which represents the orderId
+        signer: wallet.address,
+        signatureType: 0n,
+        sender: wallet.address,
+        side: order.side != "buy",
+        assetId: 1n,
+        size: BigInt(order.size),
+        price: BigInt(order.price),
+    }
+
+    const chainId = BigInt(CFG.CHAIN_ID)
+
+    const orderHash = hashFillOrderJS(eip712Order);
+    console.log("orderHash:", orderHash);
+
+    const signature = signOrderJS(orderHash, wallet)
+    console.log("Signature:", signature);
+
+    const recovered = validateSignatureJS(orderHash, signature, eip712Order.sender)
+    console.log("isRecovered:", recovered);
+    console.log("signer     :", eip712Order.signer.toString());
+
+    const now = Math.floor(Date.now() / 1000);
+    const expiry = now + 60 * 60; // 1 hour from now
+
+    const signedMessage = {
+        order: {
+            nonce: eip712Order.nonce.toString(), // must be unique in every transaction the user sends
+            salt: eip712Order.salt.toString(), // this is used to generate a hash which represents the orderId
+            signer: eip712Order.signer,
+            signatureType: eip712Order.signatureType.toString(),
+            sender: eip712Order.sender,
+            expiration: BigInt(expiry).toString(),
+            side: eip712Order.side,
+            assetId: eip712Order.assetId.toString(),
+            size: eip712Order.size.toString(),
+            price: eip712Order.price.toString()
+        },
+        chainId: chainId.toString(),
+        orderHash,
+        signature,
     };
-    return httpPostJson<any>(CFG.ORDERS_URL, payload);
+
+    console.log("signedOrderMessage:", signedMessage);
+    // Generic payload — adjust to match your API schema
+    return httpPostJson<any>(CFG.ORDERS_URL, signedMessage);/**/
 }
 
 export async function apiCancelOrder(orderId: string) {

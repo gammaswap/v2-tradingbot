@@ -8,23 +8,22 @@ import {
     HDNodeWallet,
     Signature
 } from "ethers";
+import { CFG } from "./config.js";
 import {
     Eip712Order,
     Eip712Deposit, Eip712Withdrawal, Eip712Cancel,
 } from "./types.js";
 
-export const CHAIN_ID = BigInt(process.env.CHAIN_ID || "31337");
-
 export const EXCHANGE_DOMAIN: TypedDataDomain = {
     name: "GammaSwap Exchange",
     version: "2",
-    chainId: CHAIN_ID,
-    verifyingContract: process.env.VERIFYING_CONTRACT || "0x0000000000000000000000000000000000000000",
+    chainId: CFG.CHAIN_ID,
+    verifyingContract: CFG.VERIFYING_CONTRACT
 };
 
 const DEPOSIT_ORDER_TYPEHASH = keccak256(Buffer.from(
     "DepositOrder(uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,uint32 expiration,uint256 amount,address token,address ledger,uint256 permitNonce,bytes permitSignature)"
-//"DepositOrder(uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,uint32 expiration,uint256 amount,address token,address ledger,uint256 permitNonce,bytes32 permitSignature)"
+    //"DepositOrder(uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,uint32 expiration,uint256 amount,address token,address ledger,uint256 permitNonce,bytes32 permitSignature)"
 ));
 
 const WITHDRAWAL_ORDER_TYPEHASH = keccak256(Buffer.from(

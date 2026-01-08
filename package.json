@@ -18,7 +18,8 @@
     "dev": "node --env-file=./.env --loader ts-node/esm ./src/main.ts",
     "build": "tsc",
     "start": "node dist/main.js",
-    "deposit": "node --env-file=./.env --loader ts-node/esm ./src/actions/sendDeposit.ts"
+    "deposit": "node --env-file=./.env --loader ts-node/esm ./src/actions/sendDeposit.ts",
+    "cancel": "node --env-file=./.env --loader ts-node/esm ./src/actions/sendCancel.ts"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

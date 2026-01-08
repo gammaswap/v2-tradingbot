@@ -12,4 +12,6 @@ export const STATE = {
     invBase: 0,
 
     lastMid: CFG.CENTER_PRICE,
+
+    account: CFG.USER_ADDRESS,
 };

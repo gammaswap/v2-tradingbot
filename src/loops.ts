@@ -14,12 +14,13 @@ import {
     canAggressBuy,
     canAggressSell,
 } from "./strategy.js";
+import { Wallet } from "ethers";
 
 export async function loopBookRefresh() {
     while (true) {
         try {
             const book = await apiGetBook();
-            console.log("book refresh:", book);//.asks.length, book.bids.length);
+            //console.log("book refresh:", book);//.asks.length, book.bids.length);
             STATE.book = book;
             const mid = midPrice(book);
             console.log("mid:", mid);
@@ -61,7 +62,7 @@ export async function loopPendingRefresh() {
     }
 }
 
-export async function loopQuoteMaintenance() {
+export async function loopQuoteMaintenance(wallet: Wallet) {
     while (true) {
         await sleep(jitter(CFG.QUOTE_LOOP_MS, CFG.QUOTE_JITTER_MS));
         const book = STATE.book;
@@ -97,25 +98,25 @@ export async function loopQuoteMaintenance() {
             console.log("canPlaceBid:", _canPlaceBid);
             if (!_canPlaceBid) continue;
             console.log("here");
-            /*try {
-                await apiSendOrder({ side: "buy", price, size });
+            try {
+                await apiSendOrder(wallet, { side: "buy", price, size });
                 log("placed bid", { price, size });
-                if (CFG.USE_LOCAL_LEDGER) STATE.quoteBal -= size * price;
+                if (CFG.USE_LOCAL_LEDGER) STATE.quoteBal -= Math.floor(size * price / 1000000);
             } catch (e: any) {
                 warn("place bid error:", e?.message ?? e);
             }/**/
         }
 
-        /*for (let i = 0; i < CFG.LEVELS_PER_SIDE; i++) {
+        for (let i = 0; i < CFG.LEVELS_PER_SIDE; i++) {
             const price = targetAskPrices[i];
             if (nearestOrderAtPrice(STATE.pending, "sell", price)) continue;
             const size = askSizes[i] * askSkewMul;
             if (!canPlaceAsk(size)) continue;
 
             try {
-                await apiSendOrder({ side: "sell", price, size });
+                await apiSendOrder(wallet, { side: "sell", price, size });
                 log("placed ask", { price, size });
-                if (CFG.USE_LOCAL_LEDGER) STATE.baseBal -= size;
+                if (CFG.USE_LOCAL_LEDGER) STATE.baseBal -= Math.floor((1000000 - price) * size / 1000000);
             } catch (e: any) {
                 warn("place ask error:", e?.message ?? e);
             }
@@ -166,7 +167,7 @@ export async function loopCancelRebalance() {
     }
 }
 
-export async function loopAggression() {
+export async function loopAggression(wallet: Wallet) {
     while (true) {
         await sleep(jitter(CFG.AGGRESS_MS, CFG.AGGRESS_JITTER_MS));
         const book = STATE.book;
@@ -213,7 +214,7 @@ export async function loopAggression() {
                 : clamp(roundToTick(mid - 10 * CFG.TICK_SIZE, "buy"), CFG.HARD_MIN_PRICE, CFG.HARD_MAX_PRICE);
 
         try {
-            await apiSendOrder({ side, price: aggressivePrice, size: tradeQty });
+            await apiSendOrder(wallet, { side, price: aggressivePrice, size: tradeQty });
             log("aggressed", { side, qty: tradeQty, price: aggressivePrice, mid });
 
             // local-ledger assumption: fills completely
