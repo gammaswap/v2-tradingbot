@@ -1,0 +1,27 @@
+{
+  "name": "v2-tradingbot",
+  "version": "1.0.0",
+  "description": "Trading bot for GammaSwap V2",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/0xDanr/v2-tradingbot.git"
+  },
+  "author": "Daniel D. Alcarraz (https://github.com/0xDanr)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/0xDanr/v2-tradingbot/issues"
+  },
+  "homepage": "https://github.com/0xDanr/v2-tradingbot#readme",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "ts-node src/main.ts",
+    "build": "tsc",
+    "start": "node dist/main.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.0.0"
+  }
+}
