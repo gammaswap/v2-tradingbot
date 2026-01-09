@@ -30,18 +30,12 @@ async function httpPostJson<T>(url: string, body: any): Promise<T> {
     return (await res.json()) as T;
 }
 
-/*export async function apiGetBook(): Promise<ApiBookResponse> {
+export async function apiGetBook(): Promise<ApiBookResponse> {
     return httpGetJson<ApiBookResponse>(CFG.BOOK_URL);
-}/**/
-export async function apiGetBook(): Promise<any> {
-    return httpGetJson<any>(CFG.BOOK_URL);
 }
 
-/*export async function apiGetPending(): Promise<ApiPendingResponse> {
-    return httpGetJson<ApiPendingResponse>(CFG.PENDING_URL);
-}/**/
-export async function apiGetPending(): Promise<any> {
-    return httpGetJson<any>(CFG.PENDING_URL);
+export async function apiGetPending(address: string): Promise<ApiPendingResponse> {
+    return httpGetJson<ApiPendingResponse>(CFG.PENDING_URL+address.toLowerCase());
 }
 
 export async function apiSendOrder(wallet: Wallet, order: { side: Side; price: number; size: number }) {
@@ -93,7 +87,7 @@ export async function apiSendOrder(wallet: Wallet, order: { side: Side; price: n
 
     console.log("signedOrderMessage:", signedMessage);
     // Generic payload — adjust to match your API schema
-    return httpPostJson<any>(CFG.ORDERS_URL, signedMessage);/**/
+    return httpPostJson<any>(CFG.ORDERS_URL, signedMessage);
 }
 
 export async function apiCancelOrder(orderId: string) {

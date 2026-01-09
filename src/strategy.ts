@@ -31,10 +31,14 @@ export function depthToWipe(book: BookSnapshot, side: Side, levels: number): { q
 }
 
 export function nearestOrderAtPrice(pending: Map<string, PendingOrder>, side: Side, price: number, tolTicks = 1) {
-    const tol = CFG.TICK_SIZE * tolTicks + 1e-12;
+    const tol = CFG.TICK_SIZE * tolTicks + 1;//1e-12;
     for (const o of pending.values()) {
-        if (o.side !== side) continue;
-        if (Math.abs(o.price - price) <= tol) return o;
+        if (o.side !== side) {
+            continue;
+        }
+        if (Math.abs(o.price - price) <= tol) {
+            return o;
+        }
     }
     return null;
 }
@@ -61,7 +65,6 @@ export function buildTargetLadderPrices(mid: number): { bids: number[]; asks: nu
 }
 
 export function buildTargetSizes(): { bidSizes: number[]; askSizes: number[] } {
-    console.log("===============buildTargetSizes:start==================");
     const base0 = randBetween(CFG.QUOTE_BASE_SIZE_MIN, CFG.QUOTE_BASE_SIZE_MAX);
     const sizes: number[] = [];
     let s = base0;
@@ -70,7 +73,6 @@ export function buildTargetSizes(): { bidSizes: number[]; askSizes: number[] } {
         sizes.push(Math.floor(Math.max(0, s * varMul)));
         s *= CFG.DEPTH_GROWTH;
     }
-    console.log("===============buildTargetSizes:end==================");
     return { bidSizes: sizes.slice(), askSizes: sizes.slice() };
 }
 
@@ -84,8 +86,9 @@ export function availableQuote(): number {
     return Math.max(0, STATE.quoteBal - CFG.QUOTE_RESERVE_MIN);
 }
 
-export function canPlaceAsk(size: number): boolean {
-    return size <= availableBase();
+export function canPlaceAsk(size: number, price: number): boolean {
+    console.log("availableQuote():", availableQuote(), "size:", size, "price:", price, " =>")
+    return Math.floor(size * (1000000 - price) / 1000000) <= availableQuote();
 }
 
 export function canPlaceBid(size: number, price: number): boolean {

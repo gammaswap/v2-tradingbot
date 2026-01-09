@@ -34,7 +34,7 @@ async function main() {
 
     await Promise.allSettled([
         loopBookRefresh(),
-        loopPendingRefresh(),
+        loopPendingRefresh(wallet),
         loopQuoteMaintenance(wallet),
         //loopCancelRebalance(),
         //loopAggression(),

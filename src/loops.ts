@@ -20,7 +20,7 @@ export async function loopBookRefresh() {
     while (true) {
         try {
             const book = await apiGetBook();
-            //console.log("book refresh:", book);//.asks.length, book.bids.length);
+            console.log("book refresh >> bids:", book.bids.length, "asks:", book.asks.length," total:", book.asks.length + book.bids.length);
             STATE.book = book;
             const mid = midPrice(book);
             console.log("mid:", mid);
@@ -32,21 +32,35 @@ export async function loopBookRefresh() {
     }
 }
 
-export async function loopPendingRefresh() {
+export async function loopPendingRefresh(wallet: Wallet) {
     while (true) {
         try {
-            const pendingResp = await apiGetPending();
-            console.log("pending refresh:", pendingResp);
+            const pendingResp = await apiGetPending(wallet.address);
+            console.log("pending refresh:", pendingResp.buys.length + pendingResp.sells.length, "orders");
             const next = new Map<string, any>();
-            for (const o of pendingResp.orders ?? []) {
+            for (const o of pendingResp.buys ?? []) {
                 const order = {
                     id: String(o.id),
-                    side: o.side,
+                    side: "buy",
                     price: Number(o.price),
                     size: Number(o.size),
-                    ts: o.ts ? Number(o.ts) : undefined,
+                    time: o.time ? Number(o.time) : undefined,
+                    account: o.account
                 };
-                console.log("order:", order);
+                //console.log("order:", order);
+                next.set(order.id, order);
+                if (!STATE.localOrderTs.has(order.id)) STATE.localOrderTs.set(order.id, nowMs());
+            }
+            for (const o of pendingResp.sells ?? []) {
+                const order = {
+                    id: String(o.id),
+                    side: "sell",
+                    price: Number(o.price),
+                    size: Number(o.size),
+                    time: o.time ? Number(o.time) : undefined,
+                    account: o.account
+                };
+                //console.log("order:", order);
                 next.set(order.id, order);
                 if (!STATE.localOrderTs.has(order.id)) STATE.localOrderTs.set(order.id, nowMs());
             }
@@ -54,7 +68,7 @@ export async function loopPendingRefresh() {
             for (const id of STATE.pending.keys()) {
                 if (!next.has(id)) STATE.localOrderTs.delete(id);
             }
-            STATE.pending = next;/**/
+            STATE.pending = next;
         } catch (e: any) {
             warn("pending refresh error:", e?.message ?? e);
         }
@@ -97,7 +111,7 @@ export async function loopQuoteMaintenance(wallet: Wallet) {
             const _canPlaceBid = canPlaceBid(size, price);
             console.log("canPlaceBid:", _canPlaceBid);
             if (!_canPlaceBid) continue;
-            console.log("here");
+            console.log("send bid order");
             try {
                 await apiSendOrder(wallet, { side: "buy", price, size });
                 log("placed bid", { price, size });
@@ -108,10 +122,18 @@ export async function loopQuoteMaintenance(wallet: Wallet) {
         }
 
         for (let i = 0; i < CFG.LEVELS_PER_SIDE; i++) {
+            console.log("========askLevel[i]:", i);
             const price = targetAskPrices[i];
-            if (nearestOrderAtPrice(STATE.pending, "sell", price)) continue;
+            console.log("price:", price);
+            const _nearestOrderAtPrice = nearestOrderAtPrice(STATE.pending, "sell", price);
+            console.log("_nearestOrderAtPrice:", _nearestOrderAtPrice);
+            if (_nearestOrderAtPrice) continue;
             const size = askSizes[i] * askSkewMul;
-            if (!canPlaceAsk(size)) continue;
+            console.log("size:", size);
+            const _canPlaceAsk = canPlaceAsk(size, price);
+            console.log("canPlaceAsk:", _canPlaceAsk);
+            if (!_canPlaceAsk) continue;
+            console.log("send ask order");
 
             try {
                 await apiSendOrder(wallet, { side: "sell", price, size });
@@ -134,7 +156,7 @@ export async function loopCancelRebalance() {
         const toCancel: any[] = [];
 
         for (const o of STATE.pending.values()) {
-            const ts = o.ts ?? STATE.localOrderTs.get(o.id) ?? nowMs();
+            const ts = o.time ?? STATE.localOrderTs.get(o.id) ?? nowMs();
             if (ts < cutoff) toCancel.push(o);
         }
 

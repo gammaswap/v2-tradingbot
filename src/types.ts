@@ -1,22 +1,33 @@
 import type { Side } from "./config.js";
 
-export type BookLevel = { price: number; size: number };
+export type BookLevel = {
+    price: number;
+    size: number ;
+    orderCount: number;
+    orders: PendingOrder[];
+};
 
 export type BookSnapshot = {
+    assetId: bigint;
+    ts: bigint;
     bids: BookLevel[];
     asks: BookLevel[];
 };
 
 export type PendingOrder = {
     id: string;
-    side: Side;
     price: number;
     size: number;
-    ts?: number;
+    time?: number;
+    account: string;
+    side?: Side;
 };
 
 export type ApiPendingResponse = {
-    orders: PendingOrder[];
+    assetId: bigint;
+    ts: bigint;
+    buys: PendingOrder[];
+    sells: PendingOrder[];
 };
 
 export type ApiBookResponse = BookSnapshot;
