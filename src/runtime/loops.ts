@@ -47,7 +47,6 @@ export async function loopPendingRefresh(wallet: Wallet) {
                     time: o.time ? Number(o.time) : undefined,
                     account: o.account
                 };
-                //console.log("order:", order);
                 next.set(order.id, order);
                 if (!STATE.localOrderTs.has(order.id)) STATE.localOrderTs.set(order.id, nowMs());
             }
@@ -60,7 +59,6 @@ export async function loopPendingRefresh(wallet: Wallet) {
                     time: o.time ? Number(o.time) : undefined,
                     account: o.account
                 };
-                //console.log("order:", order);
                 next.set(order.id, order);
                 if (!STATE.localOrderTs.has(order.id)) STATE.localOrderTs.set(order.id, nowMs());
             }
@@ -82,7 +80,6 @@ export async function loopQuoteMaintenance(wallet: Wallet) {
         const book = STATE.book;
         if (!book) continue;
 
-        console.log("quote maintenance:", book);
         const mid = midPrice(book);
         const { bids: targetBidPrices, asks: targetAskPrices } = buildTargetLadderPrices(mid);
         const { bidSizes, askSizes } = buildTargetSizes();
@@ -100,40 +97,28 @@ export async function loopQuoteMaintenance(wallet: Wallet) {
         console.log("bidSkewMul:", bidSkewMul);
 
         for (let i = 0; i < CFG.LEVELS_PER_SIDE; i++) {
-            console.log("========bidLevel[i]:", i);
             const price = targetBidPrices[i];
-            console.log("price:", price);
             const _nearestOrderAtPrice = nearestOrderAtPrice(STATE.pending, "buy", price);
-            console.log("_nearestOrderAtPrice:", _nearestOrderAtPrice);
             if (_nearestOrderAtPrice) continue;
             const size = bidSizes[i] * bidSkewMul;
-            console.log("size:", size);
             const _canPlaceBid = canPlaceBid(size, price);
-            console.log("canPlaceBid:", _canPlaceBid);
             if (!_canPlaceBid) continue;
-            console.log("send bid order");
             try {
                 await apiSendOrder(wallet, { side: "buy", price, size });
                 log("placed bid", { price, size });
                 if (CFG.USE_LOCAL_LEDGER) STATE.quoteBal -= Math.floor(size * price / 1000000);
             } catch (e: any) {
                 warn("place bid error:", e?.message ?? e);
-            }/**/
+            }
         }
 
         for (let i = 0; i < CFG.LEVELS_PER_SIDE; i++) {
-            console.log("========askLevel[i]:", i);
             const price = targetAskPrices[i];
-            console.log("price:", price);
             const _nearestOrderAtPrice = nearestOrderAtPrice(STATE.pending, "sell", price);
-            console.log("_nearestOrderAtPrice:", _nearestOrderAtPrice);
             if (_nearestOrderAtPrice) continue;
             const size = askSizes[i] * askSkewMul;
-            console.log("size:", size);
             const _canPlaceAsk = canPlaceAsk(size, price);
-            console.log("canPlaceAsk:", _canPlaceAsk);
             if (!_canPlaceAsk) continue;
-            console.log("send ask order");
 
             try {
                 await apiSendOrder(wallet, { side: "sell", price, size });
@@ -142,23 +127,25 @@ export async function loopQuoteMaintenance(wallet: Wallet) {
             } catch (e: any) {
                 warn("place ask error:", e?.message ?? e);
             }
-        }/**/
+        }
     }
 }
 
-export async function loopCancelRebalance() {
+export async function loopCancelRebalance(wallet: Wallet) {
     while (true) {
         await sleep(jitter(CFG.CANCEL_LOOP_MS, CFG.CANCEL_JITTER_MS));
         const book = STATE.book;
         if (!book) continue;
 
         const cutoff = nowMs() - CFG.STALE_SECONDS * 1000;
+        console.log("cancel stale orders cutoff:", cutoff);
         const toCancel: any[] = [];
 
         for (const o of STATE.pending.values()) {
             const ts = o.time ?? STATE.localOrderTs.get(o.id) ?? nowMs();
             if (ts < cutoff) toCancel.push(o);
         }
+        console.log("canceling:", toCancel.length, "stale orders");
 
         const pendingArr = Array.from(STATE.pending.values());
         if (pendingArr.length > CFG.MAX_PENDING_ORDERS) {
@@ -169,14 +156,16 @@ export async function loopCancelRebalance() {
                 .sort((a, b) => Math.abs(b.price - mid) - Math.abs(a.price - mid));
             for (let i = 0; i < excess; i++) toCancel.push(sorted[i]);
         }
+        console.log("canceling:", toCancel.length, "excess orders");
 
         const uniq = new Map<string, any>();
         for (const o of toCancel) uniq.set(o.id, o);
         const batch = Array.from(uniq.values()).slice(0, CFG.CANCEL_BATCH_MAX);
 
+        console.log("canceling:", batch.length, "total orders");
         for (const o of batch) {
             try {
-                await apiCancelOrder(o.id);
+                await apiCancelOrder(wallet, o.id);
                 log("canceled", { id: o.id, side: o.side, price: o.price, size: o.size });
                 if (CFG.USE_LOCAL_LEDGER) {
                     if (o.side === "buy") STATE.quoteBal += o.size * o.price;

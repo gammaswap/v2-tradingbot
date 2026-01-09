@@ -36,7 +36,7 @@ async function main() {
         loopBookRefresh(),
         loopPendingRefresh(wallet),
         loopQuoteMaintenance(wallet),
-        //loopCancelRebalance(),
+        loopCancelRebalance(wallet),
         //loopAggression(),
     ]);/**/
 }

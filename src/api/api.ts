@@ -1,9 +1,8 @@
 import crypto from "crypto";
 import { CFG, type Side } from "../config/config.js";
-import { idempotencyKey } from "../utils/utils.js";
-import type { ApiBookResponse, ApiPendingResponse, Eip712Order } from "../utils/types.js";
+import { ApiBookResponse, ApiPendingResponse, Eip712Cancel, Eip712Order } from "../utils/types.js";
 import { Wallet } from "ethers";
-import { hashFillOrderJS, signOrderJS, validateSignatureJS } from "../utils/eip712.js";
+import { hashCancelOrderJS, hashFillOrderJS, signOrderJS, validateSignatureJS } from "../utils/eip712.js";
 
 function buildHeaders(body?: any): Record<string, string> {
     const h: Record<string, string> = { "Content-Type": "application/json" };
@@ -90,11 +89,49 @@ export async function apiSendOrder(wallet: Wallet, order: { side: Side; price: n
     return httpPostJson<any>(CFG.ORDERS_URL, signedMessage);
 }
 
-export async function apiCancelOrder(orderId: string) {
-    const payload = {
-        user: CFG.USER_ADDRESS,
-        orderId,
-        clientId: idempotencyKey("cancel"),
+export async function apiCancelOrder(wallet: Wallet, orderHash: string) {
+
+    console.log("orderId:", orderHash)
+
+    const cancel: Eip712Cancel = {
+        nonce: BigInt(Date.now()), // must be unique in every transaction the user sends
+        salt: 1n, // this is used to generate a hash which represents the orderId
+        signer: wallet.address,
+        signatureType: 0n,
+        sender: wallet.address,
+        assetId: 1n,
+        orderHash: orderHash
+    }
+
+    const chainId = BigInt(CFG.CHAIN_ID)
+
+    const cancelHash = hashCancelOrderJS(cancel);
+    console.log("cancelHash:", cancelHash)
+
+    const signature = signOrderJS(cancelHash, wallet)
+    console.log("Signature:", signature);
+
+    const recovered = validateSignatureJS(cancelHash, signature, wallet.address)
+    console.log("isRecovered:", recovered);
+    console.log("signer     :", cancel.signer.toString());
+
+    const signedMessage = {
+        cancel: {
+            nonce: cancel.nonce.toString(), // must be unique in every transaction the user sends
+            salt: cancel.salt.toString(), // this is used to generate a hash which represents the orderId
+            signer: wallet.address,
+            signatureType: cancel.signatureType.toString(),
+            sender: wallet.address,
+            assetId: cancel.assetId.toString(),
+            orderHash: cancel.orderHash,
+        },
+        chainId: chainId.toString(),
+        orderHash: cancelHash,
+        signature,
     };
-    return httpPostJson<any>(CFG.CANCELS_URL, payload);
+
+    console.log("signedCancelMessage:", signedMessage);
+    console.log("CANCELS_URL:", CFG.CANCELS_URL);
+
+    return httpPostJson<any>(CFG.CANCELS_URL, signedMessage);
 }
