@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { CFG } from "../config.js";
+import { CFG } from "../config/config.js";
 import { Wallet } from "ethers";
 import axios from "axios";
 import {
@@ -7,9 +7,9 @@ import {
     validateSignatureJS,
     deriveAccountsFromMnemonic,
     signOrderJS
-} from "../eip712.js";
-import { Eip712Deposit } from "../types.js";
-import { getPermit2Allowance, isPermit2NonceUsed } from "../blockchain.js";
+} from "../utils/eip712.js";
+import { Eip712Deposit } from "../utils/types.js";
+import { getPermit2Allowance, isPermit2NonceUsed } from "../chain/blockchain.js";
 
 async function createPermit2Signature(wallet: Wallet, chainId: number, deposit: Eip712Deposit) : Promise<string> {
     const domain = {

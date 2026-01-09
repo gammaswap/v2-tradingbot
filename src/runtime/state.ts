@@ -1,5 +1,5 @@
-import { CFG } from "./config.js";
-import type { BookSnapshot, PendingOrder } from "./types.js";
+import { CFG } from "../config/config.js";
+import type { BookSnapshot, PendingOrder } from "../utils/types.js";
 
 export const STATE = {
     book: null as BookSnapshot | null,

@@ -1,7 +1,7 @@
-import { CFG, type Side } from "./config.js";
-import type { BookSnapshot, PendingOrder } from "./types.js";
+import { CFG, type Side } from "../config/config.js";
+import type { BookSnapshot, PendingOrder } from "../utils/types.js";
 import { STATE } from "./state.js";
-import { clamp, randBetween, roundToTick, tanh } from "./utils.js";
+import { clamp, randBetween, roundToTick, tanh } from "../utils/utils.js";
 
 export function bestBidAsk(book: BookSnapshot | null): { bid: number | null; ask: number | null } {
     if (!book) return { bid: null, ask: null };

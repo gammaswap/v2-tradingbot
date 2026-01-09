@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { CFG, type Side } from "./config.js";
+import { CFG, type Side } from "../config/config.js";
 
 export function sleep(ms: number) {
     return new Promise((r) => setTimeout(r, ms));

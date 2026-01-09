@@ -1,7 +1,7 @@
-import { CFG } from "./config.js";
-import { apiCancelOrder, apiGetBook, apiGetPending, apiSendOrder } from "./api.js";
+import { CFG } from "../config/config.js";
+import { apiCancelOrder, apiGetBook, apiGetPending, apiSendOrder } from "../api/api.js";
 import { STATE } from "./state.js";
-import { jitter, log, nowMs, sleep, warn, clamp, roundToTick } from "./utils.js";
+import { jitter, log, nowMs, sleep, warn, clamp, roundToTick } from "../utils/utils.js";
 import {
     midPrice,
     buildTargetLadderPrices,

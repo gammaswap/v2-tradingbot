@@ -1,9 +1,9 @@
 import crypto from "crypto";
-import { CFG, type Side } from "./config.js";
-import { idempotencyKey } from "./utils.js";
-import type { ApiBookResponse, ApiPendingResponse, Eip712Order } from "./types.js";
+import { CFG, type Side } from "../config/config.js";
+import { idempotencyKey } from "../utils/utils.js";
+import type { ApiBookResponse, ApiPendingResponse, Eip712Order } from "../utils/types.js";
 import { Wallet } from "ethers";
-import { hashFillOrderJS, signOrderJS, validateSignatureJS } from "./eip712.js";
+import { hashFillOrderJS, signOrderJS, validateSignatureJS } from "../utils/eip712.js";
 
 function buildHeaders(body?: any): Record<string, string> {
     const h: Record<string, string> = { "Content-Type": "application/json" };

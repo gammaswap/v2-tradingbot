@@ -1,13 +1,13 @@
-import { CFG } from "./config.js";
-import { log, warn } from "./utils.js";
+import { CFG } from "./config/config.js";
+import { log, warn } from "./utils/utils.js";
 import {
     loopAggression,
     loopBookRefresh,
     loopCancelRebalance,
     loopPendingRefresh,
     loopQuoteMaintenance,
-} from "./loops.js";
-import { deriveAccountsFromMnemonic } from "./eip712.js";
+} from "./runtime/loops.js";
+import { deriveAccountsFromMnemonic } from "./utils/eip712.js";
 import { Wallet } from "ethers";
 
 async function main() {

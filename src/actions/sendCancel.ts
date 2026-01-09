@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { CFG } from "../config.js";
+import { CFG } from "../config/config.js";
 import { Wallet } from "ethers";
 import axios from "axios";
 import {
@@ -7,8 +7,8 @@ import {
     validateSignatureJS,
     deriveAccountsFromMnemonic,
     signOrderJS
-} from "../eip712.js";
-import { Eip712Cancel } from "../types.js";
+} from "../utils/eip712.js";
+import { Eip712Cancel } from "../utils/types.js";
 
 // run with "npx ts-node ./src/sendCancel.ts"
 async function main() {

@@ -8,7 +8,7 @@ import {
     HDNodeWallet,
     Signature
 } from "ethers";
-import { CFG } from "./config.js";
+import { CFG } from "../config/config.js";
 import {
     Eip712Order,
     Eip712Deposit, Eip712Withdrawal, Eip712Cancel,

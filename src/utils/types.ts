@@ -1,4 +1,4 @@
-import type { Side } from "./config.js";
+import type { Side } from "../config/config.js";
 
 export type BookLevel = {
     price: number;

@@ -1,5 +1,5 @@
 import { ethers } from "ethers";
-import { Asset, OrderStatus } from "./types.js";
+import { Asset, OrderStatus } from "../utils/types.js";
 
 let provider: ethers.JsonRpcProvider | null = null;
 
