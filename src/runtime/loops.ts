@@ -190,8 +190,7 @@ export async function loopAggression(wallet: Wallet) {
         let side = chooseAggressionSide(mid);
         console.log("side:", side);
         console.log("CFG.WIPE_LEVELS:", CFG.WIPE_LEVELS);
-        console.log("book.asks.length:", book.asks.length);
-        console.log("book.bids.length:", book.bids.length);
+        console.log("asksLen:", book.asks.length, "bidsLen:", book.bids.length);
 
         if (side === "buy" && book.asks.length < CFG.WIPE_LEVELS) continue;
         if (side === "sell" && book.bids.length < CFG.WIPE_LEVELS) continue;
@@ -260,7 +259,7 @@ export async function loopAggression(wallet: Wallet) {
             }
         } catch (e: any) {
             warn("aggression error:", e?.message ?? e);
-        }/**/
+        }
         console.log("========================loopAggression:end==========================");
     }
 }
