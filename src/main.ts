@@ -37,8 +37,8 @@ async function main() {
         loopPendingRefresh(wallet),
         loopQuoteMaintenance(wallet),
         loopCancelRebalance(wallet),
-        //loopAggression(),
-    ]);/**/
+        loopAggression(wallet),
+    ]);
 }
 
 main().catch((e) => {

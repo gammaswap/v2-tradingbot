@@ -106,7 +106,7 @@ export async function loopQuoteMaintenance(wallet: Wallet) {
             try {
                 await apiSendOrder(wallet, { side: "buy", price, size });
                 log("placed bid", { price, size });
-                if (CFG.USE_LOCAL_LEDGER) STATE.quoteBal -= Math.floor(size * price / 1000000);
+                if (CFG.USE_LOCAL_LEDGER) STATE.quoteBal -= Math.floor(size * price / 1000000); // USD
             } catch (e: any) {
                 warn("place bid error:", e?.message ?? e);
             }
@@ -123,7 +123,7 @@ export async function loopQuoteMaintenance(wallet: Wallet) {
             try {
                 await apiSendOrder(wallet, { side: "sell", price, size });
                 log("placed ask", { price, size });
-                if (CFG.USE_LOCAL_LEDGER) STATE.baseBal -= Math.floor((1000000 - price) * size / 1000000);
+                if (CFG.USE_LOCAL_LEDGER) STATE.baseBal -= Math.floor((1000000 - price) * size / 1000000); // Asset
             } catch (e: any) {
                 warn("place ask error:", e?.message ?? e);
             }
@@ -168,7 +168,7 @@ export async function loopCancelRebalance(wallet: Wallet) {
                 await apiCancelOrder(wallet, o.id);
                 log("canceled", { id: o.id, side: o.side, price: o.price, size: o.size });
                 if (CFG.USE_LOCAL_LEDGER) {
-                    if (o.side === "buy") STATE.quoteBal += o.size * o.price;
+                    if (o.side === "buy") STATE.quoteBal += Math.floor(Number(o.size) * Number(o.price) / 1000000);
                     else STATE.baseBal += o.size;
                 }
             } catch (e: any) {
@@ -184,30 +184,44 @@ export async function loopAggression(wallet: Wallet) {
         const book = STATE.book;
         if (!book) continue;
 
+        console.log("========================loopAggression:start==========================");
         const mid = midPrice(book);
+        console.log("mid:", mid);
         let side = chooseAggressionSide(mid);
+        console.log("side:", side);
+        console.log("CFG.WIPE_LEVELS:", CFG.WIPE_LEVELS);
+        console.log("book.asks.length:", book.asks.length);
+        console.log("book.bids.length:", book.bids.length);
 
         if (side === "buy" && book.asks.length < CFG.WIPE_LEVELS) continue;
         if (side === "sell" && book.bids.length < CFG.WIPE_LEVELS) continue;
 
         const reqBuy = depthToWipe(book, "buy", CFG.WIPE_LEVELS).qty;
         const reqSell = depthToWipe(book, "sell", CFG.WIPE_LEVELS).qty;
-
+        console.log("reqBuy:", reqBuy);
+        console.log("reqSell:", reqSell);
         let tradeQty = (side === "buy" ? reqBuy : reqSell) * (1 + CFG.SLIP_BUFFER);
-        tradeQty = Math.min(tradeQty, CFG.MAX_AGGRESS_QTY);
+        console.log("tradeQty1:", tradeQty);
+        tradeQty = Math.floor(Math.min(tradeQty, CFG.MAX_AGGRESS_QTY));
+        console.log("tradeQty2:", tradeQty);
 
         const feasibleChosen = side === "buy"
             ? canAggressBuy(tradeQty, mid)
-            : canAggressSell(tradeQty);
+            : canAggressSell(tradeQty, mid);
+        console.log("feasibleChosen:", feasibleChosen);
 
         if (!feasibleChosen) {
             const other = side === "buy" ? "sell" : "buy";
+            console.log("other:", other);
             const otherReq = other === "buy" ? reqBuy : reqSell;
+            console.log("otherReq:", otherReq);
             let otherQty = Math.min(otherReq * (1 + CFG.SLIP_BUFFER), CFG.MAX_AGGRESS_QTY);
+            console.log("otherQty:", otherQty);
 
             const feasibleOther = other === "buy"
                 ? canAggressBuy(otherQty, mid)
-                : canAggressSell(otherQty);
+                : canAggressSell(otherQty, mid);
+            console.log("feasibleOther:", feasibleOther);
 
             if (!feasibleOther) {
                 log("aggression skipped (not feasible)", {
@@ -217,13 +231,17 @@ export async function loopAggression(wallet: Wallet) {
             }
             side = other;
             tradeQty = otherQty;
+            console.log("side:", side);
+            console.log("tradeQty:", tradeQty);
         }
 
+        console.log("TICK_SIZE:", CFG.TICK_SIZE);
         const aggressivePrice =
             side === "buy"
                 ? clamp(roundToTick(mid + 10 * CFG.TICK_SIZE, "sell"), CFG.HARD_MIN_PRICE, CFG.HARD_MAX_PRICE)
                 : clamp(roundToTick(mid - 10 * CFG.TICK_SIZE, "buy"), CFG.HARD_MIN_PRICE, CFG.HARD_MAX_PRICE);
 
+        console.log("aggressivePrice:", aggressivePrice, "side:", side, "qty:", tradeQty, "mid:", mid);
         try {
             await apiSendOrder(wallet, { side, price: aggressivePrice, size: tradeQty });
             log("aggressed", { side, qty: tradeQty, price: aggressivePrice, mid });
@@ -231,18 +249,18 @@ export async function loopAggression(wallet: Wallet) {
             // local-ledger assumption: fills completely
             if (CFG.USE_LOCAL_LEDGER) {
                 if (side === "buy") {
-                    const cost = tradeQty * aggressivePrice;
-                    STATE.quoteBal -= cost;
-                    STATE.baseBal += tradeQty;
+                    STATE.quoteBal -= Math.floor(tradeQty * aggressivePrice / 1000000); // USD
+                    STATE.baseBal += Math.floor(tradeQty * (1000000 - aggressivePrice) / 1000000); // Asset
                     STATE.invBase += tradeQty;
                 } else {
-                    STATE.baseBal -= tradeQty;
-                    STATE.quoteBal += tradeQty * aggressivePrice;
+                    STATE.baseBal -= Math.floor(tradeQty * (1000000 - aggressivePrice) / 1000000); // Asset
+                    STATE.quoteBal += Math.floor(tradeQty * aggressivePrice / 1000000); // USD
                     STATE.invBase -= tradeQty;
                 }
             }
         } catch (e: any) {
             warn("aggression error:", e?.message ?? e);
-        }
+        }/**/
+        console.log("========================loopAggression:end==========================");
     }
 }

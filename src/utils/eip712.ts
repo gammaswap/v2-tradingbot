@@ -22,8 +22,7 @@ export const EXCHANGE_DOMAIN: TypedDataDomain = {
 };
 
 const DEPOSIT_ORDER_TYPEHASH = keccak256(Buffer.from(
-    "DepositOrder(uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,uint32 expiration,uint256 amount,address token,address ledger,uint256 permitNonce,bytes permitSignature)"
-    //"DepositOrder(uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,uint32 expiration,uint256 amount,address token,address ledger,uint256 permitNonce,bytes32 permitSignature)"
+    "DepositOrder(uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,uint32 expiration,uint256 amount,address token,address ledger,uint256 permitNonce,bytes32 permitSignature)"
 ));
 
 const WITHDRAWAL_ORDER_TYPEHASH = keccak256(Buffer.from(
@@ -71,8 +70,7 @@ function getDepositStructHash(order: Eip712Deposit) : string {
             "address", // token
             "address", // ledger
             "uint256", // permitNonce
-            "bytes"    // permitSignature
-            //"bytes32"    // permitSignature
+            "bytes32"  // permitSignature
         ],
         [
             DEPOSIT_ORDER_TYPEHASH,
@@ -86,8 +84,7 @@ function getDepositStructHash(order: Eip712Deposit) : string {
             order.token,
             order.ledger,
             order.permitNonce,
-            order.permitSignature,
-            //keccak256(order.permitSignature),
+            keccak256(order.permitSignature),
         ]
     ));
 }

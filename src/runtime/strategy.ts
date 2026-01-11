@@ -24,8 +24,8 @@ export function depthToWipe(book: BookSnapshot, side: Side, levels: number): { q
     let qty = 0;
     let notional = 0;
     for (let i = 0; i < Math.min(levels, arr.length); i++) {
-        qty += arr[i].size;
-        notional += arr[i].size * arr[i].price;
+        qty += Number(arr[i].size);
+        notional += Math.floor(Number(arr[i].size) * Number(arr[i].price) / 1000000);
     }
     return { qty, notional };
 }
@@ -97,13 +97,15 @@ export function canPlaceBid(size: number, price: number): boolean {
 }
 
 export function canAggressBuy(qty: number, estPrice: number): boolean {
-    if (qty * estPrice > availableQuote()) return false;
+    const value = Math.floor(qty * estPrice / 1000000);
+    if (value > availableQuote()) return false;
     if (STATE.invBase + qty > CFG.INV_MAX_ABS) return false;
     return true;
 }
 
-export function canAggressSell(qty: number): boolean {
-    if (qty > availableBase()) return false;
+export function canAggressSell(qty: number, estPrice: number): boolean {
+    const value = Math.floor(qty * (1000000 - estPrice) / 1000000);
+    if (value > availableBase()) return false;
     if (STATE.invBase - qty < -CFG.INV_MAX_ABS) return false;
     return true;
 }

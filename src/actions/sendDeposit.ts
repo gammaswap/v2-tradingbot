@@ -67,7 +67,7 @@ async function main() {
         signatureType: 0n,
         sender: account.address,
         expiration: BigInt(expiry),
-        amount: 10000000000n,
+        amount: 100000000000n,
         token: CFG.SETTLEMENT_TOKEN,
         ledger: CFG.LEDGER_ADDRESS,
         permitNonce: BigInt(Date.now()), // must be unique for every permit (needs to be put in the hash of the contract)
