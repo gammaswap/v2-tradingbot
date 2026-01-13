@@ -26,8 +26,6 @@ async function main() {
         }
     });
 
-    if (CFG.START_BASE_BAL < CFG.BASE_RESERVE_MIN) warn("START_BASE_BAL < BASE_RESERVE_MIN; bot may refuse quotes.");
-
     const account = deriveAccountsFromMnemonic(CFG.MNEMONIC, CFG.WALLET_INDEX + 1)[CFG.WALLET_INDEX];
     const wallet = new Wallet(account.privateKey);
     console.log("Using address :", wallet.address);
@@ -38,6 +36,8 @@ async function main() {
     const userBalance = await getLedgerBalance(wallet.address);
     STATE.baseBal = Number(userBalance);
     console.log("userBalance:", STATE.baseBal);
+
+    if (STATE.baseBal < CFG.BASE_RESERVE_MIN) warn("START_BASE_BAL < BASE_RESERVE_MIN; bot may refuse quotes.");
 
     await Promise.allSettled([
         loopBookRefresh(),
