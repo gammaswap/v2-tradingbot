@@ -15,6 +15,7 @@ import {
     canAggressSell,
 } from "./strategy.js";
 import { Wallet } from "ethers";
+import { getLedgerBalance, getPositionBalance } from "../chain/blockchain.js";
 
 export async function loopBookRefresh() {
     while (true) {
@@ -77,6 +78,8 @@ export async function loopPendingRefresh(wallet: Wallet) {
 export async function loopQuoteMaintenance(wallet: Wallet) {
     while (true) {
         await sleep(jitter(CFG.QUOTE_LOOP_MS, CFG.QUOTE_JITTER_MS));
+        const position = await getPositionBalance(1n, wallet.address);
+        STATE.invBase = Number(position.balance) * (position.bSide ? -1 : 1)
         const book = STATE.book;
         if (!book) continue;
 
@@ -106,7 +109,7 @@ export async function loopQuoteMaintenance(wallet: Wallet) {
             try {
                 await apiSendOrder(wallet, { side: "buy", price, size });
                 log("placed bid", { price, size });
-                if (CFG.USE_LOCAL_LEDGER) STATE.quoteBal -= Math.floor(size * price / 1000000); // USD
+                if (CFG.USE_LOCAL_LEDGER) STATE.baseBal -= Math.floor(size * price / 1000000); // USD
             } catch (e: any) {
                 warn("place bid error:", e?.message ?? e);
             }
@@ -119,7 +122,6 @@ export async function loopQuoteMaintenance(wallet: Wallet) {
             const size = askSizes[i] * askSkewMul;
             const _canPlaceAsk = canPlaceAsk(size, price);
             if (!_canPlaceAsk) continue;
-
             try {
                 await apiSendOrder(wallet, { side: "sell", price, size });
                 log("placed ask", { price, size });
@@ -168,8 +170,8 @@ export async function loopCancelRebalance(wallet: Wallet) {
                 await apiCancelOrder(wallet, o.id);
                 log("canceled", { id: o.id, side: o.side, price: o.price, size: o.size });
                 if (CFG.USE_LOCAL_LEDGER) {
-                    if (o.side === "buy") STATE.quoteBal += Math.floor(Number(o.size) * Number(o.price) / 1000000);
-                    else STATE.baseBal += o.size;
+                    if (o.side === "buy") STATE.baseBal += Math.floor(Number(o.size) * Number(o.price) / 1000000);
+                    else STATE.baseBal += Math.floor(Number(o.size) * (1000000 - Number(o.price)) / 1000000);
                 }
             } catch (e: any) {
                 warn("cancel error:", e?.message ?? e);
@@ -224,7 +226,7 @@ export async function loopAggression(wallet: Wallet) {
 
             if (!feasibleOther) {
                 log("aggression skipped (not feasible)", {
-                    mid, chosen: side, qty: tradeQty, baseBal: STATE.baseBal, quoteBal: STATE.quoteBal, inv: STATE.invBase,
+                    mid, chosen: side, qty: tradeQty, baseBal: STATE.baseBal, inv: STATE.invBase,
                 });
                 continue;
             }
@@ -245,15 +247,11 @@ export async function loopAggression(wallet: Wallet) {
             await apiSendOrder(wallet, { side, price: aggressivePrice, size: tradeQty });
             log("aggressed", { side, qty: tradeQty, price: aggressivePrice, mid });
 
-            // local-ledger assumption: fills completely
+            STATE.baseBal = Number(await getLedgerBalance(wallet.address));
             if (CFG.USE_LOCAL_LEDGER) {
                 if (side === "buy") {
-                    STATE.quoteBal -= Math.floor(tradeQty * aggressivePrice / 1000000); // USD
-                    STATE.baseBal += Math.floor(tradeQty * (1000000 - aggressivePrice) / 1000000); // Asset
                     STATE.invBase += tradeQty;
                 } else {
-                    STATE.baseBal -= Math.floor(tradeQty * (1000000 - aggressivePrice) / 1000000); // Asset
-                    STATE.quoteBal += Math.floor(tradeQty * aggressivePrice / 1000000); // USD
                     STATE.invBase -= tradeQty;
                 }
             }

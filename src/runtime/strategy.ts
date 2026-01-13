@@ -83,12 +83,12 @@ export function availableBase(): number {
 }
 
 export function availableQuote(): number {
-    return Math.max(0, STATE.quoteBal - CFG.QUOTE_RESERVE_MIN);
+    return Math.max(0, STATE.baseBal - CFG.BASE_RESERVE_MIN);
 }
 
 export function canPlaceAsk(size: number, price: number): boolean {
-    console.log("availableQuote():", availableQuote(), "size:", size, "price:", price, " =>")
-    return Math.floor(size * (1000000 - price) / 1000000) <= availableQuote();
+    console.log("availableBase():", availableBase(), "size:", size, "price:", price, " =>")
+    return Math.floor(size * (1000000 - price) / 1000000) <= availableBase();
 }
 
 export function canPlaceBid(size: number, price: number): boolean {

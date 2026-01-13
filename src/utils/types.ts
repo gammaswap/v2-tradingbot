@@ -23,6 +23,19 @@ export type PendingOrder = {
     side?: Side;
 };
 
+export type Position = {
+    txId: bigint;
+    size: bigint;
+    balance: bigint;
+    margin: bigint;
+    pnl: bigint
+    side: boolean;
+    bSide: boolean;
+    mSide: boolean;
+    pSide: boolean;
+    claimed: boolean;
+};
+
 export type ApiPendingResponse = {
     assetId: bigint;
     ts: bigint;

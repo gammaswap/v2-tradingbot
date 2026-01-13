@@ -18,7 +18,7 @@ export const EXCHANGE_DOMAIN: TypedDataDomain = {
     name: "GammaSwap Exchange",
     version: "2",
     chainId: CFG.CHAIN_ID,
-    verifyingContract: CFG.VERIFYING_CONTRACT
+    verifyingContract: CFG.VERIFYING_ADDRESS
 };
 
 const DEPOSIT_ORDER_TYPEHASH = keccak256(Buffer.from(

@@ -1,11 +1,8 @@
 import { ethers } from "ethers";
-import { Asset, OrderStatus } from "../utils/types.js";
+import { CFG } from "../config/config.js";
+import { Position } from "../utils/types.js";
 
 let provider: ethers.JsonRpcProvider | null = null;
-
-const PERMIT2_ADDRESS = process.env.PERMIT2_CONTRACT ||"0x000000000022D473030F116dDEE9F6B43aC78BA3"
-const LEDGER_CONTRACT = process.env.LEDGER_CONTRACT ||"0x0000000000000000000000000000000000000000"
-const EXCHANGE_CONTRACT = process.env.EXCHANGE_CONTRACT ||"0x0000000000000000000000000000000000000000"
 
 export function getProvider(): ethers.JsonRpcProvider {
     if (!provider) {
@@ -34,10 +31,10 @@ const ACCOUNT_LEDGER_ABI = [
 
 // Minimal MARGIN_EXCHANGE ABI
 const MARGIN_EXCHANGE_ABI = [
+    "function getPosition(uint256 assetId, address account) external view returns (uint256 txId, uint256 size, uint256 balance, uint256 margin, uint256 pnl, bool side, bool bSide, bool mSide, bool pSide, bool claimed)",
     "function getOrderStatus(bytes32 orderHash) external view returns (address sender, bool isFilledOrCancelled, uint8 orderType, uint256 remaining)",
     "function assetById(uint256 assetId) external view returns (uint256 strikePrice,address oracle,uint32 expiration,uint8 assetType,bool registered)"
 ];
-
 
 /**
  * Returns a wallet's permit2 allowance in raw uint256 (BigInt)
@@ -48,7 +45,7 @@ export async function getPermit2Allowance(
 ): Promise<bigint> {
     const provider = getProvider();
     const token = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
-    return await token.allowance(user, PERMIT2_ADDRESS);
+    return await token.allowance(user, CFG.PERMIT2_ADDRESS);
 }
 
 export async function isPermit2NonceUsed(owner: string, nonce: bigint) : Promise<boolean> {
@@ -57,7 +54,42 @@ export async function isPermit2NonceUsed(owner: string, nonce: bigint) : Promise
     const bitPos = n & 0xffn;
 
     const provider = getProvider();
-    const permit2 = new ethers.Contract(PERMIT2_ADDRESS, PERMIT2_ABI, provider);
+    const permit2 = new ethers.Contract(CFG.PERMIT2_ADDRESS, PERMIT2_ABI, provider);
     const bitmap: bigint = await permit2.nonceBitmap(owner, wordPos);
     return (bitmap & (1n << bitPos)) !== 0n;
+}
+
+/**
+ * Returns a wallet's ledger balance in raw uint256 (BigInt)
+ */
+export async function getLedgerBalance(
+    user: string
+): Promise<bigint> {
+    const provider = getProvider();
+    const ledger = new ethers.Contract(CFG.LEDGER_ADDRESS, ACCOUNT_LEDGER_ABI, provider);
+    return await ledger.balanceOf(user);
+}
+
+/**
+ * Returns a wallet's ledger balance in raw uint256 (BigInt)
+ */
+export async function getPositionBalance(
+    assetId: bigint,
+    user: string
+): Promise<Position> {
+    const provider = getProvider();
+    const exchange = new ethers.Contract(CFG.EXCHANGE_ADDRESS, MARGIN_EXCHANGE_ABI, provider);
+    const resp = await exchange.getPosition(assetId, user);
+    return {
+        txId: resp.txId,
+        size: resp.size,
+        balance: resp.balance,
+        margin: resp.margin,
+        pnl: resp.pnl,
+        side: resp.side,
+        bSide: resp.bSide,
+        mSide: resp.mSide,
+        pSide: resp.pSide,
+        claimed: resp.claimed,
+    } as Position;
 }
