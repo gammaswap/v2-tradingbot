@@ -11,6 +11,10 @@ if [ -f "$ENV_FILE" ]; then
     set +a
 fi
 
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+nvm use 20
+
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/start-$(date +%Y%m%d-%H%M%S).log"
 
