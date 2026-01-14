@@ -21,11 +21,9 @@ export async function loopBookRefresh() {
     while (true) {
         try {
             const book = await apiGetBook();
-            console.log("book refresh >> bids:", book.bids.length, "asks:", book.asks.length," total:", book.asks.length + book.bids.length);
             STATE.book = book;
-            const mid = midPrice(book);
-            console.log("mid:", mid);
-            STATE.lastMid = mid;
+            STATE.lastMid = midPrice(book);
+            console.log("book refreshed:", STATE.lastMid, "bids:", book.bids.length, "asks:", book.asks.length, "total:", book.asks.length + book.bids.length, "time:", new Date().toUTCString());
         } catch (e: any) {
             warn("book refresh error:", e?.message ?? e);
         }
@@ -37,7 +35,6 @@ export async function loopPendingRefresh(wallet: Wallet) {
     while (true) {
         try {
             const pendingResp = await apiGetPending(wallet.address);
-            console.log("pending refresh:", pendingResp.buys.length + pendingResp.sells.length, "orders");
             const next = new Map<string, any>();
             for (const o of pendingResp.buys ?? []) {
                 const order = {
@@ -78,12 +75,14 @@ export async function loopPendingRefresh(wallet: Wallet) {
 export async function loopQuoteMaintenance(wallet: Wallet) {
     while (true) {
         await sleep(jitter(CFG.QUOTE_LOOP_MS, CFG.QUOTE_JITTER_MS));
+        console.log("=============loopQuoteMaintenance:start",(new Date()).toUTCString(),"============================");
         const position = await getPositionBalance(1n, wallet.address);
         STATE.invBase = Number(position.balance) * (position.bSide ? -1 : 1)
         const book = STATE.book;
         if (!book) continue;
 
         const mid = midPrice(book);
+        console.log("book >> bids:", book.bids.length, "asks:", book.asks.length," total:", book.asks.length + book.bids.length, "mid:", mid);
         const { bids: targetBidPrices, asks: targetAskPrices } = buildTargetLadderPrices(mid);
         const { bidSizes, askSizes } = buildTargetSizes();
 
@@ -129,7 +128,13 @@ export async function loopQuoteMaintenance(wallet: Wallet) {
             } catch (e: any) {
                 warn("place ask error:", e?.message ?? e);
             }
+
+            const _book = await apiGetBook();
+            STATE.book = _book;
+            STATE.lastMid = midPrice(_book);
+            console.log("book refreshed:", STATE.lastMid, "bids:", _book.bids.length, "asks:", _book.asks.length, "total:", _book.asks.length + _book.bids.length);
         }
+        console.log("=============loopQuoteMaintenance:end==================")
     }
 }
 
@@ -177,6 +182,11 @@ export async function loopCancelRebalance(wallet: Wallet) {
                 warn("cancel error:", e?.message ?? e);
             }
         }
+
+        const _book = await apiGetBook();
+        STATE.book = _book;
+        STATE.lastMid = midPrice(_book);
+        console.log("book refreshed:", STATE.lastMid, "bids:", _book.bids.length, "asks:", _book.asks.length, "total:", _book.asks.length + _book.bids.length);
     }
 }
 
@@ -186,7 +196,7 @@ export async function loopAggression(wallet: Wallet) {
         const book = STATE.book;
         if (!book) continue;
 
-        console.log("========================loopAggression:start==========================");
+        console.log("========================loopAggression:start",(new Date()).toUTCString(),"==========================");
         const mid = midPrice(book);
         console.log("mid:", mid);
         let side = chooseAggressionSide(mid);
@@ -258,6 +268,11 @@ export async function loopAggression(wallet: Wallet) {
         } catch (e: any) {
             warn("aggression error:", e?.message ?? e);
         }
+
+        const _book = await apiGetBook();
+        STATE.book = _book;
+        STATE.lastMid = midPrice(_book);
+        console.log("book refreshed:", STATE.lastMid, "bids:", _book.bids.length, "asks:", _book.asks.length, "total:", _book.asks.length + _book.bids.length);
         console.log("========================loopAggression:end==========================");
     }
 }
