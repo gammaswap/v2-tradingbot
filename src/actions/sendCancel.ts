@@ -30,12 +30,13 @@ async function main() {
     console.log("orderId:", orderHash)
 
     const cancel: Eip712Cancel = {
+        typ: 3n,
         nonce: BigInt(Date.now()), // must be unique in every transaction the user sends
         salt: 1n, // this is used to generate a hash which represents the orderId
         signer: account.address,
         signatureType: 0n,
         sender: account.address,
-        assetId: 1n,
+        assetId: BigInt(CFG.ASSET_ID),
         orderHash: orderHash
     }
 
@@ -55,6 +56,7 @@ async function main() {
 
     const signedMessage = {
         cancel: {
+            typ: cancel.typ.toString(),
             nonce: cancel.nonce.toString(), // must be unique in every transaction the user sends
             salt: cancel.salt.toString(), // this is used to generate a hash which represents the orderId
             signer: wallet.address,

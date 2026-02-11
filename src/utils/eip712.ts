@@ -22,19 +22,19 @@ export const EXCHANGE_DOMAIN: TypedDataDomain = {
 };
 
 const DEPOSIT_ORDER_TYPEHASH = keccak256(Buffer.from(
-    "DepositOrder(uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,uint32 expiration,uint256 amount,address token,address ledger,uint256 permitNonce,bytes32 permitSignature)"
+    "DepositOrder(uint8 typ,uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,uint256 amount,address token,address ledger,uint256 permitNonce,bytes32 permitSignature)"
 ));
 
 const WITHDRAWAL_ORDER_TYPEHASH = keccak256(Buffer.from(
-    "WithdrawalOrder(uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,address receiver,uint256 amount,address ledger)"
+    "WithdrawalOrder(uint8 typ,uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,address receiver,uint256 amount,address ledger)"
 ));
 
 const FILL_ORDER_TYPEHASH = keccak256(Buffer.from(
-    "FillOrder(uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,bool side,uint256 assetId,uint256 size,uint256 price)"
+    "FillOrder(uint8 typ,uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,bool side,uint256 assetId,uint256 size,uint256 price)"
 ));
 
 const CANCEL_ORDER_TYPEHASH = keccak256(Buffer.from(
-    "CancelOrder(uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,uint256 assetId,bytes32 orderHash)"
+    "CancelOrder(uint8 typ,uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,uint256 assetId,bytes32 orderHash)"
 ));
 
 const abi = new AbiCoder();
@@ -60,12 +60,12 @@ function getDepositStructHash(order: Eip712Deposit) : string {
     return keccak256(abi.encode(
         [
             "bytes32",
+            "uint8",   // typ
             "uint256", // nonce
             "uint256", // salt
             "address", // signer
             "uint8",   // signatureType
             "address", // sender
-            "uint32",  // expiration
             "uint256", // amount
             "address", // token
             "address", // ledger
@@ -74,12 +74,12 @@ function getDepositStructHash(order: Eip712Deposit) : string {
         ],
         [
             DEPOSIT_ORDER_TYPEHASH,
+            order.typ,
             order.nonce,
             order.salt,
             order.signer,
             order.signatureType,
             order.sender,
-            order.expiration,
             order.amount,
             order.token,
             order.ledger,
@@ -93,6 +93,7 @@ function getWithdrawalStructHash(order: Eip712Withdrawal) : string {
     return keccak256(abi.encode(
         [
             "bytes32",
+            "uint8",   // typ
             "uint256", // nonce
             "uint256", // salt
             "address", // signer
@@ -104,6 +105,7 @@ function getWithdrawalStructHash(order: Eip712Withdrawal) : string {
         ],
         [
             WITHDRAWAL_ORDER_TYPEHASH,
+            order.typ,
             order.nonce,
             order.salt,
             order.signer,
@@ -120,6 +122,7 @@ function getFillStructHash(order: Eip712Order) : string {
     return keccak256(abi.encode(
         [
             "bytes32",
+            "uint8",   // typ
             "uint256", // nonce
             "uint256", // salt
             "address", // signer
@@ -132,6 +135,7 @@ function getFillStructHash(order: Eip712Order) : string {
         ],
         [
             FILL_ORDER_TYPEHASH,
+            order.typ,
             order.nonce,
             order.salt,
             order.signer,
@@ -149,16 +153,18 @@ function getCancelStructHash(order: Eip712Cancel) : string {
     return keccak256(abi.encode(
         [
             "bytes32",
-            "uint256",
-            "uint256",
-            "address",
-            "uint8",
-            "address",
-            "uint256",
-            "bytes32"
+            "uint8",   // typ
+            "uint256", // nonce
+            "uint256", // salt
+            "address", // signer
+            "uint8",   // signatureType
+            "address", // sender
+            "uint256", // assetId
+            "bytes32"  // orderHash
         ],
         [
             CANCEL_ORDER_TYPEHASH,
+            order.typ,
             order.nonce,
             order.salt,
             order.signer,

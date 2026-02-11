@@ -2,6 +2,9 @@
   "name": "v2-tradingbot",
   "version": "1.0.0",
   "description": "Trading bot for GammaSwap V2",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/0xDanr/v2-tradingbot.git"
