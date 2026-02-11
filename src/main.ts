@@ -57,7 +57,7 @@ async function main() {
     const wallet = new Wallet(account.privateKey);
     console.log("Using address :", wallet.address);
 
-    const position = await getPositionBalance(1n, wallet.address);
+    const position = await getPositionBalance(BigInt(CFG.ASSET_ID), wallet.address);
     STATE.invBase = Number(position.balance) * (position.bSide ? -1 : 1)
     console.log("invBase:", STATE.invBase);
     const userBalance = await getLedgerBalance(wallet.address);

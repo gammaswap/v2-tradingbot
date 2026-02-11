@@ -31,9 +31,9 @@ const ACCOUNT_LEDGER_ABI = [
 
 // Minimal MARGIN_EXCHANGE ABI
 const MARGIN_EXCHANGE_ABI = [
-    "function getPosition(uint256 assetId, address account) external view returns (uint256 txId, uint256 size, uint256 balance, uint256 margin, uint256 pnl, bool side, bool bSide, bool mSide, bool pSide, bool claimed)",
+    "function getPosition(uint256 assetId, uint256 epoch, address account) external view returns (uint256 txId, uint256 size, uint256 balance, uint256 margin, uint256 pnl, bool side, bool bSide, bool mSide, bool pSide, bool claimed)",
     "function getOrderStatus(bytes32 orderHash) external view returns (address sender, bool isFilledOrCancelled, uint8 orderType, uint256 remaining)",
-    "function assetById(uint256 assetId) external view returns (uint256 strikePrice,address oracle,uint32 expiration,uint8 assetType,bool registered)"
+    "function getAsset(uint256 assetId) external view returns (uint256 strikePrice,address oracle,address ledger,uint32 expiration,uint8 assetType,bool registered,uint256 epoch)"
 ];
 
 /**
@@ -94,7 +94,7 @@ export async function getPositionBalance(
 ): Promise<Position> {
     const provider = getProvider();
     const exchange = new ethers.Contract(CFG.EXCHANGE_ADDRESS, MARGIN_EXCHANGE_ABI, provider);
-    const resp = await exchange.getPosition(assetId, user);
+    const resp = await exchange.getPosition(assetId, 0, user); // Must change to correct epoch in future versions
     return {
         txId: resp.txId,
         size: resp.size,
