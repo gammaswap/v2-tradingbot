@@ -30,23 +30,24 @@ async function httpPostJson<T>(url: string, body: any): Promise<T> {
 }
 
 export async function apiGetBook(): Promise<ApiBookResponse> {
-    return httpGetJson<ApiBookResponse>(CFG.BOOK_URL);
+    return httpGetJson<ApiBookResponse>(CFG.BOOK_URL + "/" + CFG.ASSET_ID);
 }
 
 export async function apiGetPending(address: string): Promise<ApiPendingResponse> {
-    return httpGetJson<ApiPendingResponse>(CFG.PENDING_URL+address.toLowerCase());
+    return httpGetJson<ApiPendingResponse>(CFG.PENDING_URL + "/" + CFG.ASSET_ID + "/" + address.toLowerCase());
 }
 
 export async function apiSendOrder(wallet: Wallet, order: { side: Side; price: number; size: number }) {
 
     const eip712Order: Eip712Order = {
+        typ: 2n,
         nonce: BigInt(Date.now()), // must be unique in every transaction the user sends
         salt: 1n, // this is used to generate a hash which represents the orderId
         signer: wallet.address,
         signatureType: 0n,
         sender: wallet.address,
         side: order.side != "buy",
-        assetId: 1n,
+        assetId: BigInt(CFG.ASSET_ID),
         size: BigInt(order.size),
         price: BigInt(order.price),
     }
@@ -68,6 +69,7 @@ export async function apiSendOrder(wallet: Wallet, order: { side: Side; price: n
 
     const signedMessage = {
         order: {
+            typ: eip712Order.typ.toString(),
             nonce: eip712Order.nonce.toString(), // must be unique in every transaction the user sends
             salt: eip712Order.salt.toString(), // this is used to generate a hash which represents the orderId
             signer: eip712Order.signer,
@@ -94,12 +96,13 @@ export async function apiCancelOrder(wallet: Wallet, orderHash: string) {
     console.log("orderId:", orderHash)
 
     const cancel: Eip712Cancel = {
+        typ: 3n,
         nonce: BigInt(Date.now()), // must be unique in every transaction the user sends
         salt: 1n, // this is used to generate a hash which represents the orderId
         signer: wallet.address,
         signatureType: 0n,
         sender: wallet.address,
-        assetId: 1n,
+        assetId: BigInt(CFG.ASSET_ID),
         orderHash: orderHash
     }
 
@@ -117,6 +120,7 @@ export async function apiCancelOrder(wallet: Wallet, orderHash: string) {
 
     const signedMessage = {
         cancel: {
+            typ: cancel.typ.toString(),
             nonce: cancel.nonce.toString(), // must be unique in every transaction the user sends
             salt: cancel.salt.toString(), // this is used to generate a hash which represents the orderId
             signer: wallet.address,

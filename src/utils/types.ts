@@ -46,12 +46,12 @@ export type ApiPendingResponse = {
 export type ApiBookResponse = BookSnapshot;
 
 export interface Eip712Deposit {
+    typ: bigint;
     nonce: bigint; // must be unique in every transaction the user sends
     salt: bigint; // this is used to generate a hash which represents the orderId
     signer: string;
     signatureType: bigint;
     sender: string;
-    expiration: bigint;
     amount: bigint;
     token: string;
     ledger: string;
@@ -67,6 +67,7 @@ export interface SignedDepositMessage {
 }
 
 export interface Eip712Order {
+    typ: bigint;
     nonce: bigint;
     salt: bigint;
     signer: string;
@@ -86,6 +87,7 @@ export interface SignedOrderMessage {
 }
 
 export interface Eip712Withdrawal {
+    typ: bigint;
     nonce: bigint; // must be unique in every transaction the user sends
     salt: bigint; // this is used to generate a hash which represents the orderId
     signer: string;
@@ -104,6 +106,7 @@ export interface SignedWithdrawalMessage {
 }
 
 export interface Eip712Cancel {
+    typ: bigint;
     nonce: bigint; // must be unique in every transaction the user sends
     salt: bigint; // this is used to generate a hash which represents the orderId
     signer: string;
@@ -119,7 +122,6 @@ export interface SignedCancelMessage {
     orderHash: string;
     signature: string;
 }
-
 
 export interface OrderStatus {
     sender: string;

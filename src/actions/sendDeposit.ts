@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { CFG } from "../config/config.js";
-import { Wallet } from "ethers";
+import { MaxUint256, Wallet } from "ethers";
 import axios from "axios";
 import {
     hashDepositOrderJS,
@@ -38,7 +38,7 @@ async function createPermit2Signature(wallet: Wallet, chainId: number, deposit: 
         },
         spender: deposit.ledger,
         nonce: deposit.permitNonce,
-        deadline: deposit.expiration,
+        deadline: MaxUint256,
     };
 
     console.log("Signing Permit2 typed data...");
@@ -61,12 +61,12 @@ async function main() {
     const expiry = now + 60 * 60; // 1 hour from now
 
     const deposit: Eip712Deposit = {
+        typ: 0n,
         nonce: BigInt(Date.now()), // must be unique in every transaction the user sends
         salt: 1n, // this is used to generate a hash which represents the orderId
         signer: account.address,
         signatureType: 0n,
         sender: account.address,
-        expiration: BigInt(expiry),
         amount: 100000000000n,
         token: CFG.SETTLEMENT_TOKEN,
         ledger: CFG.LEDGER_ADDRESS,
@@ -104,12 +104,12 @@ async function main() {
 
     const signedMessage = {
         deposit: {
+            typ: deposit.typ.toString(),
             nonce: deposit.nonce.toString(), // must be unique in every transaction the user sends
             salt: deposit.salt.toString(), // this is used to generate a hash which represents the orderId
             signer: deposit.signer,
             signatureType: deposit.signatureType.toString(),
             sender: deposit.sender,
-            expiration: deposit.expiration.toString(),
             amount: deposit.amount.toString(),
             token: deposit.token.toLowerCase(),
             ledger: deposit.ledger.toLowerCase(),
