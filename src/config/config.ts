@@ -22,9 +22,10 @@ export const CFG = {
     ORDERS_URL: envStr("ORDERS_URL", "https://exchange-api.gammaswap.com/api/orders"),
     CANCELS_URL: envStr("CANCELS_URL", "https://exchange-api.gammaswap.com/api/cancels"),
     DEPOSITS_URL: envStr("DEPOSITS_URL", "https://exchange-api.gammaswap.com/api/deposits"),
-    BOOK_URL: envStr("BOOK_URL", "https://exchange-api.gammaswap.com/api/book/1"),
+    BOOK_URL: envStr("BOOK_URL", "https://exchange-api.gammaswap.com/api/book"),
+    PENDING_URL: envStr("PENDING_URL", "https://exchange-api.gammaswap.com/api/book"),
+    ASSET_ID: envStr("ASSET_ID", "261336857817713630688382311349658711122006440411137"),
     USER_ADDRESS: envStr("USER_ADDRESS", "0xa829c1D4542F70714B35fFe95a247373329131df"),
-    PENDING_URL: envStr("PENDING_URL", "https://exchange-api.gammaswap.com/api/book/1/"),
 
     API_KEY: envStr("API_KEY", ""),
     API_SECRET: envStr("API_SECRET", ""),
@@ -33,9 +34,9 @@ export const CFG = {
     CHAIN_ID: envNum("CHAIN_ID", 84532), // baseSepolia
     PERMIT2_ADDRESS: envStr("PERMIT2_ADDRESS", "0x000000000022D473030F116dDEE9F6B43aC78BA3"),
     SETTLEMENT_TOKEN: envStr("SETTLEMENT_TOKEN", "0xdf3d36447b22e9feEe337765DdC413d09fA03bC2"),
-    LEDGER_ADDRESS: envStr("LEDGER_ADDRESS", "0x4CdEa5762F371E509B6808e7E3C252A4a562335f"),
-    EXCHANGE_ADDRESS: envStr("EXCHANGE_ADDRESS", "0x5A137E6DbEDbD01A716DfaFe534479CDF8f6be9C"),
-    VERIFYING_ADDRESS: envStr("VERIFYING_ADDRESS", "0x5A137E6DbEDbD01A716DfaFe534479CDF8f6be9C"),
+    LEDGER_ADDRESS: envStr("LEDGER_ADDRESS", ""),
+    EXCHANGE_ADDRESS: envStr("EXCHANGE_ADDRESS", ""),
+    VERIFYING_ADDRESS: envStr("VERIFYING_ADDRESS", ""),
 
     HARD_MIN_PRICE: envNum("HARD_MIN_PRICE", 100000), // 0.1
     HARD_MAX_PRICE: envNum("HARD_MAX_PRICE", 900000), // 0.9

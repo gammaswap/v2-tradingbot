@@ -1,6 +1,6 @@
 import { ethers } from "ethers";
 import { CFG } from "../config/config.js";
-import { Position } from "../utils/types.js";
+import { Asset, Position } from "../utils/types.js";
 
 let provider: ethers.JsonRpcProvider | null = null;
 
@@ -68,6 +68,21 @@ export async function getLedgerBalance(
     const provider = getProvider();
     const ledger = new ethers.Contract(CFG.LEDGER_ADDRESS, ACCOUNT_LEDGER_ABI, provider);
     return await ledger.balanceOf(user);
+}
+
+export async function getAssetById(
+    assetId: bigint
+): Promise<Asset> {
+    const provider = getProvider();
+    const exchange = new ethers.Contract(CFG.EXCHANGE_ADDRESS, MARGIN_EXCHANGE_ABI, provider);
+    return await exchange.getAsset(assetId);
+}
+
+export async function isAssetRegistered(
+    assetId: bigint
+): Promise<boolean> {
+    const asset = await getAssetById(assetId) as Asset;
+    return asset.strikePrice > 0n && asset.assetType > 0n && asset.expiration > 0n && asset.registered;
 }
 
 /**

@@ -30,11 +30,11 @@ async function httpPostJson<T>(url: string, body: any): Promise<T> {
 }
 
 export async function apiGetBook(): Promise<ApiBookResponse> {
-    return httpGetJson<ApiBookResponse>(CFG.BOOK_URL);
+    return httpGetJson<ApiBookResponse>(CFG.BOOK_URL + "/" + CFG.ASSET_ID);
 }
 
 export async function apiGetPending(address: string): Promise<ApiPendingResponse> {
-    return httpGetJson<ApiPendingResponse>(CFG.PENDING_URL+address.toLowerCase());
+    return httpGetJson<ApiPendingResponse>(CFG.PENDING_URL + "/" + CFG.ASSET_ID + "/" + address.toLowerCase());
 }
 
 export async function apiSendOrder(wallet: Wallet, order: { side: Side; price: number; size: number }) {
@@ -46,7 +46,7 @@ export async function apiSendOrder(wallet: Wallet, order: { side: Side; price: n
         signatureType: 0n,
         sender: wallet.address,
         side: order.side != "buy",
-        assetId: 1n,
+        assetId: BigInt(CFG.ASSET_ID),
         size: BigInt(order.size),
         price: BigInt(order.price),
     }

@@ -45,3 +45,14 @@ export function log(...args: any[]) {
 export function warn(...args: any[]) {
     console.warn(new Date().toISOString(), ...args);
 }
+
+export function isBigIntString(value: string): boolean {
+    if (typeof value !== "string") return false;
+
+    // Must match:
+    // - "0"
+    // - or non-zero digit followed by digits
+    const regex = /^(0|[1-9]\d*)$/;
+
+    return regex.test(value);
+}
