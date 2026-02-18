@@ -64,9 +64,6 @@ export async function apiSendOrder(wallet: Wallet, order: { side: Side; price: n
     console.log("isRecovered:", recovered);
     console.log("signer     :", eip712Order.signer.toString());
 
-    const now = Math.floor(Date.now() / 1000);
-    const expiry = now + 60 * 60; // 1 hour from now
-
     const signedMessage = {
         order: {
             typ: eip712Order.typ.toString(),
@@ -75,7 +72,6 @@ export async function apiSendOrder(wallet: Wallet, order: { side: Side; price: n
             signer: eip712Order.signer,
             signatureType: eip712Order.signatureType.toString(),
             sender: eip712Order.sender,
-            expiration: BigInt(expiry).toString(),
             side: eip712Order.side,
             assetId: eip712Order.assetId.toString(),
             size: eip712Order.size.toString(),

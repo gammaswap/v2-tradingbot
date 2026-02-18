@@ -1,11 +1,11 @@
 import { CFG } from "./config/config.js";
 import { isBigIntString, log, warn } from "./utils/utils.js";
 import {
-    loopAggression,
-    loopBookRefresh,
-    loopCancelRebalance,
-    loopPendingRefresh,
-    loopQuoteMaintenance,
+    runAggression,
+    runBookRefresh,
+    runCancelRebalance,
+    runPendingRefresh,
+    runQuoteMaintenance,
 } from "./runtime/loops.js";
 import { deriveAccountsFromMnemonic } from "./utils/eip712.js";
 import { Wallet, isAddress } from "ethers";
@@ -66,13 +66,13 @@ async function main() {
 
     if (STATE.baseBal < CFG.BASE_RESERVE_MIN) warn("START_BASE_BAL < BASE_RESERVE_MIN; bot may refuse quotes.");
 
-    await Promise.allSettled([
-        loopBookRefresh(),
-        loopPendingRefresh(wallet),
-        loopQuoteMaintenance(wallet),
-        loopCancelRebalance(wallet),
-        loopAggression(wallet),
-    ]);
+    while (true) {
+        await runBookRefresh();
+        await runPendingRefresh(wallet);
+        await runQuoteMaintenance(wallet);
+        await runCancelRebalance(wallet);
+        await runAggression(wallet);
+    }
 }
 
 main().catch((e) => {
