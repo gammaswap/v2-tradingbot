@@ -137,3 +137,10 @@ export interface Asset {
     assetType: bigint;
     registered: boolean;
 }
+
+export const OrderType = {
+    DEPOSIT: 0n,
+    WITHDRAWAL: 1n,
+    FILL: 2n,
+    CANCEL: 3n
+}
