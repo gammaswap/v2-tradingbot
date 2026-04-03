@@ -14,6 +14,15 @@ export type BookSnapshot = {
     asks: BookLevel[];
 };
 
+export type BalanceSnapshot = {
+    account: string,
+    ts: number,
+    balance: bigint,
+    pending: bigint,
+}
+
+export type ApiBalancesResponse = BalanceSnapshot
+
 export type PendingOrder = {
     id: string;
     price: number;
@@ -35,6 +44,23 @@ export type Position = {
     pSide: boolean;
     claimed: boolean;
 };
+
+export type PositionSnapshot = {
+    account: string,
+    assetId: bigint,
+    epoch: bigint,
+    ts: number,
+    size: bigint,
+    margin: bigint,
+    balance: bigint,
+    pnl: bigint,
+    side: boolean,
+    bSide: boolean,
+    mSide: boolean,
+    pSide: boolean
+}
+
+export type ApiPositionResponse = PositionSnapshot
 
 export type ApiPendingResponse = {
     assetId: bigint;
@@ -73,6 +99,7 @@ export interface Eip712Order {
     signer: string;
     signatureType: bigint;
     sender: string;
+    epoch: bigint;
     side: boolean;
     assetId: bigint;
     size: bigint;
@@ -113,6 +140,7 @@ export interface Eip712Cancel {
     signatureType: bigint;
     sender: string;
     assetId: bigint;
+    epoch: bigint;
     orderHash: string;
 }
 
@@ -136,11 +164,19 @@ export interface Asset {
     expiration: bigint;
     assetType: bigint;
     registered: boolean;
+    epoch: bigint;
+}
+
+export interface AssetEpochData {
+    expiration: bigint;
+    strikePrice: bigint;
+    resolutionPrice: bigint;
 }
 
 export const OrderType = {
     DEPOSIT: 0n,
     WITHDRAWAL: 1n,
     FILL: 2n,
-    CANCEL: 3n
+    CANCEL: 3n,
+    RESOLUTION: 4n,
 }

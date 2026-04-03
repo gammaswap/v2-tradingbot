@@ -24,7 +24,10 @@ export const CFG = {
     DEPOSITS_URL: envStr("DEPOSITS_URL", "https://exchange-api.gammaswap.com/api/deposits"),
     BOOK_URL: envStr("BOOK_URL", "https://exchange-api.gammaswap.com/api/book"),
     PENDING_URL: envStr("PENDING_URL", "https://exchange-api.gammaswap.com/api/book"),
+    BALANCE_URL: envStr("BALANCE_URL", "https://exchange-api.gammaswap.com/api/balance"),
+    POSITION_URL: envStr("POSITION_URL", "https://exchange-api.gammaswap.com/api/position"),
     ASSET_ID: envStr("ASSET_ID", "261336857817713630688382311349658711122006440411137"),
+    EPOCH: envStr("EPOCH", "0"),
     USER_ADDRESS: envStr("USER_ADDRESS", "0xa829c1D4542F70714B35fFe95a247373329131df"),
 
     API_KEY: envStr("API_KEY", ""),

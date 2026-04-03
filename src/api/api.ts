@@ -1,6 +1,13 @@
 import crypto from "crypto";
 import { CFG, type Side } from "../config/config.js";
-import { ApiBookResponse, ApiPendingResponse, Eip712Cancel, Eip712Order } from "../utils/types.js";
+import {
+    ApiBalancesResponse,
+    ApiBookResponse,
+    ApiPendingResponse,
+    ApiPositionResponse,
+    Eip712Cancel,
+    Eip712Order
+} from "../utils/types.js";
 import { Wallet } from "ethers";
 import { hashCancelOrderJS, hashFillOrderJS, signOrderJS, validateSignatureJS } from "../utils/eip712.js";
 
@@ -29,15 +36,23 @@ async function httpPostJson<T>(url: string, body: any): Promise<T> {
     return (await res.json()) as T;
 }
 
-export async function apiGetBook(): Promise<ApiBookResponse> {
-    return httpGetJson<ApiBookResponse>(CFG.BOOK_URL + "/" + CFG.ASSET_ID);
+export async function apiGetBook(epoch: number): Promise<ApiBookResponse> {
+    return httpGetJson<ApiBookResponse>(CFG.BOOK_URL + "/" + CFG.ASSET_ID + "/" + epoch);
 }
 
-export async function apiGetPending(address: string): Promise<ApiPendingResponse> {
-    return httpGetJson<ApiPendingResponse>(CFG.PENDING_URL + "/" + CFG.ASSET_ID + "/" + address.toLowerCase());
+export async function apiGetBalance(): Promise<ApiBalancesResponse> {
+    return httpGetJson<ApiBalancesResponse>(CFG.BALANCE_URL + "/" + CFG.USER_ADDRESS);
 }
 
-export async function apiSendOrder(wallet: Wallet, order: { side: Side; price: number; size: number }) {
+export async function apiGetPosition(epoch: number): Promise<ApiPositionResponse> {
+    return httpGetJson<ApiPositionResponse>(CFG.POSITION_URL + "/" + CFG.USER_ADDRESS + "/" + CFG.ASSET_ID + "/" + epoch);
+}
+
+export async function apiGetPending(address: string, epoch: number): Promise<ApiPendingResponse> {
+    return httpGetJson<ApiPendingResponse>(CFG.PENDING_URL + "/" + CFG.ASSET_ID + `/${epoch}/` + address.toLowerCase());
+}
+
+export async function apiSendOrder(wallet: Wallet, order: { epoch: number, side: Side; price: number; size: number }) {
 
     const eip712Order: Eip712Order = {
         typ: 2n,
@@ -48,6 +63,7 @@ export async function apiSendOrder(wallet: Wallet, order: { side: Side; price: n
         sender: wallet.address,
         side: order.side != "buy",
         assetId: BigInt(CFG.ASSET_ID),
+        epoch: BigInt(order.epoch),
         size: BigInt(order.size),
         price: BigInt(order.price),
     }
@@ -74,6 +90,7 @@ export async function apiSendOrder(wallet: Wallet, order: { side: Side; price: n
             sender: eip712Order.sender,
             side: eip712Order.side,
             assetId: eip712Order.assetId.toString(),
+            epoch: eip712Order.epoch.toString(),
             size: eip712Order.size.toString(),
             price: eip712Order.price.toString()
         },
@@ -87,7 +104,7 @@ export async function apiSendOrder(wallet: Wallet, order: { side: Side; price: n
     return httpPostJson<any>(CFG.ORDERS_URL, signedMessage);
 }
 
-export async function apiCancelOrder(wallet: Wallet, orderHash: string) {
+export async function apiCancelOrder(wallet: Wallet, epoch: number, orderHash: string) {
 
     console.log("orderId:", orderHash)
 
@@ -99,6 +116,7 @@ export async function apiCancelOrder(wallet: Wallet, orderHash: string) {
         signatureType: 0n,
         sender: wallet.address,
         assetId: BigInt(CFG.ASSET_ID),
+        epoch: BigInt(epoch),
         orderHash: orderHash
     }
 
@@ -123,6 +141,7 @@ export async function apiCancelOrder(wallet: Wallet, orderHash: string) {
             signatureType: cancel.signatureType.toString(),
             sender: wallet.address,
             assetId: cancel.assetId.toString(),
+            epoch: cancel.epoch.toString(),
             orderHash: cancel.orderHash,
         },
         chainId: chainId.toString(),

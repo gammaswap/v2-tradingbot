@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { CFG } from "../config/config.js";
-import { Wallet } from "ethers";
+import { Wallet, ZeroHash } from "ethers";
 import axios from "axios";
 import {
     hashCancelOrderJS,
@@ -37,7 +37,8 @@ async function main() {
         signatureType: 0n,
         sender: account.address,
         assetId: BigInt(CFG.ASSET_ID),
-        orderHash: orderHash
+        epoch: BigInt(CFG.EPOCH),
+        orderHash: orderHash == "all" ? ZeroHash : orderHash
     }
 
     const chainId = BigInt(CFG.CHAIN_ID)
@@ -63,6 +64,7 @@ async function main() {
             signatureType: cancel.signatureType.toString(),
             sender: wallet.address,
             assetId: cancel.assetId.toString(),
+            epoch: cancel.epoch.toString(),
             orderHash: cancel.orderHash,
         },
         chainId: chainId.toString(),
@@ -90,7 +92,7 @@ async function main() {
         } else {
             console.error("Request error:", err.message);
         }
-    }/**/
+    }
 }
 
 main().catch((err) => {

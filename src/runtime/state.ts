@@ -9,6 +9,7 @@ export const STATE = {
     // optional local ledger (first iteration)
     baseBal: 0,
     invBase: 0,
+    epoch: 0n,
 
     lastMid: CFG.CENTER_PRICE,
 

@@ -1,5 +1,5 @@
 import { CFG } from "../config/config.js";
-import { apiCancelOrder, apiGetBook, apiGetPending, apiSendOrder } from "../api/api.js";
+import { apiCancelOrder, apiGetBalance, apiGetBook, apiGetPending, apiSendOrder } from "../api/api.js";
 import { STATE } from "./state.js";
 import { jitter, log, nowMs, sleep, warn, clamp, roundToTick } from "../utils/utils.js";
 import {
@@ -14,13 +14,64 @@ import {
     canAggressBuy,
     canAggressSell,
 } from "./strategy.js";
-import { Wallet } from "ethers";
-import { getLedgerBalance, getPositionBalance } from "../chain/blockchain.js";
+import { Wallet, ZeroHash } from "ethers";
+import { getAssetById, getPositionBalance } from "../chain/blockchain.js";
+import { Asset } from "../utils/types.js";
+
+export async function cleanUpAllOrders(wallet: Wallet) {
+    let done = false;
+    let tryCount = 0;
+    while(!done) {
+        const resp = await apiGetBalance();
+        if(resp.pending > 0n) {
+            await cancelAllOrders(wallet);
+            tryCount++;
+        } else {
+            done = true;
+        }
+        if(tryCount >= 10) {
+            done = true;
+        }
+    }
+}
+
+export async function cancelAllOrders(wallet: Wallet) {
+    let epoch = Number(STATE.epoch);
+    let done = false;
+    while(!done && epoch > 0n) {
+        // look for pending orders
+        const pending = await apiGetPending(CFG.USER_ADDRESS, epoch);
+        if(pending.buys.length > 0 || pending.sells.length > 0) {
+            // has pending orders, send cancel all
+            await apiCancelOrder(wallet, epoch, ZeroHash);
+            await sleep(1000 * 3);
+            epoch--;
+        } else {
+            epoch--;
+        }
+    }
+}
+
+export async function runAssetEpochCheck(wallet: Wallet) {
+    const asset: Asset = await getAssetById(BigInt(CFG.ASSET_ID));
+    if(asset.epoch != STATE.epoch) {
+        const resp = await apiGetBalance();
+        if(resp.pending > 0n) {
+            await cancelAllOrders(wallet);
+            return false;
+        } else {
+            // just move to next period
+            STATE.epoch = asset.epoch;
+            console.log("asset epoch changed:", STATE.epoch);
+        }
+    }
+    return true;
+}
 
 export async function runBookRefresh() {
     console.log("=============runBookRefresh:start",(new Date()).toUTCString(),"============================");
     try {
-        const book = await apiGetBook();
+        const book = await apiGetBook(Number(STATE.epoch));
         STATE.book = book;
         STATE.lastMid = midPrice(book);
         console.log("book refreshed:", STATE.lastMid, "bids:", book.bids.length, "asks:", book.asks.length, "total:", book.asks.length + book.bids.length, "time:", new Date().toUTCString());
@@ -34,7 +85,7 @@ export async function runBookRefresh() {
 export async function runPendingRefresh(wallet: Wallet) {
     console.log("=============runPendingRefresh:start",(new Date()).toUTCString(),"============================");
     try {
-        const pendingResp = await apiGetPending(wallet.address);
+        const pendingResp = await apiGetPending(wallet.address, Number(STATE.epoch));
         const next = new Map<string, any>();
         for (const o of pendingResp.buys ?? []) {
             const order = {
@@ -104,7 +155,7 @@ export async function runQuoteMaintenance(wallet: Wallet) {
         const _canPlaceBid = canPlaceBid(size, price);
         if (!_canPlaceBid) continue;
         try {
-            await apiSendOrder(wallet, { side: "buy", price, size });
+            await apiSendOrder(wallet, { epoch: Number(STATE.epoch), side: "buy", price, size });
             log("placed bid", { price, size });
             if (CFG.USE_LOCAL_LEDGER) STATE.baseBal -= Math.floor(size * price / 1000000); // USD
         } catch (e: any) {
@@ -120,14 +171,14 @@ export async function runQuoteMaintenance(wallet: Wallet) {
         const _canPlaceAsk = canPlaceAsk(size, price);
         if (!_canPlaceAsk) continue;
         try {
-            await apiSendOrder(wallet, { side: "sell", price, size });
+            await apiSendOrder(wallet, { epoch: Number(STATE.epoch), side: "sell", price, size });
             log("placed ask", { price, size });
             if (CFG.USE_LOCAL_LEDGER) STATE.baseBal -= Math.floor((1000000 - price) * size / 1000000); // Asset
         } catch (e: any) {
             warn("place ask error:", e?.message ?? e);
         }
 
-        const _book = await apiGetBook();
+        const _book = await apiGetBook(Number(STATE.epoch));
         STATE.book = _book;
         STATE.lastMid = midPrice(_book);
         console.log("book refreshed:", STATE.lastMid, "bids:", _book.bids.length, "asks:", _book.asks.length, "total:", _book.asks.length + _book.bids.length);
@@ -169,7 +220,7 @@ export async function runCancelRebalance(wallet: Wallet) {
     console.log("canceling:", batch.length, "total orders");
     for (const o of batch) {
         try {
-            await apiCancelOrder(wallet, o.id);
+            await apiCancelOrder(wallet, Number(o.epoch), o.id);
             log("canceled", { id: o.id, side: o.side, price: o.price, size: o.size });
             if (CFG.USE_LOCAL_LEDGER) {
                 if (o.side === "buy") STATE.baseBal += Math.floor(Number(o.size) * Number(o.price) / 1000000);
@@ -180,7 +231,7 @@ export async function runCancelRebalance(wallet: Wallet) {
         }
     }
 
-    const _book = await apiGetBook();
+    const _book = await apiGetBook(Number(STATE.epoch));
     STATE.book = _book;
     STATE.lastMid = midPrice(_book);
     console.log("book refreshed:", STATE.lastMid, "bids:", _book.bids.length, "asks:", _book.asks.length, "total:", _book.asks.length + _book.bids.length);
@@ -250,10 +301,12 @@ export async function runAggression(wallet: Wallet) {
 
     console.log("aggressivePrice:", aggressivePrice, "side:", side, "qty:", tradeQty, "mid:", mid);
     try {
-        await apiSendOrder(wallet, { side, price: aggressivePrice, size: tradeQty });
+        await apiSendOrder(wallet, { epoch: Number(STATE.epoch), side, price: aggressivePrice, size: tradeQty });
         log("aggressed", { side, qty: tradeQty, price: aggressivePrice, mid });
 
-        STATE.baseBal = Number(await getLedgerBalance(wallet.address));
+        //STATE.baseBal = Number(await getLedgerBalance(wallet.address));
+        const resp = await apiGetBalance();
+        STATE.baseBal = Number(resp.balance);
         if (CFG.USE_LOCAL_LEDGER) {
             if (side === "buy") {
                 STATE.invBase += tradeQty;
@@ -265,7 +318,7 @@ export async function runAggression(wallet: Wallet) {
         warn("aggression error:", e?.message ?? e);
     }
 
-    const _book = await apiGetBook();
+    const _book = await apiGetBook(Number(STATE.epoch));
     STATE.book = _book;
     STATE.lastMid = midPrice(_book);
     console.log("book refreshed:", STATE.lastMid, "bids:", _book.bids.length, "asks:", _book.asks.length, "total:", _book.asks.length + _book.bids.length);

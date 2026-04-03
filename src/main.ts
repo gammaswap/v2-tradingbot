@@ -1,7 +1,9 @@
 import { CFG } from "./config/config.js";
-import { isBigIntString, log, warn } from "./utils/utils.js";
+import { isBigIntString, log, sleep, warn } from "./utils/utils.js";
 import {
+    cleanUpAllOrders,
     runAggression,
+    runAssetEpochCheck,
     runBookRefresh,
     runCancelRebalance,
     runPendingRefresh,
@@ -9,8 +11,10 @@ import {
 } from "./runtime/loops.js";
 import { deriveAccountsFromMnemonic } from "./utils/eip712.js";
 import { Wallet, isAddress } from "ethers";
-import { getLedgerBalance, getPositionBalance, isAssetRegistered } from "./chain/blockchain.js";
+import { getAssetById, isAssetRegistered } from "./chain/blockchain.js";
 import { STATE } from "./runtime/state.js";
+import { apiGetBalance, apiGetPosition } from "./api/api.js";
+import { Asset } from "./utils/types.js";
 
 async function main() {
     log("starting bot", {
@@ -57,21 +61,39 @@ async function main() {
     const wallet = new Wallet(account.privateKey);
     console.log("Using address :", wallet.address);
 
-    const position = await getPositionBalance(BigInt(CFG.ASSET_ID), wallet.address);
+    const asset: Asset = await getAssetById(BigInt(CFG.ASSET_ID));
+    STATE.epoch = asset.epoch;
+    log("asset:", asset);
+
+    await cleanUpAllOrders(wallet);
+
+    await sleep(1000 * 3);
+
+    const resp = await apiGetBalance();
+    if(resp.pending > 0n) {
+        warn("Error: Pending balance > 0, pending:", resp.pending);
+        return;
+    }
+
+    const position = await apiGetPosition(Number(STATE.epoch));
     STATE.invBase = Number(position.balance) * (position.bSide ? -1 : 1)
     console.log("invBase:", STATE.invBase);
-    const userBalance = await getLedgerBalance(wallet.address);
-    STATE.baseBal = Number(userBalance);
+    STATE.baseBal = Number(resp.balance);
     console.log("userBalance:", STATE.baseBal);
 
     if (STATE.baseBal < CFG.BASE_RESERVE_MIN) warn("START_BASE_BAL < BASE_RESERVE_MIN; bot may refuse quotes.");
 
     while (true) {
-        await runBookRefresh();
-        await runPendingRefresh(wallet);
-        await runQuoteMaintenance(wallet);
-        await runCancelRebalance(wallet);
-        await runAggression(wallet);
+        if(await runAssetEpochCheck(wallet)) {
+            await sleep(1000);
+            await runBookRefresh();
+            await runPendingRefresh(wallet);
+            await runQuoteMaintenance(wallet);
+            await runCancelRebalance(wallet);
+            await runAggression(wallet);
+        } else {
+            await sleep(1000 * 3);
+        }
     }
 }
 
