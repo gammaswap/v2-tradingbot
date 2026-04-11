@@ -13,7 +13,7 @@ import {
     Eip712Order,
     Eip712Deposit,
     Eip712Withdrawal,
-    Eip712Cancel,
+    Eip712Cancel, Eip712Claim,
 } from "./types.js";
 
 export const EXCHANGE_DOMAIN: TypedDataDomain = {
@@ -37,6 +37,10 @@ const FILL_ORDER_TYPEHASH = keccak256(Buffer.from(
 
 const CANCEL_ORDER_TYPEHASH = keccak256(Buffer.from(
     "CancelOrder(uint8 typ,uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,uint256 assetId,uint32 epoch,bytes32 orderHash)"
+));
+
+const CLAIM_ORDER_TYPEHASH = keccak256(Buffer.from(
+    "ClaimOrder(uint8 typ,uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,uint256 assetId,uint32 epoch)"
 ));
 
 const abi = new AbiCoder();
@@ -182,6 +186,33 @@ function getCancelStructHash(order: Eip712Cancel) : string {
     ));
 }
 
+function getClaimStructHash(order: Eip712Claim) : string {
+    return keccak256(abi.encode(
+        [
+            "bytes32",
+            "uint8",   // typ
+            "uint256", // nonce
+            "uint256", // salt
+            "address", // signer
+            "uint8",   // signatureType
+            "address", // sender
+            "uint256", // assetId
+            "uint32",  // epoch
+        ],
+        [
+            CLAIM_ORDER_TYPEHASH,
+            order.typ,
+            order.nonce,
+            order.salt,
+            order.signer,
+            order.signatureType,
+            order.sender,
+            order.assetId,
+            order.epoch,
+        ]
+    ));
+}
+
 export function hashDepositOrderJS(order: Eip712Deposit) : string {
     const structHash = getDepositStructHash(order);
     const domainSeparator = getDomainSeparator();
@@ -223,6 +254,19 @@ export function hashFillOrderJS(order: Eip712Order) : string {
 
 export function hashCancelOrderJS(order: Eip712Cancel) : string {
     const structHash = getCancelStructHash(order);
+    const domainSeparator = getDomainSeparator();
+
+    // "\x19\x01" || domainSeparator || structHash
+    return keccak256(
+        solidityPacked(
+            ["string", "bytes32", "bytes32"],
+            ["\x19\x01", domainSeparator, structHash]
+        )
+    );
+}
+
+export function hashClaimOrderJS(order: Eip712Claim) : string {
+    const structHash = getClaimStructHash(order);
     const domainSeparator = getDomainSeparator();
 
     // "\x19\x01" || domainSeparator || structHash

@@ -22,10 +22,10 @@
   dependencies:
     "@jridgewell/trace-mapping" "0.3.9"
 
-"@gammaswap/v2-exchange@^0.1.1":
-  version "0.1.1"
-  resolved "https://npm.pkg.github.com/download/@gammaswap/v2-exchange/0.1.1/4a9530888db961bead2a6f182097ef5eb00fc7b8#4a9530888db961bead2a6f182097ef5eb00fc7b8"
-  integrity sha512-sPZwsXPNEFOLbw2d8EGO7jZk+BpU4R2kyiFyeyoCMtihBV8lTVCV8kiERerRNEM9OlSgODjZGMuYNEjbSA4Psg==
+"@gammaswap/v2-exchange@^0.2.1":
+  version "0.2.1"
+  resolved "https://npm.pkg.github.com/download/@gammaswap/v2-exchange/0.2.1/5d83a7c103d5a061f4d5fac48b0e740f9739c5d2#5d83a7c103d5a061f4d5fac48b0e740f9739c5d2"
+  integrity sha512-GVGirPYndYysG8D+YexHGfYBPa6XdKrrimV7MOwnOkt7onoz7B/PHYwT6wHFLzXyjhwfBZ1gDBrspNQu42+jtw==
   dependencies:
     "@chainlink/data-streams-sdk" "^1.2.1"
     "@openzeppelin/contracts" "^5.4.0"
@@ -129,7 +129,7 @@ asynckit@^0.4.0:
   resolved "https://registry.yarnpkg.com/asynckit/-/asynckit-0.4.0.tgz#c79ed97f7f34cb8f2ba1bc9790bcc366474b4b79"
   integrity sha512-Oei9OH4tRh0YqU3GxhX79dM/mwVgvbZJaSNaRk+bshkj0S5cfHcgYakreBjrHwatXKbz+IoIdYLxrKim2MjW0Q==
 
-axios@^1.13.2:
+axios@1.13.2:
   version "1.13.2"
   resolved "https://registry.yarnpkg.com/axios/-/axios-1.13.2.tgz#9ada120b7b5ab24509553ec3e40123521117f687"
   integrity sha512-VPk9ebNqPcy5lRGuSlKx752IlDatOjT9paPlm8A7yOuW2Fbvp4X3JznJtT4f0GzGLLiWE9W8onz51SqLYwzGaA==

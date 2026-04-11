@@ -21,9 +21,11 @@ function envBool(name: string, def: boolean): boolean {
 export const CFG = {
     ORDERS_URL: envStr("ORDERS_URL", "https://exchange-api.gammaswap.com/api/orders"),
     CANCELS_URL: envStr("CANCELS_URL", "https://exchange-api.gammaswap.com/api/cancels"),
+    CLAIM_URL: envStr("CLAIM_URL", "https://exchange-api.gammaswap.com/api/claim"),
     DEPOSITS_URL: envStr("DEPOSITS_URL", "https://exchange-api.gammaswap.com/api/deposits"),
     BOOK_URL: envStr("BOOK_URL", "https://exchange-api.gammaswap.com/api/book"),
     PENDING_URL: envStr("PENDING_URL", "https://exchange-api.gammaswap.com/api/book"),
+    RESOLUTION_URL: envStr("RESOLUTION_URL", "https://exchange-api.gammaswap.com/api/resolve"),
     BALANCE_URL: envStr("BALANCE_URL", "https://exchange-api.gammaswap.com/api/balance"),
     POSITION_URL: envStr("POSITION_URL", "https://exchange-api.gammaswap.com/api/position"),
     ASSET_ID: envStr("ASSET_ID", "261336857817713630688382311349658711122006440411137"),

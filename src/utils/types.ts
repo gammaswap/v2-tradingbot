@@ -69,6 +69,15 @@ export type ApiPendingResponse = {
     sells: PendingOrder[];
 };
 
+export type ApiResolutionPriceResponse = {
+    assetId: bigint;
+    epoch: bigint;
+    price: bigint;
+    id: number;
+    ts: bigint;
+    isNull: boolean;
+};
+
 export type ApiBookResponse = BookSnapshot;
 
 export interface Eip712Deposit {
@@ -144,6 +153,24 @@ export interface Eip712Cancel {
     orderHash: string;
 }
 
+export interface Eip712Claim {
+    typ: bigint;
+    nonce: bigint; // must be unique in every transaction the user sends
+    salt: bigint; // this is used to generate a hash which represents the orderId
+    signer: string;
+    signatureType: bigint;
+    sender: string;
+    assetId: bigint;
+    epoch: bigint;
+}
+
+export interface SignedClaimMessage {
+    claim: Eip712Claim;
+    chainId: bigint;
+    orderHash: string;
+    signature: string;
+}
+
 export interface SignedCancelMessage {
     cancel: Eip712Cancel;
     chainId: bigint;
@@ -179,4 +206,5 @@ export const OrderType = {
     FILL: 2n,
     CANCEL: 3n,
     RESOLUTION: 4n,
+    CLAIM: 5n,
 }

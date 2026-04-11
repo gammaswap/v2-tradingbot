@@ -1,5 +1,12 @@
 import { CFG } from "../config/config.js";
-import { apiCancelOrder, apiGetBalance, apiGetBook, apiGetPending, apiSendOrder } from "../api/api.js";
+import {
+    apiCancelOrder, apiClaim,
+    apiGetBalance,
+    apiGetBook,
+    apiGetPending,
+    apiLastResolutionPrice,
+    apiSendOrder
+} from "../api/api.js";
 import { STATE } from "./state.js";
 import { jitter, log, nowMs, sleep, warn, clamp, roundToTick } from "../utils/utils.js";
 import {
@@ -15,8 +22,7 @@ import {
     canAggressSell,
 } from "./strategy.js";
 import { Wallet, ZeroHash } from "ethers";
-import { getAssetById, getPositionBalance } from "../chain/blockchain.js";
-import { Asset } from "../utils/types.js";
+import { getPositionBalance } from "../chain/blockchain.js";
 
 export async function cleanUpAllOrders(wallet: Wallet) {
     let done = false;
@@ -53,15 +59,20 @@ export async function cancelAllOrders(wallet: Wallet) {
 }
 
 export async function runAssetEpochCheck(wallet: Wallet) {
-    const asset: Asset = await getAssetById(BigInt(CFG.ASSET_ID));
-    if(asset.epoch != STATE.epoch) {
+    let epoch = 0n;
+    const resolution = await apiLastResolutionPrice();
+    if(!resolution.isNull) {
+        epoch = BigInt(resolution.epoch) + 1n;
+    }
+    if(epoch != STATE.epoch) { // these are supposed to be current epoch
+        await apiClaim(wallet, Number(STATE.epoch));
         const resp = await apiGetBalance();
         if(resp.pending > 0n) {
             await cancelAllOrders(wallet);
             return false;
         } else {
             // just move to next period
-            STATE.epoch = asset.epoch;
+            STATE.epoch = epoch;
             console.log("asset epoch changed:", STATE.epoch);
         }
     }
