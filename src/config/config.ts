@@ -18,6 +18,13 @@ function envBool(name: string, def: boolean): boolean {
     return ["1", "true", "yes", "y", "on"].includes(v.toLowerCase());
 }
 
+function envBigInt(name: string, def: number): bigint {
+    const v = process.env[name];
+    if (v == null || v.trim() === "") return BigInt(def);
+    const n = Number(v);
+    return Number.isFinite(n) ? BigInt(n) : BigInt(def);
+}
+
 export const CFG = {
     ORDERS_URL: envStr("ORDERS_URL", "https://exchange-api.gammaswap.com/api/orders"),
     CANCELS_URL: envStr("CANCELS_URL", "https://exchange-api.gammaswap.com/api/cancels"),
@@ -48,6 +55,7 @@ export const CFG = {
     SOFT_MIN_PRICE: envNum("SOFT_MIN_PRICE", 300000), // 0.3
     SOFT_MAX_PRICE: envNum("SOFT_MAX_PRICE", 700000), // 0.7
     CENTER_PRICE: envNum("CENTER_PRICE", 500000), // 0.5
+    DUST_BALANCE: envBigInt("DUST_BALANCE", 1000000), // 1
 
     TICK_SIZE: envNum("TICK_SIZE", 1000),// 0.001
 

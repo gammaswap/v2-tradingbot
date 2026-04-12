@@ -30,6 +30,8 @@ async function main() {
             cancels: CFG.CANCELS_URL,
             book: CFG.BOOK_URL,
             pending: CFG.PENDING_URL,
+            claims: CFG.CLAIM_URL,
+            resolve: CFG.RESOLUTION_URL
         }
     });
 
@@ -70,7 +72,7 @@ async function main() {
     await sleep(1000 * 3);
 
     const resp = await apiGetBalance();
-    if(resp.pending > 0n) {
+    if(resp.pending >= CFG.DUST_BALANCE) {
         warn("Error: Pending balance > 0, pending:", resp.pending);
         return;
     }

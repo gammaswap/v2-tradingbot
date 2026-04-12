@@ -1,9 +1,11 @@
 import { CFG } from "../config/config.js";
 import {
-    apiCancelOrder, apiClaim,
+    apiCancelOrder,
+    apiClaim,
     apiGetBalance,
     apiGetBook,
     apiGetPending,
+    apiGetPosition,
     apiLastResolutionPrice,
     apiSendOrder
 } from "../api/api.js";
@@ -24,18 +26,28 @@ import {
 import { Wallet, ZeroHash } from "ethers";
 import { getPositionBalance } from "../chain/blockchain.js";
 
+export async function hasPendingOrders() {
+    const resp = await apiGetBalance();
+    console.log("cleanUpAllOrders:cancel all orders >> pending", resp.pending);
+    const hasPendingBalance = resp.pending >= CFG.DUST_BALANCE;
+    await sleep(1000 * 2);
+    return hasPendingBalance;
+}
+
 export async function cleanUpAllOrders(wallet: Wallet) {
     let done = false;
     let tryCount = 0;
     while(!done) {
-        const resp = await apiGetBalance();
-        if(resp.pending > 0n) {
+        if(await hasPendingOrders()) {
+            console.log("cleanUpAllOrders:cancel all orders >> tryCount:", tryCount);
             await cancelAllOrders(wallet);
             tryCount++;
         } else {
+            console.log("cleanUpAllOrders:done");
             done = true;
         }
         if(tryCount >= 10) {
+            console.log("cleanUpAllOrders:cancel all orders >> max tryCount reached");
             done = true;
         }
     }
@@ -45,30 +57,56 @@ export async function cancelAllOrders(wallet: Wallet) {
     let epoch = Number(STATE.epoch);
     let done = false;
     while(!done && epoch > 0n) {
+        console.log("cancelAllOrders:epoch:", epoch);
         // look for pending orders
         const pending = await apiGetPending(CFG.USER_ADDRESS, epoch);
         if(pending.buys.length > 0 || pending.sells.length > 0) {
             // has pending orders, send cancel all
+            console.log("cancelAllOrders:cancel all orders >> pending.buys:", pending.buys.length, "pending.sells:", pending.sells.length, "epoch:", epoch);
             await apiCancelOrder(wallet, epoch, ZeroHash);
-            await sleep(1000 * 3);
             epoch--;
         } else {
+            console.log("cancelAllOrders:skipping: epoch:", epoch);
             epoch--;
         }
+        await sleep(1000 * 3);
+
+        const resp = await apiGetBalance();
+        if(resp.pending < CFG.DUST_BALANCE) {
+            warn("Error: Pending balance > 0, pending:", resp.pending);
+            done = true;
+            return;
+        }
+
+        await sleep(1000 * 3);
     }
 }
 
 export async function runAssetEpochCheck(wallet: Wallet) {
+    console.log("=============runAssetEpochCheck:start",(new Date()).toUTCString(),"============================");
     let epoch = 0n;
     const resolution = await apiLastResolutionPrice();
     if(!resolution.isNull) {
         epoch = BigInt(resolution.epoch) + 1n;
     }
-    if(epoch != STATE.epoch) { // these are supposed to be current epoch
-        await apiClaim(wallet, Number(STATE.epoch));
-        const resp = await apiGetBalance();
-        if(resp.pending > 0n) {
+    if(epoch != STATE.epoch) {
+        let pos;
+        try {
+            pos = await apiGetPosition(Number(STATE.epoch));
+        } catch(e: any) {
+           console.log("position check error:", e?.message ?? e);
+        }
+        console.log("asset epoch check >> epoch:", epoch, "STATE.epoch:", STATE.epoch, "pos:", pos);
+        try{
+            if(pos && pos.size > 0n) {
+                await apiClaim(wallet, Number(STATE.epoch));
+            }
+        } catch(e: any) {
+            console.log("claim error:", e?.message ?? e);
+        }
+        if(await hasPendingOrders()) {
             await cancelAllOrders(wallet);
+            console.log("cancelled all orders, return false");
             return false;
         } else {
             // just move to next period
@@ -76,6 +114,7 @@ export async function runAssetEpochCheck(wallet: Wallet) {
             console.log("asset epoch changed:", STATE.epoch);
         }
     }
+    console.log("=============runAssetEpochCheck:end",(new Date()).toUTCString(),"============================");
     return true;
 }
 
