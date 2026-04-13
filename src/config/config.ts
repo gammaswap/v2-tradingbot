@@ -18,13 +18,25 @@ function envBool(name: string, def: boolean): boolean {
     return ["1", "true", "yes", "y", "on"].includes(v.toLowerCase());
 }
 
+function envBigInt(name: string, def: number): bigint {
+    const v = process.env[name];
+    if (v == null || v.trim() === "") return BigInt(def);
+    const n = Number(v);
+    return Number.isFinite(n) ? BigInt(n) : BigInt(def);
+}
+
 export const CFG = {
     ORDERS_URL: envStr("ORDERS_URL", "https://exchange-api.gammaswap.com/api/orders"),
     CANCELS_URL: envStr("CANCELS_URL", "https://exchange-api.gammaswap.com/api/cancels"),
+    CLAIM_URL: envStr("CLAIM_URL", "https://exchange-api.gammaswap.com/api/claim"),
     DEPOSITS_URL: envStr("DEPOSITS_URL", "https://exchange-api.gammaswap.com/api/deposits"),
     BOOK_URL: envStr("BOOK_URL", "https://exchange-api.gammaswap.com/api/book"),
     PENDING_URL: envStr("PENDING_URL", "https://exchange-api.gammaswap.com/api/book"),
+    RESOLUTION_URL: envStr("RESOLUTION_URL", "https://exchange-api.gammaswap.com/api/resolve"),
+    BALANCE_URL: envStr("BALANCE_URL", "https://exchange-api.gammaswap.com/api/balance"),
+    POSITION_URL: envStr("POSITION_URL", "https://exchange-api.gammaswap.com/api/position"),
     ASSET_ID: envStr("ASSET_ID", "261336857817713630688382311349658711122006440411137"),
+    EPOCH: envStr("EPOCH", "0"),
     USER_ADDRESS: envStr("USER_ADDRESS", "0xa829c1D4542F70714B35fFe95a247373329131df"),
 
     API_KEY: envStr("API_KEY", ""),
@@ -43,6 +55,7 @@ export const CFG = {
     SOFT_MIN_PRICE: envNum("SOFT_MIN_PRICE", 300000), // 0.3
     SOFT_MAX_PRICE: envNum("SOFT_MAX_PRICE", 700000), // 0.7
     CENTER_PRICE: envNum("CENTER_PRICE", 500000), // 0.5
+    DUST_BALANCE: envBigInt("DUST_BALANCE", 1000000), // 1
 
     TICK_SIZE: envNum("TICK_SIZE", 1000),// 0.001
 

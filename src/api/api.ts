@@ -1,8 +1,24 @@
 import crypto from "crypto";
 import { CFG, type Side } from "../config/config.js";
-import { ApiBookResponse, ApiPendingResponse, Eip712Cancel, Eip712Order } from "../utils/types.js";
+import {
+    ApiBalancesResponse,
+    ApiBookResponse,
+    ApiPendingResponse,
+    ApiPositionResponse,
+    ApiResolutionPriceResponse,
+    Eip712Cancel,
+    Eip712Claim,
+    Eip712Order,
+    OrderType
+} from "../utils/types.js";
 import { Wallet } from "ethers";
-import { hashCancelOrderJS, hashFillOrderJS, signOrderJS, validateSignatureJS } from "../utils/eip712.js";
+import {
+    hashCancelOrderJS,
+    hashClaimOrderJS,
+    hashFillOrderJS,
+    signOrderJS,
+    validateSignatureJS
+} from "../utils/eip712.js";
 
 function buildHeaders(body?: any): Record<string, string> {
     const h: Record<string, string> = { "Content-Type": "application/json" };
@@ -29,18 +45,30 @@ async function httpPostJson<T>(url: string, body: any): Promise<T> {
     return (await res.json()) as T;
 }
 
-export async function apiGetBook(): Promise<ApiBookResponse> {
-    return httpGetJson<ApiBookResponse>(CFG.BOOK_URL + "/" + CFG.ASSET_ID);
+export async function apiGetBook(epoch: number): Promise<ApiBookResponse> {
+    return httpGetJson<ApiBookResponse>(CFG.BOOK_URL + "/" + CFG.ASSET_ID + "/" + epoch);
 }
 
-export async function apiGetPending(address: string): Promise<ApiPendingResponse> {
-    return httpGetJson<ApiPendingResponse>(CFG.PENDING_URL + "/" + CFG.ASSET_ID + "/" + address.toLowerCase());
+export async function apiGetBalance(): Promise<ApiBalancesResponse> {
+    return httpGetJson<ApiBalancesResponse>(CFG.BALANCE_URL + "/" + CFG.USER_ADDRESS);
 }
 
-export async function apiSendOrder(wallet: Wallet, order: { side: Side; price: number; size: number }) {
+export async function apiGetPosition(epoch: number): Promise<ApiPositionResponse> {
+    return httpGetJson<ApiPositionResponse>(CFG.POSITION_URL + "/" + CFG.USER_ADDRESS + "/" + CFG.ASSET_ID + "/" + epoch);
+}
+
+export async function apiGetPending(address: string, epoch: number): Promise<ApiPendingResponse> {
+    return httpGetJson<ApiPendingResponse>(CFG.PENDING_URL + "/" + CFG.ASSET_ID + `/${epoch}/` + address.toLowerCase());
+}
+
+export async function apiLastResolutionPrice(): Promise<ApiResolutionPriceResponse> {
+    return httpGetJson<ApiResolutionPriceResponse>(CFG.RESOLUTION_URL + "/last/epoch/" + CFG.ASSET_ID);
+}
+
+export async function apiSendOrder(wallet: Wallet, order: { epoch: number, side: Side; price: number; size: number }) {
 
     const eip712Order: Eip712Order = {
-        typ: 2n,
+        typ: OrderType.FILL,
         nonce: BigInt(Date.now()), // must be unique in every transaction the user sends
         salt: 1n, // this is used to generate a hash which represents the orderId
         signer: wallet.address,
@@ -48,6 +76,7 @@ export async function apiSendOrder(wallet: Wallet, order: { side: Side; price: n
         sender: wallet.address,
         side: order.side != "buy",
         assetId: BigInt(CFG.ASSET_ID),
+        epoch: BigInt(order.epoch),
         size: BigInt(order.size),
         price: BigInt(order.price),
     }
@@ -74,6 +103,7 @@ export async function apiSendOrder(wallet: Wallet, order: { side: Side; price: n
             sender: eip712Order.sender,
             side: eip712Order.side,
             assetId: eip712Order.assetId.toString(),
+            epoch: eip712Order.epoch.toString(),
             size: eip712Order.size.toString(),
             price: eip712Order.price.toString()
         },
@@ -87,18 +117,19 @@ export async function apiSendOrder(wallet: Wallet, order: { side: Side; price: n
     return httpPostJson<any>(CFG.ORDERS_URL, signedMessage);
 }
 
-export async function apiCancelOrder(wallet: Wallet, orderHash: string) {
+export async function apiCancelOrder(wallet: Wallet, epoch: number, orderHash: string) {
 
     console.log("orderId:", orderHash)
 
     const cancel: Eip712Cancel = {
-        typ: 3n,
+        typ: OrderType.CANCEL,
         nonce: BigInt(Date.now()), // must be unique in every transaction the user sends
         salt: 1n, // this is used to generate a hash which represents the orderId
         signer: wallet.address,
         signatureType: 0n,
         sender: wallet.address,
         assetId: BigInt(CFG.ASSET_ID),
+        epoch: BigInt(epoch),
         orderHash: orderHash
     }
 
@@ -123,6 +154,7 @@ export async function apiCancelOrder(wallet: Wallet, orderHash: string) {
             signatureType: cancel.signatureType.toString(),
             sender: wallet.address,
             assetId: cancel.assetId.toString(),
+            epoch: cancel.epoch.toString(),
             orderHash: cancel.orderHash,
         },
         chainId: chainId.toString(),
@@ -134,4 +166,53 @@ export async function apiCancelOrder(wallet: Wallet, orderHash: string) {
     console.log("CANCELS_URL:", CFG.CANCELS_URL);
 
     return httpPostJson<any>(CFG.CANCELS_URL, signedMessage);
+}
+
+export async function apiClaim(wallet: Wallet, epoch: number) {
+
+    console.log("epoch:", epoch)
+
+    const claim: Eip712Claim = {
+        typ: OrderType.CLAIM,
+        nonce: BigInt(Date.now()), // must be unique in every transaction the user sends
+        salt: 1n, // this is used to generate a hash which represents the orderId
+        signer: wallet.address,
+        signatureType: 0n,
+        sender: wallet.address,
+        assetId: BigInt(CFG.ASSET_ID),
+        epoch: BigInt(epoch),
+    }
+
+    const chainId = BigInt(CFG.CHAIN_ID)
+
+    const cancelHash = hashClaimOrderJS(claim);
+    console.log("cancelHash:", cancelHash)
+
+    const signature = signOrderJS(cancelHash, wallet)
+    console.log("Signature:", signature);
+
+    const recovered = validateSignatureJS(cancelHash, signature, wallet.address)
+    console.log("isRecovered:", recovered);
+    console.log("signer     :", claim.signer.toString());
+
+    const signedMessage = {
+        claim: {
+            typ: claim.typ.toString(),
+            nonce: claim.nonce.toString(), // must be unique in every transaction the user sends
+            salt: claim.salt.toString(), // this is used to generate a hash which represents the orderId
+            signer: wallet.address,
+            signatureType: claim.signatureType.toString(),
+            sender: wallet.address,
+            assetId: claim.assetId.toString(),
+            epoch: claim.epoch.toString(),
+        },
+        chainId: chainId.toString(),
+        orderHash: cancelHash,
+        signature,
+    };
+
+    console.log("signedClaimMessage:", signedMessage);
+    console.log("CLAIM_URL:", CFG.CLAIM_URL);
+
+    return httpPostJson<any>(CFG.CLAIM_URL, signedMessage);
 }

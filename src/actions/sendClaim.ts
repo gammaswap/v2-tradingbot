@@ -1,16 +1,16 @@
 import 'dotenv/config';
 import { CFG } from "../config/config.js";
-import { Wallet, ZeroHash } from "ethers";
+import { Wallet } from "ethers";
 import axios from "axios";
 import {
-    hashCancelOrderJS,
     validateSignatureJS,
     deriveAccountsFromMnemonic,
-    signOrderJS
+    signOrderJS,
+    hashClaimOrderJS
 } from "../utils/eip712.js";
-import { Eip712Cancel, OrderType } from "../utils/types.js";
+import { Eip712Claim, OrderType } from "../utils/types.js";
 
-// run with "npx ts-node ./src/sendCancel.ts"
+// run with "npx ts-node ./src/sendTestClaim.ts"
 async function main() {
     console.log("CHAIN_ID:", CFG.CHAIN_ID);
     console.log("LEDGER_ADDRESS:", CFG.LEDGER_ADDRESS);
@@ -18,65 +18,62 @@ async function main() {
     const account = deriveAccountsFromMnemonic(CFG.MNEMONIC, CFG.WALLET_INDEX + 1)[CFG.WALLET_INDEX];
     console.log("Using address:", account.address);
 
-    let orderHash;
+    let epoch = BigInt(CFG.EPOCH);
 
     if (process.argv.length > 2) {
-        orderHash = process.argv[2]
-    } else {
-        console.log("No orderHash provided")
-        return
+        if(isNaN(Number(process.argv[2]))) {
+            console.log("Invalid epoch provided")
+            return
+        }
+        epoch = BigInt(process.argv[2])
     }
 
-    console.log("orderId:", orderHash)
+    console.log("epoch:", epoch)
 
-    const cancel: Eip712Cancel = {
-        typ: OrderType.CANCEL,
+    const claim: Eip712Claim = {
+        typ: OrderType.CLAIM,
         nonce: BigInt(Date.now()), // must be unique in every transaction the user sends
         salt: 1n, // this is used to generate a hash which represents the orderId
         signer: account.address,
         signatureType: 0n,
         sender: account.address,
         assetId: BigInt(CFG.ASSET_ID),
-        epoch: BigInt(CFG.EPOCH),
-        orderHash: orderHash == "all" ? ZeroHash : orderHash
+        epoch: epoch,
     }
 
     const chainId = BigInt(CFG.CHAIN_ID)
 
-    const cancelHash = hashCancelOrderJS(cancel);
-    console.log("cancelHash:", cancelHash)
+    const claimHash = hashClaimOrderJS(claim);
+    console.log("claimHash:", claimHash)
 
     const wallet = new Wallet(account.privateKey);
 
-    const signature = signOrderJS(cancelHash, wallet)
+    const signature = signOrderJS(claimHash, wallet)
     console.log("Signature:", signature);
 
-    const recovered = validateSignatureJS(cancelHash, signature, wallet.address)
+    const recovered = validateSignatureJS(claimHash, signature, wallet.address)
     console.log("isRecovered:", recovered);
-    console.log("signer     :", cancel.signer.toString());
+    console.log("signer     :", claim.signer.toString());
 
     const signedMessage = {
-        cancel: {
-            typ: cancel.typ.toString(),
-            nonce: cancel.nonce.toString(), // must be unique in every transaction the user sends
-            salt: cancel.salt.toString(), // this is used to generate a hash which represents the orderId
+        claim: {
+            typ: claim.typ.toString(),
+            nonce: claim.nonce.toString(), // must be unique in every transaction the user sends
+            salt: claim.salt.toString(), // this is used to generate a hash which represents the orderId
             signer: wallet.address,
-            signatureType: cancel.signatureType.toString(),
+            signatureType: claim.signatureType.toString(),
             sender: wallet.address,
-            assetId: cancel.assetId.toString(),
-            epoch: cancel.epoch.toString(),
-            orderHash: cancel.orderHash,
+            assetId: claim.assetId.toString(),
+            epoch: claim.epoch.toString(),
         },
         chainId: chainId.toString(),
-        orderHash: cancelHash,
+        orderHash: claimHash,
         signature,
     };
 
-    console.log("signedCancelMessage:", signedMessage);
-    console.log("CANCELS_URL:", CFG.CANCELS_URL);
-
+    console.log("signedClaimMessage:", signedMessage);
     try {
-        const res = await axios.post(CFG.CANCELS_URL, signedMessage, {
+        const res = await axios.post(CFG.CLAIM_URL, signedMessage, {
             headers: {
                 "Content-Type": "application/json",
             },

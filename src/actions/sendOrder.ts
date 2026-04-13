@@ -30,7 +30,8 @@ async function main() {
         signatureType: 0n,
         sender: account.address,
         side: true,
-        assetId: 261336857817713630688382311349658711122006440411137n,
+        assetId: BigInt(CFG.ASSET_ID),
+        epoch: BigInt(CFG.EPOCH),
         size: 100_000_000n,
         price: 530000n,
     }
@@ -98,7 +99,7 @@ async function main() {
         } else {
             console.error("Request error:", err.message);
         }
-    }/**/
+    }
 }
 
 main().catch((err) => {

@@ -11,7 +11,9 @@ import {
 import { CFG } from "../config/config.js";
 import {
     Eip712Order,
-    Eip712Deposit, Eip712Withdrawal, Eip712Cancel,
+    Eip712Deposit,
+    Eip712Withdrawal,
+    Eip712Cancel, Eip712Claim,
 } from "./types.js";
 
 export const EXCHANGE_DOMAIN: TypedDataDomain = {
@@ -30,11 +32,15 @@ const WITHDRAWAL_ORDER_TYPEHASH = keccak256(Buffer.from(
 ));
 
 const FILL_ORDER_TYPEHASH = keccak256(Buffer.from(
-    "FillOrder(uint8 typ,uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,bool side,uint256 assetId,uint256 size,uint256 price)"
+    "FillOrder(uint8 typ,uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,uint32 epoch,bool side,uint256 assetId,uint256 size,uint256 price)"
 ));
 
 const CANCEL_ORDER_TYPEHASH = keccak256(Buffer.from(
-    "CancelOrder(uint8 typ,uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,uint256 assetId,bytes32 orderHash)"
+    "CancelOrder(uint8 typ,uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,uint256 assetId,uint32 epoch,bytes32 orderHash)"
+));
+
+const CLAIM_ORDER_TYPEHASH = keccak256(Buffer.from(
+    "ClaimOrder(uint8 typ,uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,uint256 assetId,uint32 epoch)"
 ));
 
 const abi = new AbiCoder();
@@ -128,6 +134,7 @@ function getFillStructHash(order: Eip712Order) : string {
             "address", // signer
             "uint8",   // signatureType
             "address", // sender
+            "uint32",  // epoch
             "bool",    // side
             "uint256", // assetId
             "uint256", // size
@@ -141,6 +148,7 @@ function getFillStructHash(order: Eip712Order) : string {
             order.signer,
             order.signatureType,
             order.sender,
+            order.epoch,
             order.side,
             order.assetId,
             order.size,
@@ -160,6 +168,7 @@ function getCancelStructHash(order: Eip712Cancel) : string {
             "uint8",   // signatureType
             "address", // sender
             "uint256", // assetId
+            "uint32",  // epoch
             "bytes32"  // orderHash
         ],
         [
@@ -171,7 +180,35 @@ function getCancelStructHash(order: Eip712Cancel) : string {
             order.signatureType,
             order.sender,
             order.assetId,
+            order.epoch,
             order.orderHash   // MUST be 32 bytes
+        ]
+    ));
+}
+
+function getClaimStructHash(order: Eip712Claim) : string {
+    return keccak256(abi.encode(
+        [
+            "bytes32",
+            "uint8",   // typ
+            "uint256", // nonce
+            "uint256", // salt
+            "address", // signer
+            "uint8",   // signatureType
+            "address", // sender
+            "uint256", // assetId
+            "uint32",  // epoch
+        ],
+        [
+            CLAIM_ORDER_TYPEHASH,
+            order.typ,
+            order.nonce,
+            order.salt,
+            order.signer,
+            order.signatureType,
+            order.sender,
+            order.assetId,
+            order.epoch,
         ]
     ));
 }
@@ -217,6 +254,19 @@ export function hashFillOrderJS(order: Eip712Order) : string {
 
 export function hashCancelOrderJS(order: Eip712Cancel) : string {
     const structHash = getCancelStructHash(order);
+    const domainSeparator = getDomainSeparator();
+
+    // "\x19\x01" || domainSeparator || structHash
+    return keccak256(
+        solidityPacked(
+            ["string", "bytes32", "bytes32"],
+            ["\x19\x01", domainSeparator, structHash]
+        )
+    );
+}
+
+export function hashClaimOrderJS(order: Eip712Claim) : string {
+    const structHash = getClaimStructHash(order);
     const domainSeparator = getDomainSeparator();
 
     // "\x19\x01" || domainSeparator || structHash
