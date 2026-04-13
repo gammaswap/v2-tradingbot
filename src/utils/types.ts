@@ -65,6 +65,7 @@ export type ApiPositionResponse = PositionSnapshot
 export type ApiPendingResponse = {
     assetId: bigint;
     ts: bigint;
+    epoch: bigint;
     buys: PendingOrder[];
     sells: PendingOrder[];
 };

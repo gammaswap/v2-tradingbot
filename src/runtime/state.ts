@@ -14,4 +14,5 @@ export const STATE = {
     lastMid: CFG.CENTER_PRICE,
 
     account: CFG.USER_ADDRESS,
+    lastTradeTime: 0
 };

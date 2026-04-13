@@ -82,13 +82,18 @@ export async function cancelAllOrders(wallet: Wallet) {
     }
 }
 
-export async function runAssetEpochCheck(wallet: Wallet) {
-    console.log("=============runAssetEpochCheck:start",(new Date()).toUTCString(),"============================");
+export async function getCurrentEpoch() : Promise<bigint> {
     let epoch = 0n;
     const resolution = await apiLastResolutionPrice();
     if(!resolution.isNull) {
         epoch = BigInt(resolution.epoch) + 1n;
     }
+    return epoch;
+}
+
+export async function runAssetEpochCheck(wallet: Wallet) {
+    console.log("=============runAssetEpochCheck:start",(new Date()).toUTCString(),"============================");
+    const epoch = await getCurrentEpoch();
     if(epoch != STATE.epoch) {
         let pos;
         try {
@@ -144,7 +149,8 @@ export async function runPendingRefresh(wallet: Wallet) {
                 price: Number(o.price),
                 size: Number(o.size),
                 time: o.time ? Number(o.time) : undefined,
-                account: o.account
+                account: o.account,
+                epoch: BigInt(pendingResp.epoch)
             };
             next.set(order.id, order);
             if (!STATE.localOrderTs.has(order.id)) STATE.localOrderTs.set(order.id, nowMs());
@@ -156,7 +162,8 @@ export async function runPendingRefresh(wallet: Wallet) {
                 price: Number(o.price),
                 size: Number(o.size),
                 time: o.time ? Number(o.time) : undefined,
-                account: o.account
+                account: o.account,
+                epoch: BigInt(pendingResp.epoch)
             };
             next.set(order.id, order);
             if (!STATE.localOrderTs.has(order.id)) STATE.localOrderTs.set(order.id, nowMs());
@@ -179,6 +186,12 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     STATE.invBase = Number(position.balance) * (position.bSide ? -1 : 1)
     const book = STATE.book;
     if (!book) return;
+
+    const epoch = await getCurrentEpoch();
+    if(epoch != STATE.epoch) {
+        console.log("quote maintenance skipped (epoch mismatch)", { epoch, STATE_epoch: STATE.epoch });
+        return;
+    }
 
     const mid = midPrice(book);
     console.log("book >> bids:", book.bids.length, "asks:", book.asks.length," total:", book.asks.length + book.bids.length, "mid:", mid);
@@ -293,6 +306,21 @@ export async function runAggression(wallet: Wallet) {
     const book = STATE.book;
     if (!book) return;
 
+    const currTime = nowMs();
+    const tradeDelay = jitter(CFG.AGGRESS_MS, CFG.AGGRESS_JITTER_MS);
+    const msSinceLastTrade = currTime - STATE.lastTradeTime;
+    if(msSinceLastTrade < tradeDelay) {
+        console.log("aggression skipped (trade delay)", { msSinceLastTrade, tradeDelay });
+        return;
+    }
+    STATE.lastTradeTime = currTime;
+
+    const epoch = await getCurrentEpoch();
+    if(epoch != STATE.epoch) {
+        console.log("aggression skipped (epoch mismatch)", { epoch, STATE_epoch: STATE.epoch });
+        return;
+    }
+
     console.log("========================runAggression:start",(new Date()).toUTCString(),"==========================");
     const mid = midPrice(book);
     console.log("mid:", mid);
@@ -373,5 +401,4 @@ export async function runAggression(wallet: Wallet) {
     STATE.lastMid = midPrice(_book);
     console.log("book refreshed:", STATE.lastMid, "bids:", _book.bids.length, "asks:", _book.asks.length, "total:", _book.asks.length + _book.bids.length);
     console.log("========================runAggression:end",(new Date()).toUTCString(),"==========================");
-    await sleep(jitter(CFG.AGGRESS_MS, CFG.AGGRESS_JITTER_MS));
 }

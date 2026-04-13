@@ -94,7 +94,7 @@ async function main() {
             await runCancelRebalance(wallet);
             await runAggression(wallet);
         } else {
-            await sleep(1000 * 3);
+            await sleep(1000);
         }
     }
 }
