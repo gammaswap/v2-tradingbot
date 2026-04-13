@@ -23,7 +23,8 @@
     "start": "node dist/main.js",
     "deposit": "node --env-file=./.env --loader ts-node/esm ./src/actions/sendDeposit.ts",
     "cancel": "node --env-file=./.env --loader ts-node/esm ./src/actions/sendCancel.ts",
-    "order": "node --env-file=./.env --loader ts-node/esm ./src/actions/sendOrder.ts"
+    "order": "node --env-file=./.env --loader ts-node/esm ./src/actions/sendOrder.ts",
+    "claim": "node --env-file=./.env --loader ts-node/esm ./src/actions/sendClaim.ts"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

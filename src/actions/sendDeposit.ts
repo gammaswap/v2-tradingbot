@@ -8,7 +8,7 @@ import {
     deriveAccountsFromMnemonic,
     signOrderJS
 } from "../utils/eip712.js";
-import { Eip712Deposit } from "../utils/types.js";
+import { Eip712Deposit, OrderType } from "../utils/types.js";
 import { getPermit2Allowance, isPermit2NonceUsed } from "../chain/blockchain.js";
 
 async function createPermit2Signature(wallet: Wallet, chainId: number, deposit: Eip712Deposit) : Promise<string> {
@@ -61,7 +61,7 @@ async function main() {
     const expiry = now + 60 * 60; // 1 hour from now
 
     const deposit: Eip712Deposit = {
-        typ: 0n,
+        typ: OrderType.DEPOSIT,
         nonce: BigInt(Date.now()), // must be unique in every transaction the user sends
         salt: 1n, // this is used to generate a hash which represents the orderId
         signer: account.address,
