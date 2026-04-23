@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-ENV_FILE="$ROOT/.env"
+ENV_FILE="$ROOT/.env.asset2"
 LOG_DIR="$ROOT/logs"
 
 if [ -f "$ENV_FILE" ]; then
@@ -16,7 +16,7 @@ export NVM_DIR="$HOME/.nvm"
 nvm use 20
 
 mkdir -p "$LOG_DIR"
-LOG_FILE="$LOG_DIR/start-$(date +%Y%m%d-%H%M%S).log"
+LOG_FILE="$LOG_DIR/asset2-$(date +%Y%m%d-%H%M%S).log"
 
 echo "Starting bot; logging to $LOG_FILE"
 yarn --cwd "$ROOT" start >>"$LOG_FILE" 2>&1
