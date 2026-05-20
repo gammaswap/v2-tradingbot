@@ -56,7 +56,8 @@ export async function cleanUpAllOrders(wallet: Wallet) {
 export async function cancelAllOrders(wallet: Wallet) {
     let epoch = Number(STATE.epoch);
     let done = false;
-    while(!done && epoch > 0n) {
+    console.log("==============cancelAllOrders:start", epoch,"========================");
+    while(!done && epoch >= 0n) {
         console.log("cancelAllOrders:epoch:", epoch);
         // look for pending orders
         const pending = await apiGetPending(CFG.USER_ADDRESS, epoch);
@@ -80,6 +81,7 @@ export async function cancelAllOrders(wallet: Wallet) {
 
         await sleep(1000 * 3);
     }
+    console.log("==============cancelAllOrders:end", epoch,"========================");
 }
 
 export async function getCurrentEpoch() : Promise<bigint> {
