@@ -26,6 +26,7 @@ function envBigInt(name: string, def: number): bigint {
 }
 
 export const CFG = {
+    RPC_URL: envStr("RPC_URL", "http://localhost:8545"),
     ORDERS_URL: envStr("ORDERS_URL", "https://exchange-api.gammaswap.com/api/orders"),
     CANCELS_URL: envStr("CANCELS_URL", "https://exchange-api.gammaswap.com/api/cancels"),
     CLAIM_URL: envStr("CLAIM_URL", "https://exchange-api.gammaswap.com/api/claim"),
@@ -46,7 +47,8 @@ export const CFG = {
     CHAIN_ID: envNum("CHAIN_ID", 84532), // baseSepolia
     PERMIT2_ADDRESS: envStr("PERMIT2_ADDRESS", "0x000000000022D473030F116dDEE9F6B43aC78BA3"),
     SETTLEMENT_TOKEN: envStr("SETTLEMENT_TOKEN", "0xdf3d36447b22e9feEe337765DdC413d09fA03bC2"),
-    LEDGER_ADDRESS: envStr("LEDGER_ADDRESS", ""),
+    LEDGER_ADDRESS: envStr("LEDGER_ADDRESS", "0xF801fc13AA08876F343fEBf50dFfA52A78180811"),
+    DEPOSIT_LEDGER_ADDRESS: envStr("DEPOSIT_LEDGER_ADDRESS", "0x06E54Aa21496Ed0099219ea79a2c72247F36091A"),
     EXCHANGE_ADDRESS: envStr("EXCHANGE_ADDRESS", ""),
     VERIFYING_ADDRESS: envStr("VERIFYING_ADDRESS", ""),
 
