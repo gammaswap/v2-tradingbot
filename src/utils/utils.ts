@@ -21,6 +21,14 @@ export function roundToTick(price: number, side: Side): number {
     return Math.floor(r * t);
 }
 
+export function roundToLot(lot: number): number {
+    const t = CFG.LOT_SIZE;
+    if (t <= 0) return lot;
+    const q = lot / t;
+    const r = Math.ceil(q);
+    return Math.floor(r * t);
+}
+
 export function jitter(baseMs: number, jitterMs: number) {
     const j = (Math.random() * 2 - 1) * jitterMs;
     return Math.max(50, Math.floor(baseMs + j));

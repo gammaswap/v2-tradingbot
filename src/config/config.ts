@@ -60,6 +60,7 @@ export const CFG = {
     DUST_BALANCE: envBigInt("DUST_BALANCE", 1000000), // 1
 
     TICK_SIZE: envNum("TICK_SIZE", 1000),// 0.001
+    LOT_SIZE: envNum("LOT_SIZE", 10000),// 0.01
 
     LEVELS_PER_SIDE: Math.max(1, Math.floor(envNum("LEVELS_PER_SIDE", 5))),
     LEVEL_SPACING_NEAR: envNum("LEVEL_SPACING_NEAR", 2000), // 0.002
