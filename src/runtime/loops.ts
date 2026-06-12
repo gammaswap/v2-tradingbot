@@ -10,7 +10,7 @@ import {
     apiSendOrder
 } from "../api/api.js";
 import { STATE } from "./state.js";
-import { jitter, log, nowMs, sleep, warn, clamp, roundToTick } from "../utils/utils.js";
+import {jitter, log, nowMs, sleep, warn, clamp, roundToTick, roundToLot} from "../utils/utils.js";
 import {
     midPrice,
     buildTargetLadderPrices,
@@ -216,7 +216,7 @@ export async function runQuoteMaintenance(wallet: Wallet) {
         const price = targetBidPrices[i];
         const _nearestOrderAtPrice = nearestOrderAtPrice(STATE.pending, "buy", price);
         if (_nearestOrderAtPrice) continue;
-        const size = bidSizes[i] * bidSkewMul;
+        const size = roundToLot(bidSizes[i] * bidSkewMul);
         const _canPlaceBid = canPlaceBid(size, price);
         if (!_canPlaceBid) continue;
         try {
@@ -232,7 +232,7 @@ export async function runQuoteMaintenance(wallet: Wallet) {
         const price = targetAskPrices[i];
         const _nearestOrderAtPrice = nearestOrderAtPrice(STATE.pending, "sell", price);
         if (_nearestOrderAtPrice) continue;
-        const size = askSizes[i] * askSkewMul;
+        const size = roundToLot(askSizes[i] * askSkewMul);
         const _canPlaceAsk = canPlaceAsk(size, price);
         if (!_canPlaceAsk) continue;
         try {
@@ -338,9 +338,9 @@ export async function runAggression(wallet: Wallet) {
     const reqSell = depthToWipe(book, "sell", CFG.WIPE_LEVELS).qty;
     console.log("reqBuy:", reqBuy);
     console.log("reqSell:", reqSell);
-    let tradeQty = (side === "buy" ? reqBuy : reqSell) * (1 + CFG.SLIP_BUFFER);
+    let tradeQty = roundToLot((side === "buy" ? reqBuy : reqSell) * (1 + CFG.SLIP_BUFFER));
     console.log("tradeQty1:", tradeQty);
-    tradeQty = Math.floor(Math.min(tradeQty, CFG.MAX_AGGRESS_QTY));
+    tradeQty = roundToLot(Math.floor(Math.min(tradeQty, CFG.MAX_AGGRESS_QTY)));
     console.log("tradeQty2:", tradeQty);
 
     const feasibleChosen = side === "buy"
@@ -353,7 +353,7 @@ export async function runAggression(wallet: Wallet) {
         console.log("other:", other);
         const otherReq = other === "buy" ? reqBuy : reqSell;
         console.log("otherReq:", otherReq);
-        let otherQty = Math.min(otherReq * (1 + CFG.SLIP_BUFFER), CFG.MAX_AGGRESS_QTY);
+        let otherQty = roundToLot(Math.min(otherReq * (1 + CFG.SLIP_BUFFER), CFG.MAX_AGGRESS_QTY));
         console.log("otherQty:", otherQty);
 
         const feasibleOther = other === "buy"
