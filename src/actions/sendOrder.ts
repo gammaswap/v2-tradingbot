@@ -34,6 +34,7 @@ async function main() {
         epoch: BigInt(CFG.EPOCH),
         size: 100_000_000n,
         price: 530000n,
+        approvalNonce: 0n,
     }
 
     if(args.length > 0 && args[0].toLowerCase() == "buy") {
@@ -74,7 +75,8 @@ async function main() {
             side: order.side,
             assetId: order.assetId.toString(),
             size: order.size.toString(),
-            price: order.price.toString()
+            price: order.price.toString(),
+            approvalNonce: order.approvalNonce.toString(),
         },
         chainId: chainId.toString(),
         orderHash,

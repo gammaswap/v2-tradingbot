@@ -32,15 +32,15 @@ const WITHDRAWAL_ORDER_TYPEHASH = keccak256(Buffer.from(
 ));
 
 const FILL_ORDER_TYPEHASH = keccak256(Buffer.from(
-    "FillOrder(uint8 typ,uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,uint32 epoch,bool side,uint256 assetId,uint256 size,uint256 price)"
+    "FillOrder(uint8 typ,uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,uint32 epoch,bool side,uint256 assetId,uint256 size,uint256 price,uint256 approvalNonce)"
 ));
 
 const CANCEL_ORDER_TYPEHASH = keccak256(Buffer.from(
-    "CancelOrder(uint8 typ,uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,uint256 assetId,uint32 epoch,bytes32 orderHash)"
+    "CancelOrder(uint8 typ,uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,uint256 assetId,uint32 epoch,bytes32 orderHash,uint256 approvalNonce)"
 ));
 
 const CLAIM_ORDER_TYPEHASH = keccak256(Buffer.from(
-    "ClaimOrder(uint8 typ,uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,uint256 assetId,uint32 epoch)"
+    "ClaimOrder(uint8 typ,uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,uint256 assetId,uint32 epoch,uint256 approvalNonce)"
 ));
 
 const abi = new AbiCoder();
@@ -138,7 +138,8 @@ function getFillStructHash(order: Eip712Order) : string {
             "bool",    // side
             "uint256", // assetId
             "uint256", // size
-            "uint256"  // price
+            "uint256",  // price
+            "uint256"  // approvalNonce
         ],
         [
             FILL_ORDER_TYPEHASH,
@@ -153,6 +154,7 @@ function getFillStructHash(order: Eip712Order) : string {
             order.assetId,
             order.size,
             order.price,
+            order.approvalNonce
         ]
     ));
 }
@@ -169,7 +171,8 @@ function getCancelStructHash(order: Eip712Cancel) : string {
             "address", // sender
             "uint256", // assetId
             "uint32",  // epoch
-            "bytes32"  // orderHash
+            "bytes32",  // orderHash
+            "uint256"  // approvalNonce
         ],
         [
             CANCEL_ORDER_TYPEHASH,
@@ -181,7 +184,8 @@ function getCancelStructHash(order: Eip712Cancel) : string {
             order.sender,
             order.assetId,
             order.epoch,
-            order.orderHash   // MUST be 32 bytes
+            order.orderHash,   // MUST be 32 bytes
+            order.approvalNonce
         ]
     ));
 }
@@ -198,6 +202,7 @@ function getClaimStructHash(order: Eip712Claim) : string {
             "address", // sender
             "uint256", // assetId
             "uint32",  // epoch
+            "uint256" // assetId
         ],
         [
             CLAIM_ORDER_TYPEHASH,
@@ -209,6 +214,7 @@ function getClaimStructHash(order: Eip712Claim) : string {
             order.sender,
             order.assetId,
             order.epoch,
+            order.approvalNonce
         ]
     ));
 }

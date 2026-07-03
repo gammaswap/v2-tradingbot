@@ -79,6 +79,7 @@ export async function apiSendOrder(wallet: Wallet, order: { epoch: number, side:
         epoch: BigInt(order.epoch),
         size: BigInt(order.size),
         price: BigInt(order.price),
+        approvalNonce: 0n,
     }
 
     const chainId = BigInt(CFG.CHAIN_ID)
@@ -130,7 +131,8 @@ export async function apiCancelOrder(wallet: Wallet, epoch: number, orderHash: s
         sender: wallet.address,
         assetId: BigInt(CFG.ASSET_ID),
         epoch: BigInt(epoch),
-        orderHash: orderHash
+        orderHash: orderHash,
+        approvalNonce: 0n,
     }
 
     const chainId = BigInt(CFG.CHAIN_ID)
@@ -181,6 +183,7 @@ export async function apiClaim(wallet: Wallet, epoch: number) {
         sender: wallet.address,
         assetId: BigInt(CFG.ASSET_ID),
         epoch: BigInt(epoch),
+        approvalNonce: 0n,
     }
 
     const chainId = BigInt(CFG.CHAIN_ID)

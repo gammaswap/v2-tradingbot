@@ -39,6 +39,7 @@ async function main() {
         sender: account.address,
         assetId: BigInt(CFG.ASSET_ID),
         epoch: epoch,
+        approvalNonce: 0n,
     }
 
     const chainId = BigInt(CFG.CHAIN_ID)
@@ -65,6 +66,7 @@ async function main() {
             sender: wallet.address,
             assetId: claim.assetId.toString(),
             epoch: claim.epoch.toString(),
+            approvalNonce: claim.approvalNonce.toString(),
         },
         chainId: chainId.toString(),
         orderHash: claimHash,

@@ -38,7 +38,8 @@ async function main() {
         sender: account.address,
         assetId: BigInt(CFG.ASSET_ID),
         epoch: BigInt(CFG.EPOCH),
-        orderHash: orderHash == "all" ? ZeroHash : orderHash
+        orderHash: orderHash == "all" ? ZeroHash : orderHash,
+        approvalNonce: 0n,
     }
 
     const chainId = BigInt(CFG.CHAIN_ID)
@@ -66,6 +67,7 @@ async function main() {
             assetId: cancel.assetId.toString(),
             epoch: cancel.epoch.toString(),
             orderHash: cancel.orderHash,
+            approvalNonce: cancel.approvalNonce.toString(),
         },
         chainId: chainId.toString(),
         orderHash: cancelHash,

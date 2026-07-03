@@ -114,6 +114,7 @@ export interface Eip712Order {
     assetId: bigint;
     size: bigint;
     price: bigint;
+    approvalNonce: bigint;
 }
 
 export interface SignedOrderMessage {
@@ -152,6 +153,7 @@ export interface Eip712Cancel {
     assetId: bigint;
     epoch: bigint;
     orderHash: string;
+    approvalNonce: bigint;
 }
 
 export interface Eip712Claim {
@@ -163,6 +165,7 @@ export interface Eip712Claim {
     sender: string;
     assetId: bigint;
     epoch: bigint;
+    approvalNonce: bigint;
 }
 
 export interface SignedClaimMessage {
