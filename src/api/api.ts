@@ -79,6 +79,7 @@ export async function apiSendOrder(wallet: Wallet, order: { epoch: number, side:
         epoch: BigInt(order.epoch),
         size: BigInt(order.size),
         price: BigInt(order.price),
+        timeInForce: 0n,
         approvalNonce: 0n,
     }
 
@@ -107,6 +108,7 @@ export async function apiSendOrder(wallet: Wallet, order: { epoch: number, side:
             epoch: eip712Order.epoch.toString(),
             size: eip712Order.size.toString(),
             price: eip712Order.price.toString(),
+            timeInForce: eip712Order.timeInForce.toString(),
             approvalNonce: eip712Order.approvalNonce.toString(),
         },
         chainId: chainId.toString(),
