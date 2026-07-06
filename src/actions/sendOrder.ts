@@ -34,6 +34,7 @@ async function main() {
         epoch: BigInt(CFG.EPOCH),
         size: 100_000_000n,
         price: 530000n,
+        timeInForce: 0n,
         approvalNonce: 0n,
     }
 
@@ -76,6 +77,7 @@ async function main() {
             assetId: order.assetId.toString(),
             size: order.size.toString(),
             price: order.price.toString(),
+            timeInForce: order.timeInForce.toString(),
             approvalNonce: order.approvalNonce.toString(),
         },
         chainId: chainId.toString(),

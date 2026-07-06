@@ -114,6 +114,7 @@ export interface Eip712Order {
     assetId: bigint;
     size: bigint;
     price: bigint;
+    timeInForce: bigint;
     approvalNonce: bigint;
 }
 
