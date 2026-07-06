@@ -24,23 +24,23 @@ export const EXCHANGE_DOMAIN: TypedDataDomain = {
 };
 
 const DEPOSIT_ORDER_TYPEHASH = keccak256(Buffer.from(
-    "DepositOrder(uint8 typ,uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,uint256 amount,address token,address ledger,uint256 permitNonce,bytes32 permitSignature)"
+    "DepositOrder(uint8 typ,uint64 nonce,address signer,uint8 signatureType,address sender,uint64 amount,address token,address ledger,uint64 permitNonce,bytes32 permitSignature)"
 ));
 
 const WITHDRAWAL_ORDER_TYPEHASH = keccak256(Buffer.from(
-    "WithdrawalOrder(uint8 typ,uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,address receiver,uint256 amount,address ledger)"
+    "WithdrawalOrder(uint8 typ,uint64 nonce,address signer,uint8 signatureType,address sender,address receiver,uint64 amount,address ledger)"
 ));
 
 const FILL_ORDER_TYPEHASH = keccak256(Buffer.from(
-    "FillOrder(uint8 typ,uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,uint32 epoch,bool side,uint256 assetId,uint256 size,uint256 price,uint256 approvalNonce)"
+    "FillOrder(uint8 typ,uint64 nonce,address signer,uint8 signatureType,address sender,uint32 epoch,bool side,uint256 assetId,uint64 size,uint24 price,uint8 timeInForce,uint32 approvalNonce)"
 ));
 
 const CANCEL_ORDER_TYPEHASH = keccak256(Buffer.from(
-    "CancelOrder(uint8 typ,uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,uint256 assetId,uint32 epoch,bytes32 orderHash,uint256 approvalNonce)"
+    "CancelOrder(uint8 typ,uint64 nonce,address signer,uint8 signatureType,address sender,uint256 assetId,uint32 epoch,bytes32 orderHash,uint32 approvalNonce)"
 ));
 
 const CLAIM_ORDER_TYPEHASH = keccak256(Buffer.from(
-    "ClaimOrder(uint8 typ,uint256 nonce,uint256 salt,address signer,uint8 signatureType,address sender,uint256 assetId,uint32 epoch,uint256 approvalNonce)"
+    "ClaimOrder(uint8 typ,uint64 nonce,address signer,uint8 signatureType,address sender,uint256 assetId,uint32 epoch,uint32 approvalNonce)"
 ));
 
 const abi = new AbiCoder();
@@ -67,22 +67,20 @@ function getDepositStructHash(order: Eip712Deposit) : string {
         [
             "bytes32",
             "uint8",   // typ
-            "uint256", // nonce
-            "uint256", // salt
+            "uint64",  // nonce
             "address", // signer
             "uint8",   // signatureType
             "address", // sender
-            "uint256", // amount
+            "uint64",  // amount
             "address", // token
             "address", // ledger
-            "uint256", // permitNonce
+            "uint32",  // permitNonce
             "bytes32"  // permitSignature
         ],
         [
             DEPOSIT_ORDER_TYPEHASH,
             order.typ,
             order.nonce,
-            order.salt,
             order.signer,
             order.signatureType,
             order.sender,
@@ -100,20 +98,18 @@ function getWithdrawalStructHash(order: Eip712Withdrawal) : string {
         [
             "bytes32",
             "uint8",   // typ
-            "uint256", // nonce
-            "uint256", // salt
+            "uint64",  // nonce
             "address", // signer
             "uint8",   // signatureType
             "address", // sender
             "address", // receiver
-            "uint256", // amount
+            "uint64",  // amount
             "address", // ledger
         ],
         [
             WITHDRAWAL_ORDER_TYPEHASH,
             order.typ,
             order.nonce,
-            order.salt,
             order.signer,
             order.signatureType,
             order.sender,
@@ -129,23 +125,22 @@ function getFillStructHash(order: Eip712Order) : string {
         [
             "bytes32",
             "uint8",   // typ
-            "uint256", // nonce
-            "uint256", // salt
+            "uint64",  // nonce
             "address", // signer
             "uint8",   // signatureType
             "address", // sender
             "uint32",  // epoch
             "bool",    // side
             "uint256", // assetId
-            "uint256", // size
-            "uint256",  // price
-            "uint256"  // approvalNonce
+            "uint64",  // size
+            "uint24",  // price
+            "uint8",   // timeInForce
+            "uint32",  // approvalNonce
         ],
         [
             FILL_ORDER_TYPEHASH,
             order.typ,
             order.nonce,
-            order.salt,
             order.signer,
             order.signatureType,
             order.sender,
@@ -154,6 +149,7 @@ function getFillStructHash(order: Eip712Order) : string {
             order.assetId,
             order.size,
             order.price,
+            order.timeInForce,
             order.approvalNonce
         ]
     ));
@@ -164,21 +160,19 @@ function getCancelStructHash(order: Eip712Cancel) : string {
         [
             "bytes32",
             "uint8",   // typ
-            "uint256", // nonce
-            "uint256", // salt
+            "uint64",  // nonce
             "address", // signer
             "uint8",   // signatureType
             "address", // sender
             "uint256", // assetId
             "uint32",  // epoch
-            "bytes32",  // orderHash
-            "uint256"  // approvalNonce
+            "bytes32", // orderHash
+            "uint32",  // approvalNonce
         ],
         [
             CANCEL_ORDER_TYPEHASH,
             order.typ,
             order.nonce,
-            order.salt,
             order.signer,
             order.signatureType,
             order.sender,
@@ -195,20 +189,18 @@ function getClaimStructHash(order: Eip712Claim) : string {
         [
             "bytes32",
             "uint8",   // typ
-            "uint256", // nonce
-            "uint256", // salt
+            "uint64",  // nonce
             "address", // signer
             "uint8",   // signatureType
             "address", // sender
             "uint256", // assetId
             "uint32",  // epoch
-            "uint256" // assetId
+            "uint32",  // approvalNonce
         ],
         [
             CLAIM_ORDER_TYPEHASH,
             order.typ,
             order.nonce,
-            order.salt,
             order.signer,
             order.signatureType,
             order.sender,
