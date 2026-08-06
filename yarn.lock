@@ -22,10 +22,18 @@
   dependencies:
     "@jridgewell/trace-mapping" "0.3.9"
 
-"@gammaswap/v2-exchange@^0.8.1":
-  version "0.8.1"
-  resolved "https://npm.pkg.github.com/download/@gammaswap/v2-exchange/0.8.1/152e18ac00a43b66141308182dfae321918cf1e2#152e18ac00a43b66141308182dfae321918cf1e2"
-  integrity sha512-04uN/wPHV+2VJkop42e2avju2j65tDR1yEt1T+qgJ/pA72Kq1iRkhfMxO+pkYzYSdQhOZMj9YirWra3fMED0DA==
+"@gammaswap/v2-exchange-sdk@^0.1.0":
+  version "0.1.0"
+  resolved "https://npm.pkg.github.com/download/@gammaswap/v2-exchange-sdk/0.1.0/abc831cb5e6e2b245fd3abc2a20e42a288a81ed6#abc831cb5e6e2b245fd3abc2a20e42a288a81ed6"
+  integrity sha512-/9HWucjdOlNwOdDzEaiJbssllU3qcWgwsg2rL0f8TuDj11JCT87vbLl4Nk0DHSo7p5fzCkRLixg38knDG4f3PA==
+  dependencies:
+    ethers "^6.15.0"
+    ws "^8.14.2"
+
+"@gammaswap/v2-exchange@^0.12.0":
+  version "0.12.0"
+  resolved "https://npm.pkg.github.com/download/@gammaswap/v2-exchange/0.12.0/09eda70eef0719a308b69dc9f18a0d064a7b5d1c#09eda70eef0719a308b69dc9f18a0d064a7b5d1c"
+  integrity sha512-NIfhn3Ow6RkgvMTCs87w/fwAdf3HHgg1MZPZqTERXowHZ2OwrFDIOoi5Flo22rzcc505Y6Dwn37VdKZwspptFQ==
   dependencies:
     "@chainlink/data-streams-sdk" "^1.2.1"
     "@openzeppelin/contracts" "^5.4.0"
@@ -371,6 +379,11 @@ ws@8.17.1:
   version "8.17.1"
   resolved "https://registry.yarnpkg.com/ws/-/ws-8.17.1.tgz#9293da530bb548febc95371d90f9c878727d919b"
   integrity sha512-6XQFvXTkbfUOZOKKILFG1PDK2NDQs4azKQl26T0YS5CxqWLgXajbPZ+h4gZekJyRqFU8pvnbAbbs/3TgRPy+GQ==
+
+ws@^8.14.2:
+  version "8.21.2"
+  resolved "https://registry.yarnpkg.com/ws/-/ws-8.21.2.tgz#e6976cfe96161d40420689a5f051378d11b0f0ce"
+  integrity sha512-54dMVAo4WIe6SKy3vBgN+9bJZqqQ8IMRevAkOLQALhi49qkkQDQfWdAZ8KQlXiEabw88ARXXdUrlvtbKQX+aKw==
 
 ws@^8.18.3:
   version "8.20.0"

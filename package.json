@@ -21,6 +21,8 @@
     "dev": "node --env-file=./.env --loader ts-node/esm ./src/main.ts",
     "build": "tsc",
     "start": "node dist/main.js",
+    "asset": "node --env-file=./.env --loader ts-node/esm ./scripts/sample/getAsset.ts",
+    "book": "node --env-file=./.env --loader ts-node/esm ./scripts/sample/getBook.ts",
     "deposit": "node --env-file=./.env --loader ts-node/esm ./src/actions/sendDeposit.ts",
     "cancel": "node --env-file=./.env --loader ts-node/esm ./src/actions/sendCancel.ts",
     "order": "node --env-file=./.env --loader ts-node/esm ./src/actions/sendOrder.ts",
@@ -32,7 +34,8 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "@gammaswap/v2-exchange": "^0.8.1",
+    "@gammaswap/v2-exchange": "^0.12.0",
+    "@gammaswap/v2-exchange-sdk": "^0.1.0",
     "axios": "1.13.2",
     "dotenv": "^17.2.3",
     "ethers": "^6.16.0"

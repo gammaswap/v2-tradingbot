@@ -12,6 +12,32 @@ function envStr(name: string, def: string): string {
     return v == null || v.trim() === "" ? def : v;
 }
 
+function envApiUrl(): string {
+    const explicit = process.env.API_URL;
+    if (explicit != null && explicit.trim() !== "") return explicit.trim();
+
+    const endpointFallbacks = [
+        { name: "ORDERS_URL", suffix: "/orders" },
+        { name: "CANCELS_URL", suffix: "/cancels" },
+        { name: "CLAIM_URL", suffix: "/claim" },
+        { name: "BOOK_URL", suffix: "/book" },
+        { name: "PENDING_URL", suffix: "/book" },
+        { name: "BALANCE_URL", suffix: "/balance" },
+        { name: "POSITION_URL", suffix: "/position" },
+        { name: "RESOLUTION_URL", suffix: "/resolve" },
+    ];
+
+    for (const { name, suffix } of endpointFallbacks) {
+        const value = process.env[name];
+        const normalized = value?.trim().replace(/\/+$/, "");
+        if (normalized != null && normalized !== "" && normalized.endsWith(suffix)) {
+            return normalized.slice(0, -suffix.length);
+        }
+    }
+
+    return "https://exchange-api.gammaswap.com/api";
+}
+
 function envBool(name: string, def: boolean): boolean {
     const v = process.env[name];
     if (v == null || v.trim() === "") return def;
@@ -27,6 +53,7 @@ function envBigInt(name: string, def: number): bigint {
 
 export const CFG = {
     RPC_URL: envStr("RPC_URL", "http://localhost:8545"),
+    API_URL: envApiUrl(),
     ORDERS_URL: envStr("ORDERS_URL", "https://exchange-api.gammaswap.com/api/orders"),
     CANCELS_URL: envStr("CANCELS_URL", "https://exchange-api.gammaswap.com/api/cancels"),
     CLAIM_URL: envStr("CLAIM_URL", "https://exchange-api.gammaswap.com/api/claim"),

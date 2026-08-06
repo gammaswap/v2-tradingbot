@@ -9,7 +9,7 @@ import {
     runPendingRefresh,
     runQuoteMaintenance,
 } from "./runtime/loops.js";
-import { deriveAccountsFromMnemonic } from "./utils/eip712.js";
+import { deriveAccountsFromMnemonic } from "@gammaswap/v2-exchange-sdk";
 import { Wallet, isAddress } from "ethers";
 import { getAssetById, isAssetRegistered } from "./chain/blockchain.js";
 import { STATE } from "./runtime/state.js";
@@ -25,14 +25,7 @@ async function main() {
         EXCHANGE_ADDRESS: CFG.EXCHANGE_ADDRESS,
         LEDGER_ADDRESS: CFG.LEDGER_ADDRESS,
         ASSET_ID: CFG.ASSET_ID,
-        endpoints: {
-            orders: CFG.ORDERS_URL,
-            cancels: CFG.CANCELS_URL,
-            book: CFG.BOOK_URL,
-            pending: CFG.PENDING_URL,
-            claims: CFG.CLAIM_URL,
-            resolve: CFG.RESOLUTION_URL
-        }
+        API_URL: CFG.API_URL,
     });
 
     if(!isAddress(CFG.EXCHANGE_ADDRESS) || CFG.EXCHANGE_ADDRESS == "0x0000000000000000000000000000000000000000") {
@@ -54,10 +47,7 @@ async function main() {
         return;
     }
 
-    log("endpoints:", {
-        orders: CFG.ORDERS_URL,
-        cancels: CFG.CANCELS_URL,
-    })
+    log("API_URL:", CFG.API_URL)
 
     const account = deriveAccountsFromMnemonic(CFG.MNEMONIC, CFG.WALLET_INDEX + 1)[CFG.WALLET_INDEX];
     const wallet = new Wallet(account.privateKey);
