@@ -3,6 +3,7 @@ import {
     createExchangeClient,
     createInfoClient,
     OrderSide,
+    TimeInForce,
     type ExchangeClient,
     type ExchangeContractsInput,
     type FetchLike,
@@ -130,32 +131,35 @@ function parseNumberField(value: unknown, label: string): number {
     throw new Error(`Invalid number field ${label}: ${String(value)}`);
 }
 
-function normalizeBookLevel(input: any): BookLevel {
+function normalizeBookLevel(input: any, side: Side, epoch: number): BookLevel {
     const price = parseNumberField(input.price, "level.price");
     return {
         price,
         size: parseNumberField(input.size, "level.size"),
         orderCount: Number(input.orderCount ?? input.orders?.length ?? 0),
-        orders: normalizePendingOrders(input.orders ?? [], price),
+        orders: normalizePendingOrders(input.orders ?? [], side, epoch, price),
     };
 }
 
-function normalizePendingOrders(orders: any[], fallbackPrice?: number): PendingOrder[] {
+function normalizePendingOrders(orders: any[], side: Side, epoch: number, fallbackPrice?: number): PendingOrder[] {
     return orders.map((order) => ({
         id: String(order.id),
         price: parseNumberField(order.price ?? fallbackPrice, "order.price"),
         size: parseNumberField(order.size, "order.size"),
-        time: order.time == null ? undefined : parseNumberField(order.time, "order.time"),
+        side: side,
+        time: parseNumberField(order.time, "order.time"),
         account: String(order.account ?? ""),
+        epoch: BigInt(epoch)
     }));
 }
 
 function normalizeBook(data: any): ApiBookResponse {
+    const epoch = parseNumberField(data.epoch, "book.epoch");
     return {
         assetId: parseBigIntField(data.assetId ?? CFG.ASSET_ID, "book.assetId"),
         ts: parseBigIntField(data.ts ?? Date.now(), "book.ts"),
-        bids: (data.bids ?? []).map(normalizeBookLevel),
-        asks: (data.asks ?? []).map(normalizeBookLevel),
+        bids: (data.bids || []).map((level: BookLevel) => normalizeBookLevel(level, "buy", epoch)),
+        asks: (data.asks || []).map((level: BookLevel) => normalizeBookLevel(level, "sell", epoch)),
     };
 }
 
@@ -164,8 +168,8 @@ function normalizePending(data: any, address: string, epoch: number): ApiPending
         assetId: parseBigIntField(data.assetId ?? CFG.ASSET_ID, "pending.assetId"),
         ts: parseBigIntField(data.ts ?? Date.now(), "pending.ts"),
         epoch: parseBigIntField(data.epoch ?? epoch, "pending.epoch"),
-        buys: normalizePendingOrders(data.buys ?? []).map((order) => ({ ...order, account: order.account || address })),
-        sells: normalizePendingOrders(data.sells ?? []).map((order) => ({ ...order, account: order.account || address })),
+        buys: normalizePendingOrders(data.buys ?? [], "buy", epoch).map((order) => ({ ...order, account: order.account || address })),
+        sells: normalizePendingOrders(data.sells ?? [], "sell", epoch).map((order) => ({ ...order, account: order.account || address })),
     };
 }
 
@@ -243,7 +247,7 @@ export async function apiLastResolutionPrice(): Promise<ApiResolutionPriceRespon
     return normalizeResolutionPrice(data);
 }
 
-export async function apiSendOrder(wallet: Wallet, order: { epoch: number, side: Side; price: number; size: number }) {
+export async function apiSendOrder(wallet: Wallet, order: { epoch: number, side: Side; price: number; size: number; tif?: 0n | 1n | 2n }) {
     const client = getExchangeClient(wallet);
     const res = await client.placeOrder({
         assetId: CFG.ASSET_ID,
@@ -251,6 +255,7 @@ export async function apiSendOrder(wallet: Wallet, order: { epoch: number, side:
         side: order.side === "buy" ? OrderSide.BUY : OrderSide.SELL,
         price: protocolPriceToSdkInput(order.price),
         size: protocolAmountToSdkInput(order.size),
+        timeInForce: order.tif ?? TimeInForce.GTC,
     });
 
     console.log("signedOrderMessage:", res.request);
@@ -280,5 +285,31 @@ export async function apiClaim(wallet: Wallet, epoch: number) {
     });
 
     console.log("signedClaimMessage:", res.request);
+    return res;
+}
+
+export async function apiCancelReplaceOrder(
+    wallet: Wallet,
+    input: {
+        epoch: number;
+        orderHash: string;
+        side: Side;
+        price: number;
+        size: number;
+        allOrNothing?: boolean;
+    },
+) {
+    const client = getExchangeClient(wallet);
+    const res = await client.cancelReplaceOrder({
+        assetId: CFG.ASSET_ID,
+        epoch: input.epoch.toString(),
+        cancelOrderHash: input.orderHash,
+        side: input.side === "buy" ? OrderSide.BUY : OrderSide.SELL,
+        price: protocolPriceToSdkInput(input.price),
+        size: protocolAmountToSdkInput(input.size),
+        allOrNothing: input.allOrNothing ?? false,
+    });
+
+    console.log("signedCancelReplaceMessage:", res.request);
     return res;
 }

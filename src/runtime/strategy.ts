@@ -1,7 +1,7 @@
 import { CFG, type Side } from "../config/config.js";
 import type { BookSnapshot, PendingOrder } from "../utils/types.js";
 import { STATE } from "./state.js";
-import { clamp, randBetween, roundToTick, tanh } from "../utils/utils.js";
+import { clamp, nowMs, randBetween, roundToTick, tanh } from "../utils/utils.js";
 
 export function bestBidAsk(book: BookSnapshot | null): { bid: number | null; ask: number | null } {
     if (!book) return { bid: null, ask: null };
@@ -17,6 +17,25 @@ export function midPrice(book: BookSnapshot | null): number {
     if (bid != null) return bid;
     if (ask != null) return ask;
     return STATE.lastMid;
+}
+
+export function hasFreshFairValue(): boolean {
+    if (!CFG.USE_ORACLE_FAIR_VALUE || !STATE.fairValue || STATE.oracle.stale) return false;
+    return nowMs() - STATE.fairValue.updatedAtMs <= CFG.FAIR_VALUE_STALE_MS;
+}
+
+export function shouldPauseForFairValue(): boolean {
+    return CFG.USE_ORACLE_FAIR_VALUE && CFG.REQUIRE_FRESH_FAIR_VALUE && !hasFreshFairValue();
+}
+
+export function referencePrice(book: BookSnapshot | null): number {
+    const bookMid = midPrice(book);
+    if (!hasFreshFairValue()) return bookMid;
+
+    const weight = clamp(CFG.FAIR_VALUE_WEIGHT, 0, 1);
+    const fairValue = STATE.fairValue?.protocolPrice ?? bookMid;
+    const blended = weight * fairValue + (1 - weight) * bookMid;
+    return roundToNearestTick(clamp(blended, 0, 1000000));
 }
 
 export function depthToWipe(book: BookSnapshot, side: Side, levels: number): { qty: number; notional: number } {
@@ -78,34 +97,30 @@ export function buildTargetSizes(): { bidSizes: number[]; askSizes: number[] } {
 
 // ---- solvency/inventory checks ----
 
-export function availableBase(): number {
-    return Math.max(0, STATE.baseBal - CFG.BASE_RESERVE_MIN);
-}
-
-export function availableQuote(): number {
+export function availableCollateral(): number {
     return Math.max(0, STATE.baseBal - CFG.BASE_RESERVE_MIN);
 }
 
 export function canPlaceAsk(size: number, price: number): boolean {
-    console.log("availableBase():", availableBase(), "size:", size, "price:", price, " =>")
-    return Math.floor(size * (1000000 - price) / 1000000) <= availableBase();
+    console.log("availableCollateral():", availableCollateral(), "size:", size, "price:", price, " =>")
+    return Math.floor(size * (1000000 - price) / 1000000) <= availableCollateral();
 }
 
 export function canPlaceBid(size: number, price: number): boolean {
-    console.log("availableQuote():", availableQuote(), "size:", size, "price:", price, " =>")
-    return Math.floor(size * price / 1000000) <= availableQuote();
+    console.log("availableCollateral():", availableCollateral(), "size:", size, "price:", price, " =>")
+    return Math.floor(size * price / 1000000) <= availableCollateral();
 }
 
 export function canAggressBuy(qty: number, estPrice: number): boolean {
     const value = Math.floor(qty * estPrice / 1000000);
-    if (value > availableQuote()) return false;
+    if (value > availableCollateral()) return false;
     if (STATE.invBase + qty > CFG.INV_MAX_ABS) return false;
     return true;
 }
 
 export function canAggressSell(qty: number, estPrice: number): boolean {
     const value = Math.floor(qty * (1000000 - estPrice) / 1000000);
-    if (value > availableBase()) return false;
+    if (value > availableCollateral()) return false;
     if (STATE.invBase - qty < -CFG.INV_MAX_ABS) return false;
     return true;
 }
@@ -132,4 +147,24 @@ export function chooseAggressionSide(mid: number): Side {
 
     const pBuy = computePBuy(mid);
     return Math.random() < pBuy ? "buy" : "sell";
+}
+
+export function chooseFairValueAggressionSide(book: BookSnapshot, reference: number): Side | null {
+    if (!hasFreshFairValue()) return chooseAggressionSide(reference);
+
+    // This chooses to cross the spread to buy if reference > ask by minEdge, and sell if reference < bid by minEdge.
+    const { bid, ask } = bestBidAsk(book);
+    const minEdge = CFG.FAIR_VALUE_MIN_EDGE_TICKS * CFG.TICK_SIZE;
+    const buyEdge = ask == null ? Number.NEGATIVE_INFINITY : reference - ask;
+    const sellEdge = bid == null ? Number.NEGATIVE_INFINITY : bid - reference;
+    const bestEdge = Math.max(buyEdge, sellEdge);
+
+    if (bestEdge < minEdge) return null;
+    return buyEdge >= sellEdge ? "buy" : "sell";
+}
+
+function roundToNearestTick(price: number): number {
+    const tick = CFG.TICK_SIZE;
+    if (tick <= 0) return Math.round(price);
+    return Math.round(price / tick) * tick;
 }

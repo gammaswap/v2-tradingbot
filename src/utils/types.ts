@@ -23,13 +23,33 @@ export type BalanceSnapshot = {
 
 export type ApiBalancesResponse = BalanceSnapshot
 
+export interface OrderKey {
+    price: number;
+    time: number;
+    id: string;
+}
+
+export type CancelReplaceInstruction = {
+    price: number;
+    size: number;
+    side: Side;
+    cancelId: string;
+}
+
+export type NewOrderInstruction = {
+    price: number;
+    size: number;
+    side: Side;
+}
+
 export type PendingOrder = {
     id: string;
     price: number;
     size: number;
-    time?: number;
+    side: Side;
+    time: number;
     account: string;
-    side?: Side;
+    epoch: bigint;
 };
 
 export type Position = {

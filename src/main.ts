@@ -15,6 +15,7 @@ import { getAssetById, isAssetRegistered } from "./chain/blockchain.js";
 import { STATE } from "./runtime/state.js";
 import { apiGetBalance, apiGetPosition } from "./api/api.js";
 import { Asset } from "./utils/types.js";
+import { startOracleFeed, type OracleFeed } from "./runtime/oracle.js";
 
 async function main() {
     log("starting bot", {
@@ -26,6 +27,9 @@ async function main() {
         LEDGER_ADDRESS: CFG.LEDGER_ADDRESS,
         ASSET_ID: CFG.ASSET_ID,
         API_URL: CFG.API_URL,
+        ORACLE_FEED_WS_URL: CFG.ORACLE_FEED_WS_URL,
+        SYMBOL_ID: CFG.SYMBOL_ID,
+        USE_ORACLE_FAIR_VALUE: CFG.USE_ORACLE_FAIR_VALUE,
     });
 
     if(!isAddress(CFG.EXCHANGE_ADDRESS) || CFG.EXCHANGE_ADDRESS == "0x0000000000000000000000000000000000000000") {
@@ -54,6 +58,7 @@ async function main() {
     console.log("Using address :", wallet.address);
 
     const asset: Asset = await getAssetById(BigInt(CFG.ASSET_ID));
+    STATE.asset = asset;
     STATE.epoch = asset.epoch;
     log("asset:", asset);
 
@@ -75,18 +80,44 @@ async function main() {
 
     if (STATE.baseBal < CFG.BASE_RESERVE_MIN) warn("START_BASE_BAL < BASE_RESERVE_MIN; bot may refuse quotes.");
 
+    const oracle = await startOracleFeed();
+    registerShutdown(oracle);
+
+    if (CFG.USE_ORACLE_FAIR_VALUE) {
+        const gotFirstPrice = await oracle.waitForFirstPrice(CFG.ORACLE_FIRST_PRICE_TIMEOUT_MS);
+        if (!gotFirstPrice && CFG.REQUIRE_FRESH_FAIR_VALUE) {
+            warn("No oracle price received before timeout; stopping because REQUIRE_FRESH_FAIR_VALUE is enabled.");
+            await oracle.close();
+            return;
+        }
+        if (!gotFirstPrice) warn("No oracle price received before timeout; falling back to book mid until one arrives.");
+    }
+
     while (true) {
         if(await runAssetEpochCheck(wallet)) {
             await sleep(1000);
             await runBookRefresh();
             await runPendingRefresh(wallet);
             await runQuoteMaintenance(wallet);
-            await runCancelRebalance(wallet);
+            //await runCancelRebalance(wallet);
             await runAggression(wallet);
         } else {
             await sleep(1000);
         }
     }
+}
+
+function registerShutdown(oracle: OracleFeed) {
+    let shuttingDown = false;
+    const shutdown = (signal: NodeJS.Signals) => {
+        if (shuttingDown) return;
+        shuttingDown = true;
+        console.log("received", signal, "closing oracle websocket");
+        void oracle.close().finally(() => process.exit(0));
+    };
+
+    process.once("SIGINT", shutdown);
+    process.once("SIGTERM", shutdown);
 }
 
 main().catch((e) => {

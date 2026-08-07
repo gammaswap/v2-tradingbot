@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { CFG, type Side } from "../config/config.js";
+import { OrderKey, PendingOrder } from "./types.js";
 
 export function sleep(ms: number) {
     return new Promise((r) => setTimeout(r, ms));
@@ -63,4 +64,12 @@ export function isBigIntString(value: string): boolean {
     const regex = /^(0|[1-9]\d*)$/;
 
     return regex.test(value);
+}
+
+export function getOrderKey(order: PendingOrder) : OrderKey {
+    return {
+        price: order.price,
+        time: order.time,
+        id: order.id,
+    } as OrderKey;
 }

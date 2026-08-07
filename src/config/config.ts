@@ -1,5 +1,7 @@
 export type Side = "buy" | "sell";
 
+const DEFAULT_ASSET_ID = "261336857817713630688382311349658711122006440411137";
+
 function envNum(name: string, def: number): number {
     const v = process.env[name];
     if (v == null || v.trim() === "") return def;
@@ -51,6 +53,16 @@ function envBigInt(name: string, def: number): bigint {
     return Number.isFinite(n) ? BigInt(n) : BigInt(def);
 }
 
+function symbolIdFromAssetId(assetId: string): string {
+    try {
+        return (BigInt(assetId) & ((1n << 64n) - 1n)).toString();
+    } catch {
+        return "1";
+    }
+}
+
+const ASSET_ID = envStr("ASSET_ID", DEFAULT_ASSET_ID);
+
 export const CFG = {
     RPC_URL: envStr("RPC_URL", "http://localhost:8545"),
     API_URL: envApiUrl(),
@@ -63,7 +75,7 @@ export const CFG = {
     RESOLUTION_URL: envStr("RESOLUTION_URL", "https://exchange-api.gammaswap.com/api/resolve"),
     BALANCE_URL: envStr("BALANCE_URL", "https://exchange-api.gammaswap.com/api/balance"),
     POSITION_URL: envStr("POSITION_URL", "https://exchange-api.gammaswap.com/api/position"),
-    ASSET_ID: envStr("ASSET_ID", "261336857817713630688382311349658711122006440411137"),
+    ASSET_ID,
     EPOCH: envStr("EPOCH", "0"),
     USER_ADDRESS: envStr("USER_ADDRESS", "0xa829c1D4542F70714B35fFe95a247373329131df"),
 
@@ -85,6 +97,18 @@ export const CFG = {
     SOFT_MAX_PRICE: envNum("SOFT_MAX_PRICE", 700000), // 0.7
     CENTER_PRICE: envNum("CENTER_PRICE", 500000), // 0.5
     DUST_BALANCE: envBigInt("DUST_BALANCE", 1000000), // 1
+
+    USE_ORACLE_FAIR_VALUE: envBool("USE_ORACLE_FAIR_VALUE", true),
+    REQUIRE_FRESH_FAIR_VALUE: envBool("REQUIRE_FRESH_FAIR_VALUE", true),
+    ORACLE_FEED_WS_URL: envStr("ORACLE_FEED_WS_URL", "wss://exchange-api.gammaswap.com/oracle-ws/"),
+    SYMBOL_ID: envStr("SYMBOL_ID", symbolIdFromAssetId(ASSET_ID)),
+    ORACLE_STALE_PRICE_TIMEOUT_MS: envNum("ORACLE_STALE_PRICE_TIMEOUT_MS", 30000),
+    ORACLE_FIRST_PRICE_TIMEOUT_MS: envNum("ORACLE_FIRST_PRICE_TIMEOUT_MS", 30000),
+    FAIR_VALUE_STALE_MS: envNum("FAIR_VALUE_STALE_MS", 45000),
+    FAIR_VALUE_VOL: envNum("FAIR_VALUE_VOL", 0.80),
+    FAIR_VALUE_WEIGHT: envNum("FAIR_VALUE_WEIGHT", 1.0),
+    FAIR_VALUE_MIN_EDGE_TICKS: envNum("FAIR_VALUE_MIN_EDGE_TICKS", 2),
+    FAIR_VALUE_PAYS_ABOVE_STRIKE: envBool("FAIR_VALUE_PAYS_ABOVE_STRIKE", true),
 
     TICK_SIZE: envNum("TICK_SIZE", 1000),// 0.001
     LOT_SIZE: envNum("LOT_SIZE", 10000),// 0.01
