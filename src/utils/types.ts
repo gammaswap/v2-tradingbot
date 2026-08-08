@@ -115,3 +115,28 @@ export interface AssetEpochData {
     strikePrice: bigint;
     resolutionPrice: bigint;
 }
+
+/**
+ * AssetId encoding/decoding utilities
+ *
+ * Matches PackedAssetId.sol (MarginExchange): LSB-first bit packing.
+ * - id: 64 bits (0-63)
+ * - marketType: 8 bits (64-71)
+ * - startTime: 32 bits (72-103)
+ * - periodLength: 32 bits (104-135)
+ * - strike: 48 bits (136-183) — strike
+ * - strike: 16 bits (184-199) — range
+ * - reserved: 56 bits (200-255)
+ *
+ * expiration (not packed) = startTime + periodLength (when the market settles).
+ */
+export interface DecodedAssetId {
+    id: number;           // uint64 — base asset id
+    marketType: number;   // uint8 — asset type (1 = up/down, etc.)
+    startTime: number;    // uint32 — market start timestamp
+    periodLength: number; // uint32 — period in seconds (e.g. 900 for 15m)
+    strike: string;       // uint48 — strike/priceChange per asset type
+    range: number;        // uint16 — range
+    reserved: string;     // uint56 — reserved
+    expiration: number;   // startTime + periodLength (convenience)
+}

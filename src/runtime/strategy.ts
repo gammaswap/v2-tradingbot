@@ -28,6 +28,20 @@ export function shouldPauseForFairValue(): boolean {
     return CFG.USE_ORACLE_FAIR_VALUE && CFG.REQUIRE_FRESH_FAIR_VALUE && !hasFreshFairValue();
 }
 
+export function shouldCancelReplace(o: PendingOrder, newPrice: number, newSize: number, tolTicks: number = 1) : boolean {
+    const tol = CFG.TICK_SIZE * tolTicks + 1;//1e-12;
+    if (Math.abs(o.price - newPrice) <= tol) {
+        return false;
+    }
+
+    const tolSize = 10000 * 1000; // 10 USD = $0.01 x 1000
+    if (Math.abs(o.size - newSize) <= tolSize) {
+        return false;
+    }
+
+    return true;
+}
+
 export function referencePrice(book: BookSnapshot | null): number {
     const bookMid = midPrice(book);
     if (!hasFreshFairValue()) return bookMid;

@@ -26,7 +26,9 @@
     "deposit": "node --env-file=./.env --loader ts-node/esm ./src/actions/sendDeposit.ts",
     "cancel": "node --env-file=./.env --loader ts-node/esm ./src/actions/sendCancel.ts",
     "order": "node --env-file=./.env --loader ts-node/esm ./src/actions/sendOrder.ts",
-    "claim": "node --env-file=./.env --loader ts-node/esm ./src/actions/sendClaim.ts"
+    "claim": "node --env-file=./.env --loader ts-node/esm ./src/actions/sendClaim.ts",
+    "resolution": "node --env-file=./.env --loader ts-node/esm ./scripts/sample/getResolutionPrice.ts",
+    "resolution:last": "node --env-file=./.env --loader ts-node/esm ./scripts/sample/getLastResolutionPrice.ts"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

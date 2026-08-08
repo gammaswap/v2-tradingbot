@@ -18,21 +18,20 @@ import {
     shouldPauseForFairValue,
     buildTargetLadderPrices,
     buildTargetSizes,
-    nearestOrderAtPrice,
-    canPlaceBid,
-    canPlaceAsk,
     chooseFairValueAggressionSide,
     depthToWipe,
     canAggressBuy,
     canAggressSell,
     availableCollateral,
     canPlaceOrder,
+    shouldCancelReplace,
 } from "./strategy.js";
 import { Wallet, ZeroHash } from "ethers";
 import { getAssetById, getPositionBalance } from "../chain/blockchain.js";
 import { updateFairValueFromOracle } from "./fairValue.js";
-import { OrderKey, PendingOrder, CancelReplaceInstruction, NewOrderInstruction } from "../utils/types.js";
+import { PendingOrder, CancelReplaceInstruction, NewOrderInstruction } from "../utils/types.js";
 import { TimeInForce } from "@gammaswap/v2-exchange-sdk";
+import { decodeAssetId } from "../utils/assetIdUtils.js";
 
 export async function hasPendingOrders() {
     const resp = await apiGetBalance();
@@ -101,9 +100,37 @@ export async function getCurrentEpoch() : Promise<bigint> {
     return epoch;
 }
 
+function calculateExpiration(startTime: number, periodLength: number, epoch: number) : number {
+    return startTime + periodLength * (epoch + 1);
+}
+
+export async function getCurrentAssetStatus() : Promise<{ epoch: bigint, strikePrice: bigint, periodLength: number, expiration: number }> {
+    let epoch = 0n;
+    const assetData = decodeAssetId(BigInt(CFG.ASSET_ID));
+    const resolution = await apiLastResolutionPrice();
+    if(!resolution.isNull) {
+        return {
+            epoch: BigInt(resolution.epoch) + 1n,
+            strikePrice: BigInt(resolution.price),
+            periodLength: assetData.periodLength,
+            expiration: calculateExpiration(assetData.startTime, assetData.periodLength, Number(resolution.epoch))
+        };
+    } else {
+        return {
+            epoch,
+            strikePrice: BigInt(assetData.strike),
+            periodLength: assetData.periodLength,
+            expiration: calculateExpiration(assetData.startTime, assetData.periodLength, Number(epoch))
+        };
+    }
+}
+
 export async function runAssetEpochCheck(wallet: Wallet) {
     console.log("=============runAssetEpochCheck:start",(new Date()).toUTCString(),"============================");
-    const epoch = await getCurrentEpoch();
+    const assetStatus = await getCurrentAssetStatus();
+    const epoch = assetStatus.epoch;
+    const strikePrice = assetStatus.strikePrice;
+    const expiration = BigInt(assetStatus.expiration);
     if(epoch != STATE.epoch) {
         let pos;
         try {
@@ -112,7 +139,7 @@ export async function runAssetEpochCheck(wallet: Wallet) {
            console.log("position check error:", e?.message ?? e);
         }
         console.log("asset epoch check >> epoch:", epoch, "STATE.epoch:", STATE.epoch, "pos:", pos);
-        try{
+        try {
             if(pos && pos.size > 0n) {
                 await apiClaim(wallet, Number(STATE.epoch));
             }
@@ -128,6 +155,8 @@ export async function runAssetEpochCheck(wallet: Wallet) {
             STATE.epoch = epoch;
             try {
                 STATE.asset = await getAssetById(BigInt(CFG.ASSET_ID));
+                STATE.asset.strikePrice = strikePrice;
+                STATE.asset.expiration = expiration;
                 if (STATE.oracle.price != null) updateFairValueFromOracle(STATE.oracle.price, STATE.oracle.ts);
                 console.log("asset refreshed:", STATE.asset);
             } catch(e: any) {
@@ -197,19 +226,6 @@ export async function runPendingRefresh(wallet: Wallet) {
     await sleep(CFG.PENDING_REFRESH_MS);
 }
 
-function shouldCancelReplace(o: PendingOrder, newPrice: number, newSize: number, tolTicks: number = 1) : boolean {
-    const tol = CFG.TICK_SIZE * tolTicks + 1;//1e-12;
-    if (Math.abs(o.price - newPrice) <= tol) {
-        return false;
-    }
-
-    const tolSize = 10000 * 1000; // 10 USD = $0.01 x 1000
-    if (Math.abs(o.size - newSize) <= tolSize) {
-        return false;
-    }
-
-    return true;
-}
 
 function prepareOrders(oldOrders: PendingOrder[], newPrices: number[], newSizes: number[], skewMul: number, isBuy: boolean) : {
     cancelReplaces: CancelReplaceInstruction[],
@@ -350,7 +366,6 @@ export async function runQuoteMaintenance(wallet: Wallet) {
                     allOrNothing: false
                 });
             log(`cancel replace`, { price: instr.price, size: instr.size, side: instr.side, cancelId: instr.cancelId });
-            //if (CFG.USE_LOCAL_LEDGER) STATE.baseBal -= Math.floor(size * price / 1000000); // USD collateral for longs
         } catch (e: any) {
             warn(`failed cancel replace cancelId: ${instr.cancelId}, price: ${instr.price}, size: ${instr.size},` +
                 `side: ${instr.side}, error:`, e?.message ?? e);
@@ -411,7 +426,7 @@ export async function runAggression(wallet: Wallet) {
     }
     STATE.lastTradeTime = currTime;
 
-    const epoch = await getCurrentEpoch();
+    const epoch = await getCurrentEpoch(); // TODO: we shouldn't need to do this everywhere
     if(epoch != STATE.epoch) {
         console.log("aggression skipped (epoch mismatch)", { epoch, STATE_epoch: STATE.epoch });
         return;
