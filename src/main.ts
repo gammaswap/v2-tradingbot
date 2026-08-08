@@ -5,7 +5,6 @@ import {
     runAggression,
     runAssetEpochCheck,
     runBookRefresh,
-    runCancelRebalance,
     runPendingRefresh,
     runQuoteMaintenance,
 } from "./runtime/loops.js";
@@ -99,7 +98,6 @@ async function main() {
             await runBookRefresh();
             await runPendingRefresh(wallet);
             await runQuoteMaintenance(wallet);
-            //await runCancelRebalance(wallet);
             await runAggression(wallet);
         } else {
             await sleep(1000);

@@ -25,6 +25,8 @@ import {
     depthToWipe,
     canAggressBuy,
     canAggressSell,
+    availableCollateral,
+    canPlaceOrder,
 } from "./strategy.js";
 import { Wallet, ZeroHash } from "ethers";
 import { getAssetById, getPositionBalance } from "../chain/blockchain.js";
@@ -157,7 +159,6 @@ export async function runPendingRefresh(wallet: Wallet) {
     try {
         const pendingResp = await apiGetPending(wallet.address, Number(STATE.epoch));
         const next = new Map<string, any>();
-        const _nowMs = nowMs();
         STATE.pendingBuys.clear();
         STATE.pendingSells.clear();
         for (const o of pendingResp.buys ?? []) {
@@ -173,7 +174,6 @@ export async function runPendingRefresh(wallet: Wallet) {
             const orderKey = getOrderKey(order);
             if(!STATE.pendingBuys.has(orderKey)) STATE.pendingBuys.set(orderKey, order)
             next.set(order.id, order);
-            if (!STATE.localOrderTs.has(order.id)) STATE.localOrderTs.set(order.id, _nowMs);
         }
         for (const o of pendingResp.sells ?? []) {
             const order = {
@@ -188,11 +188,6 @@ export async function runPendingRefresh(wallet: Wallet) {
             const orderKey = getOrderKey(order);
             if(!STATE.pendingSells.has(orderKey)) STATE.pendingSells.set(orderKey, order)
             next.set(order.id, order);
-            if (!STATE.localOrderTs.has(order.id)) STATE.localOrderTs.set(order.id, _nowMs);
-        }
-
-        for (const id of STATE.pending.keys()) {
-            if (!next.has(id)) STATE.localOrderTs.delete(id);
         }
         STATE.pending = next;
     } catch (e: any) {
@@ -225,45 +220,51 @@ function prepareOrders(oldOrders: PendingOrder[], newPrices: number[], newSizes:
     const cancelReplaces: any[] = [];
     const cancels: any[] = [];
     const newOrders: any[] = [];
+    let collateral = availableCollateral();
     for(let i = 0; i < minLength; i++) {
+        const oldOrder = oldOrders[i];
         const price = newPrices[i]
         const size = roundToLot(newSizes[i] * skewMul);
-        const sizeDelta = size - oldOrders[i].size;
-        // TODO: the risk change should be based on margin not just size
-        if(sizeDelta == 0) { // no risk change
-            if(shouldCancelReplace(oldOrders[i], price, size)) {
+        const oldMarginPrice =  isBuy ? oldOrder.price : 1000000 - oldOrder.price;
+        const newMarginPrice = isBuy ? price : 1000000 - price;
+        const oldMargin = Math.floor(oldOrder.size * oldMarginPrice / 1000000);
+        const newMargin = Math.floor(size * newMarginPrice / 1000000);
+        const marginChange = newMargin - oldMargin;
+        if(marginChange <= 0) { // no risk change or decreasing risk
+            if(shouldCancelReplace(oldOrder, price, size)) {
                 // create new cancel replace order
                 cancelReplaces.push({
                     price: price,
                     size: size,
-                    side: oldOrders[i].side,
-                    cancelId: oldOrders[i].id
+                    side: oldOrder.side,
+                    cancelId: oldOrder.id
                 })
+                collateral += marginChange;
             }
-        } else if(sizeDelta > 0) { // increasing risk
-            const _canPlaceOrder = isBuy ? canPlaceBid(sizeDelta, price) : canPlaceAsk(sizeDelta, price);
+        } else if(marginChange > 0) { // increasing risk
+            let _canPlaceOrder = canPlaceOrder(isBuy, size, price, collateral + oldMargin);
             let _size = size;
+            let _marginChange = marginChange;
             if(!_canPlaceOrder) {
-                _size = oldOrders[i].size; // neutralize risk
+                _size = oldOrder.size; // lower risk
+                const _newMargin = Math.floor(_size * newMarginPrice / 1000000);
+                _marginChange = _newMargin - oldMargin;
+                _canPlaceOrder = _marginChange <= 0 || canPlaceOrder(isBuy, _size, price, collateral + oldMargin);
             }
-            if(shouldCancelReplace(oldOrders[i], price, _size)) {
-                // create new cancel replace order
-                cancelReplaces.push({
-                    price: price,
-                    size: _size,
-                    side: oldOrders[i].side,
-                    cancelId: oldOrders[i].id
-                })
-            }
-        } else if(sizeDelta < 0) { // decreasing risk
-            if(shouldCancelReplace(oldOrders[i], price, size)) {
-                // create new cancel replace order
-                cancelReplaces.push({
-                    price: price,
-                    size: size,
-                    side: oldOrders[i].side,
-                    cancelId: oldOrders[i].id
-                })
+            if(_canPlaceOrder) {
+                if(shouldCancelReplace(oldOrder, price, _size)) {
+                    // create new cancel replace order
+                    cancelReplaces.push({
+                        price: price,
+                        size: _size,
+                        side: oldOrder.side,
+                        cancelId: oldOrder.id
+                    })
+                    collateral += _marginChange;
+                }
+            } else {
+                cancels.push(oldOrder.id)
+                collateral -= oldMargin;
             }
         }
     }
@@ -271,7 +272,8 @@ function prepareOrders(oldOrders: PendingOrder[], newPrices: number[], newSizes:
         for(let i = minLength; i < newPrices.length; i++) {
             const price = newPrices[i]
             const size = roundToLot(newSizes[i] * skewMul);
-            const _canPlaceOrder = isBuy ? canPlaceBid(size, price) : canPlaceAsk(size, price);
+            const newMargin = Math.floor(size * (isBuy ? price : 1000000 - price) / 1000000);
+            const _canPlaceOrder = canPlaceOrder(isBuy, size, price, collateral);
             if(!_canPlaceOrder) continue;
             // add new order
             newOrders.push({
@@ -279,6 +281,7 @@ function prepareOrders(oldOrders: PendingOrder[], newPrices: number[], newSizes:
                 size: size,
                 side: isBuy ? "buy" : "sell"
             })
+            collateral += newMargin;
         }
     } else if(oldOrders.length > newPrices.length) {
         for(let i = minLength; i < oldOrders.length; i++) {
@@ -376,7 +379,6 @@ export async function runQuoteMaintenance(wallet: Wallet) {
                     size: instr.size
                 });
             log("placed order", { price: instr.price, size: instr.size, side: instr.side });
-            //if (CFG.USE_LOCAL_LEDGER) STATE.baseBal -= Math.floor((1000000 - price) * size / 1000000); // USD collateral for shorts
         } catch (e: any) {
             warn(`failed to place order price: ${instr.price}, size: ${instr.size}, side: ${instr.side}, error:`, e?.message ?? e);
         }
@@ -391,58 +393,6 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     console.log("=============runQuoteMaintenance:end",(new Date()).toUTCString(),"============================");
     await sleep(jitter(CFG.QUOTE_LOOP_MS, CFG.QUOTE_JITTER_MS));
 }
-/*
-export async function runCancelRebalance(wallet: Wallet) {
-    console.log("=============runCancelRebalance:start",(new Date()).toUTCString(),"============================");
-    const book = STATE.book;
-    if (!book) return;
-
-    const cutoff = nowMs() - CFG.STALE_SECONDS * 1000;
-    console.log("cancel stale orders cutoff:", cutoff);
-    const toCancel: any[] = [];
-
-    for (const o of STATE.pending.values()) {
-        const ts = o.time ?? STATE.localOrderTs.get(o.id) ?? nowMs();
-        if (ts < cutoff) toCancel.push(o);
-    }
-    console.log("canceling:", toCancel.length, "stale orders");
-
-    const pendingArr = Array.from(STATE.pending.values());
-    if (pendingArr.length > CFG.MAX_PENDING_ORDERS) {
-        const excess = pendingArr.length - CFG.MAX_PENDING_ORDERS;
-        const mid = referencePrice(book);
-        const sorted = pendingArr
-            .slice()
-            .sort((a, b) => Math.abs(b.price - mid) - Math.abs(a.price - mid));
-        for (let i = 0; i < excess; i++) toCancel.push(sorted[i]);
-    }
-    console.log("canceling:", toCancel.length, "excess orders");
-
-    const uniq = new Map<string, any>();
-    for (const o of toCancel) uniq.set(o.id, o);
-    const batch = Array.from(uniq.values()).slice(0, CFG.CANCEL_BATCH_MAX);
-
-    console.log("canceling:", batch.length, "total orders");
-    for (const o of batch) {
-        try {
-            await apiCancelOrder(wallet, Number(o.epoch), o.id);
-            log("canceled", { id: o.id, side: o.side, price: o.price, size: o.size });
-            if (CFG.USE_LOCAL_LEDGER) {
-                if (o.side === "buy") STATE.baseBal += Math.floor(Number(o.size) * Number(o.price) / 1000000);
-                else STATE.baseBal += Math.floor(Number(o.size) * (1000000 - Number(o.price)) / 1000000);
-            }
-        } catch (e: any) {
-            warn("cancel error:", e?.message ?? e);
-        }
-    }
-
-    const _book = await apiGetBook(Number(STATE.epoch));
-    STATE.book = _book;
-    STATE.lastMid = midPrice(_book);
-    console.log("book refreshed:", STATE.lastMid, "bids:", _book.bids.length, "asks:", _book.asks.length, "total:", _book.asks.length + _book.bids.length);
-    console.log("=============runCancelRebalance:end",(new Date()).toUTCString(),"============================");
-    await sleep(jitter(CFG.CANCEL_LOOP_MS, CFG.CANCEL_JITTER_MS));
-}/**/
 
 export async function runAggression(wallet: Wallet) {
     const book = STATE.book;
@@ -535,17 +485,21 @@ export async function runAggression(wallet: Wallet) {
 
     console.log("aggressivePrice:", aggressivePrice, "side:", side, "qty:", tradeQty, "mid:", bookMid, "reference:", refPrice);
     try {
-        await apiSendOrder(wallet, { epoch: Number(STATE.epoch), side, price: aggressivePrice, size: tradeQty, tif: TimeInForce.IOC });
+        const resp = await apiSendOrder(wallet, { epoch: Number(STATE.epoch), side, price: aggressivePrice, size: tradeQty, tif: TimeInForce.IOC });
         log("aggressed", { side, qty: tradeQty, price: aggressivePrice, mid: bookMid, reference: refPrice });
 
-        //STATE.baseBal = Number(await getLedgerBalance(wallet.address));
-        const resp = await apiGetBalance();
-        STATE.baseBal = Number(resp.balance);
-        if (CFG.USE_LOCAL_LEDGER) {
-            if (side === "buy") {
-                STATE.invBase += tradeQty;
-            } else {
-                STATE.invBase -= tradeQty;
+        const balance = await apiGetBalance(); // FIXME: this could be off due to caching, must account for it
+        STATE.baseBal = Number(balance.balance - balance.pending);
+        if(resp.data) {
+            // @ts-ignore
+            if(resp.data?.status == "FILLED" || resp.data?.status == "PARTIALLY_FILLED") {
+                // @ts-ignore
+                const tradeQty = Number(resp.data?.filled);
+                if (side === "buy") {
+                    STATE.invBase += tradeQty;
+                } else {
+                    STATE.invBase -= tradeQty;
+                }
             }
         }
     } catch (e: any) {

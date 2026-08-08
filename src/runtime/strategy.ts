@@ -101,14 +101,24 @@ export function availableCollateral(): number {
     return Math.max(0, STATE.baseBal - CFG.BASE_RESERVE_MIN);
 }
 
-export function canPlaceAsk(size: number, price: number): boolean {
-    console.log("availableCollateral():", availableCollateral(), "size:", size, "price:", price, " =>")
-    return Math.floor(size * (1000000 - price) / 1000000) <= availableCollateral();
+export function canPlaceOrder(isBuy: boolean, size: number, price: number, collateral?: number): boolean {
+    if(isBuy) {
+        return canPlaceBid(size, price, collateral);
+    } else {
+        return canPlaceAsk(size, price, collateral);
+    }
 }
 
-export function canPlaceBid(size: number, price: number): boolean {
-    console.log("availableCollateral():", availableCollateral(), "size:", size, "price:", price, " =>")
-    return Math.floor(size * price / 1000000) <= availableCollateral();
+export function canPlaceAsk(size: number, price: number, collateral?: number): boolean {
+    const _collateral = collateral ?? availableCollateral();
+    console.log("availableCollateral():", availableCollateral(), "collateral:", collateral, " size:", size, "price:", price, " =>")
+    return Math.floor(size * (1000000 - price) / 1000000) <= _collateral;
+}
+
+export function canPlaceBid(size: number, price: number, collateral?: number): boolean {
+    const _collateral = collateral ?? availableCollateral();
+    console.log("availableCollateral():", availableCollateral(), "collateral:", collateral, "size:", size, "price:", price, " =>")
+    return Math.floor(size * price / 1000000) <= _collateral;
 }
 
 export function canAggressBuy(qty: number, estPrice: number): boolean {
