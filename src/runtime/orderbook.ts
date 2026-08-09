@@ -11,7 +11,6 @@ export type OrderBookFeed = {
 };
 
 export async function startOrderBookFeed(queue: RuntimeEventQueue): Promise<OrderBookFeed> {
-    let lastSeq: bigint | null = null;
     const client = createExchangeWebSocketClient({
         websocketUrl: CFG.ORDERBOOK_WS_URL,
         reconnect: true,
@@ -20,19 +19,9 @@ export async function startOrderBookFeed(queue: RuntimeEventQueue): Promise<Orde
 
     const unsubscribe: Unsubscribe = await client.subscribeOrderBook(CFG.ASSET_ID, {
         onUpdate: (update) => {
-            if (lastSeq != null && update.seqId > lastSeq + 1n) {
-                warn("orderbook sequence gap; requesting full resync", {
-                    previous: lastSeq.toString(),
-                    received: update.seqId.toString(),
-                });
-                queue.publish({ type: "market-resync", reason: "websocket sequence gap" });
-            }
-
-            lastSeq = update.seqId;
             queue.publish({ type: "market", update });
         },
         onResyncRequired: (assetId) => {
-            lastSeq = null;
             warn("orderbook websocket requires resync:", assetId);
             queue.publish({ type: "market-resync", reason: `SDK resync for ${assetId}` });
         },

@@ -9,6 +9,7 @@ export type BookLevel = {
 
 export type BookSnapshot = {
     assetId: bigint;
+    seqId: bigint;
     ts: bigint;
     bids: BookLevel[];
     asks: BookLevel[];

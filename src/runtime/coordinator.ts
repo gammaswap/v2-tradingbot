@@ -1,10 +1,19 @@
 import type { WebSocketTradeUpdate } from "@gammaswap/v2-exchange-sdk";
 import type { Wallet } from "ethers";
 import { CFG } from "../config/config.js";
+import { apiGetBook } from "../api/api.js";
 import { markFairValueStale, updateFairValueFromOracle } from "./fairValue.js";
-import { refreshTradingState, runAggression, runAssetEpochCheck, runQuoteMaintenance } from "./loops.js";
-import { RuntimeEvent, RuntimeEventQueue } from "./events.js";
+import { refreshPrivateState, runAggression, runAssetEpochCheck, runQuoteMaintenance } from "./loops.js";
+import type { RuntimeEvent, RuntimeEventQueue } from "./events.js";
 import { STATE } from "./state.js";
+import { midPrice } from "./strategy.js";
+import {
+    applyMarketUpdate,
+    buildBookSnapshot,
+    createLocalOrderBookState,
+    installBookSnapshot,
+    type LocalOrderBookState,
+} from "./orderbookReducer.js";
 import { jitter, debug, log, nowMs, warn } from "../utils/utils.js";
 
 const EPOCH_CHECK_MS = 1_000;
@@ -13,7 +22,12 @@ export async function runRuntimeCoordinator(
     wallet: Wallet,
     queue: RuntimeEventQueue,
 ): Promise<void> {
-    await refreshTradingState(wallet);
+    const localBook = createLocalOrderBookState(BigInt(CFG.ASSET_ID));
+    const initialBookReady = await resyncBook(localBook);
+    if (!initialBookReady) {
+        throw new Error("unable to initialize the local orderbook");
+    }
+    await refreshPrivateState(wallet);
 
     let nextEpochCheck = nowMs();
     let nextQuote = nowMs();
@@ -24,44 +38,84 @@ export async function runRuntimeCoordinator(
         await queue.wait(Math.max(0, nextAction - nowMs()));
 
         const events = queue.drain();
-        const actions = processEvents(events);
+        const actions = processEvents(localBook, events);
+        let bookReady = true;
 
-        if (actions.needsResync || actions.marketChanged) {
-            await refreshTradingState(wallet);
+        if (actions.needsResync) {
+            bookReady = await resyncBook(localBook);
+        } else if (actions.marketChanged) {
+            publishLocalBook(localBook);
+        }
+
+        if (actions.needsResync || actions.ownTradeOccurred) {
+            await refreshPrivateState(wallet);
         }
 
         const now = nowMs();
         if (now >= nextEpochCheck) {
+            const epochBefore = STATE.epoch;
             const epochWasValid = await runAssetEpochCheck(wallet);
-            if (!epochWasValid) {
-                await refreshTradingState(wallet);
+            if (!epochWasValid || STATE.epoch !== epochBefore) {
+                bookReady = await resyncBook(localBook);
+                await refreshPrivateState(wallet);
             }
             nextEpochCheck = now + EPOCH_CHECK_MS;
         }
 
-        if (now >= nextQuote || actions.tradeOccurred || actions.needsResync) {
+        if (bookReady && (now >= nextQuote || actions.tradeOccurred || actions.needsResync)) {
             await runQuoteMaintenance(wallet);
-            await refreshTradingState(wallet);
+            await refreshPrivateState(wallet);
             nextQuote = now + jitter(CFG.QUOTE_LOOP_MS, CFG.QUOTE_JITTER_MS);
         }
 
-        if (now >= nextAggression) {
+        if (bookReady && now >= nextAggression) {
             await runAggression(wallet);
-            await refreshTradingState(wallet);
+            await refreshPrivateState(wallet);
             nextAggression = now + jitter(CFG.AGGRESS_MS, CFG.AGGRESS_JITTER_MS);
         }
-
     }
 }
 
-function processEvents(events: RuntimeEvent[]): {
+async function resyncBook(state: LocalOrderBookState): Promise<boolean> {
+    try {
+        const snapshot = await apiGetBook(Number(STATE.epoch));
+        const ready = installBookSnapshot(state, snapshot);
+        if (!ready) {
+            warn("REST book snapshot did not cover buffered websocket events; another resync is required");
+            return false;
+        }
+
+        publishLocalBook(state);
+        log("local orderbook resynced", {
+            seqId: state.seqId?.toString(),
+            bids: STATE.book?.bids.length,
+            asks: STATE.book?.asks.length,
+        });
+        return true;
+    } catch (error: any) {
+        warn("orderbook resync failed:", error?.message ?? error);
+        return false;
+    }
+}
+
+function publishLocalBook(state: LocalOrderBookState): void {
+    STATE.book = buildBookSnapshot(state);
+    STATE.lastMid = midPrice(STATE.book);
+}
+
+function processEvents(
+    book: LocalOrderBookState,
+    events: RuntimeEvent[],
+): {
     needsResync: boolean;
     marketChanged: boolean;
     tradeOccurred: boolean;
+    ownTradeOccurred: boolean;
 } {
     let needsResync = false;
     let marketChanged = false;
     let tradeOccurred = false;
+    let ownTradeOccurred = false;
 
     for (const event of events) {
         if (event.type === "market-resync") {
@@ -88,21 +142,28 @@ function processEvents(events: RuntimeEvent[]): {
         }
 
         marketChanged = true;
+        if (event.update.type === "trade") tradeOccurred = true;
+        const result = applyMarketUpdate(book, event.update);
+        if (result === "buffered" || result === "invalid") {
+            needsResync = true;
+            continue;
+        }
+
         if (event.update.type === "trade") {
-            tradeOccurred = true;
-            applyTradeHint(event.update);
+            ownTradeOccurred = applyTradeHint(event.update) || ownTradeOccurred;
         }
     }
 
-    return { needsResync, marketChanged, tradeOccurred };
+    if (book.needsResync) needsResync = true;
+    return { needsResync, marketChanged, tradeOccurred, ownTradeOccurred };
 }
 
-function applyTradeHint(update: WebSocketTradeUpdate): void {
+function applyTradeHint(update: WebSocketTradeUpdate): boolean {
     const order = STATE.pending.get(update.data.orderId);
-    if (!order) return;
+    if (!order) return false;
 
     const fill = Number(update.data.fill);
-    if (fill <= 0) return;
+    if (fill <= 0) return false;
 
     STATE.invBase += order.side === "buy" ? fill : -fill;
     STATE.lastTradeTime = nowMs();
@@ -113,4 +174,5 @@ function applyTradeHint(update: WebSocketTradeUpdate): void {
         fillPrice: Number(update.data.fillPrice),
         seqId: update.seqId.toString(),
     });
+    return true;
 }

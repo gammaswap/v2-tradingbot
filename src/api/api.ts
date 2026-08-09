@@ -157,6 +157,7 @@ function normalizeBook(data: any): ApiBookResponse {
     const epoch = parseNumberField(data.epoch, "book.epoch");
     return {
         assetId: parseBigIntField(data.assetId ?? CFG.ASSET_ID, "book.assetId"),
+        seqId: parseBigIntField(data.seqId, "book.seqId"),
         ts: parseBigIntField(data.ts ?? Date.now(), "book.ts"),
         bids: (data.bids || []).map((level: BookLevel) => normalizeBookLevel(level, "buy", epoch)),
         asks: (data.asks || []).map((level: BookLevel) => normalizeBookLevel(level, "sell", epoch)),

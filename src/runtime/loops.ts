@@ -4,7 +4,6 @@ import {
     apiCancelReplaceOrder,
     apiClaim,
     apiGetBalance,
-    apiGetBook,
     apiGetPending,
     apiGetPosition,
     apiLastResolutionPrice,
@@ -169,13 +168,12 @@ export async function runAssetEpochCheck(wallet: Wallet) {
     return true;
 }
 
-export async function refreshTradingState(wallet: Wallet): Promise<void> {
+export async function refreshPrivateState(wallet: Wallet): Promise<void> {
     const epoch = STATE.epoch;
-    console.log("=============refreshTradingState:start", epoch.toString(), "============================");
+    console.log("=============refreshPrivateState:start", epoch.toString(), "============================");
 
     try {
-        const [book, pendingResp, balance, position] = await Promise.all([
-            apiGetBook(Number(epoch)),
+        const [pendingResp, balance, position] = await Promise.all([
             apiGetPending(wallet.address, Number(epoch)),
             apiGetBalance(),
             apiGetPosition(Number(epoch)),
@@ -184,24 +182,19 @@ export async function refreshTradingState(wallet: Wallet): Promise<void> {
         // Do not apply a snapshot for an epoch that changed while requests were pending.
         if (STATE.epoch !== epoch) return;
 
-        STATE.book = book;
-        STATE.lastMid = midPrice(book);
         applyPendingResponse(pendingResp);
         STATE.baseBal = Number(balance.balance - balance.pending);
         STATE.invBase = Number(position.balance) * (position.bSide ? -1 : 1);
         console.log("trading state refreshed:", {
-            mid: STATE.lastMid,
-            bids: book.bids.length,
-            asks: book.asks.length,
             pending: STATE.pending.size,
             baseBal: STATE.baseBal,
             invBase: STATE.invBase,
         });
     } catch (e: any) {
-        warn("trading state refresh error:", e?.message ?? e);
+        warn("private state refresh error:", e?.message ?? e);
     }
 
-    console.log("=============refreshTradingState:end",(new Date()).toUTCString(),"============================");
+    console.log("=============refreshPrivateState:end",(new Date()).toUTCString(),"============================");
 }
 
 function applyPendingResponse(pendingResp: Awaited<ReturnType<typeof apiGetPending>>): void {
@@ -517,9 +510,5 @@ export async function runAggression(wallet: Wallet) {
         warn("aggression error:", e?.message ?? e);
     }
 
-    const _book = await apiGetBook(Number(STATE.epoch));
-    STATE.book = _book;
-    STATE.lastMid = midPrice(_book);
-    console.log("book refreshed:", STATE.lastMid, "bids:", _book.bids.length, "asks:", _book.asks.length, "total:", _book.asks.length + _book.bids.length);
     console.log("========================runAggression:end",(new Date()).toUTCString(),"==========================");
 }
