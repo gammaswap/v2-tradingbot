@@ -141,15 +141,20 @@ function processEvents(
             continue;
         }
 
-        marketChanged = true;
-        if (event.update.type === "trade") tradeOccurred = true;
         const result = applyMarketUpdate(book, event.update);
+        if (result === "ignored" || result === "ignored-epoch" || result === "duplicate") {
+            continue;
+        }
+
+        marketChanged = true;
         if (result === "buffered" || result === "invalid") {
             needsResync = true;
+            if (event.update.type === "trade") tradeOccurred = true;
             continue;
         }
 
         if (event.update.type === "trade") {
+            tradeOccurred = true;
             ownTradeOccurred = applyTradeHint(event.update) || ownTradeOccurred;
         }
     }

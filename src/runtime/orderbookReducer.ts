@@ -6,6 +6,7 @@ export type LocalBookOrder = PendingOrder;
 
 export type LocalOrderBookState = {
     assetId: bigint;
+    epoch: bigint | null;
     seqId: bigint | null;
     ts: bigint;
     orders: Map<string, LocalBookOrder>;
@@ -13,11 +14,12 @@ export type LocalOrderBookState = {
     needsResync: boolean;
 };
 
-export type MarketApplyResult = "applied" | "duplicate" | "buffered" | "invalid";
+export type MarketApplyResult = "applied" | "duplicate" | "ignored" | "ignored-epoch" | "buffered" | "invalid";
 
 export function createLocalOrderBookState(assetId: bigint): LocalOrderBookState {
     return {
         assetId,
+        epoch: null,
         seqId: null,
         ts: 0n,
         orders: new Map(),
@@ -31,6 +33,7 @@ export function installBookSnapshot(
     snapshot: BookSnapshot,
 ): boolean {
     state.assetId = snapshot.assetId;
+    state.epoch = snapshot.epoch;
     state.seqId = snapshot.seqId;
     state.ts = snapshot.ts;
     state.orders.clear();
@@ -40,6 +43,7 @@ export function installBookSnapshot(
     for (const level of snapshot.asks) addSnapshotOrders(state, level.orders, "sell");
 
     const buffered = state.buffered
+        .filter((update) => update.assetId === snapshot.assetId && update.epoch === snapshot.epoch)
         .filter((update) => update.seqId > snapshot.seqId)
         .sort((a, b) => (a.seqId < b.seqId ? -1 : a.seqId > b.seqId ? 1 : 0));
     state.buffered = [];
@@ -56,6 +60,9 @@ export function applyMarketUpdate(
     state: LocalOrderBookState,
     update: WebSocketMarketUpdate,
 ): MarketApplyResult {
+    if (update.assetId !== state.assetId) return "ignored";
+    if (state.epoch != null && update.epoch !== state.epoch) return "ignored-epoch";
+
     if (state.seqId == null || state.needsResync) {
         state.buffered.push(update);
         state.needsResync = true;
@@ -94,6 +101,7 @@ export function buildBookSnapshot(state: LocalOrderBookState): BookSnapshot {
 
     return {
         assetId: state.assetId,
+        epoch: state.epoch ?? 0n,
         seqId: state.seqId ?? 0n,
         ts: state.ts,
         bids: buildLevels(bids, "buy"),
