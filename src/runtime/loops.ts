@@ -27,7 +27,7 @@ import {
     shouldCancelReplace,
 } from "./strategy.js";
 import { Wallet, ZeroHash } from "ethers";
-import { getAssetById, getPositionBalance } from "../chain/blockchain.js";
+import { getAssetById } from "../chain/blockchain.js";
 import { updateFairValueFromOracle } from "./fairValue.js";
 import { PendingOrder, CancelReplaceInstruction, NewOrderInstruction } from "../utils/types.js";
 import { TimeInForce } from "@gammaswap/v2-exchange-sdk";
@@ -169,61 +169,68 @@ export async function runAssetEpochCheck(wallet: Wallet) {
     return true;
 }
 
-export async function runBookRefresh() {
-    console.log("=============runBookRefresh:start",(new Date()).toUTCString(),"============================");
+export async function refreshTradingState(wallet: Wallet): Promise<void> {
+    const epoch = STATE.epoch;
+    console.log("=============refreshTradingState:start", epoch.toString(), "============================");
+
     try {
-        const book = await apiGetBook(Number(STATE.epoch));
+        const [book, pendingResp, balance, position] = await Promise.all([
+            apiGetBook(Number(epoch)),
+            apiGetPending(wallet.address, Number(epoch)),
+            apiGetBalance(),
+            apiGetPosition(Number(epoch)),
+        ]);
+
+        // Do not apply a snapshot for an epoch that changed while requests were pending.
+        if (STATE.epoch !== epoch) return;
+
         STATE.book = book;
         STATE.lastMid = midPrice(book);
-        console.log("book refreshed:", STATE.lastMid, "bids:", book.bids.length, "asks:", book.asks.length, "total:", book.asks.length + book.bids.length, "time:", new Date().toUTCString());
+        applyPendingResponse(pendingResp);
+        STATE.baseBal = Number(balance.balance - balance.pending);
+        STATE.invBase = Number(position.balance) * (position.bSide ? -1 : 1);
+        console.log("trading state refreshed:", {
+            mid: STATE.lastMid,
+            bids: book.bids.length,
+            asks: book.asks.length,
+            pending: STATE.pending.size,
+            baseBal: STATE.baseBal,
+            invBase: STATE.invBase,
+        });
     } catch (e: any) {
-        warn("book refresh error:", e?.message ?? e);
+        warn("trading state refresh error:", e?.message ?? e);
     }
-    console.log("=============runBookRefresh:end",(new Date()).toUTCString(),"============================");
-    await sleep(CFG.BOOK_REFRESH_MS);
+
+    console.log("=============refreshTradingState:end",(new Date()).toUTCString(),"============================");
 }
 
-export async function runPendingRefresh(wallet: Wallet) {
-    console.log("=============runPendingRefresh:start",(new Date()).toUTCString(),"============================");
-    try {
-        const pendingResp = await apiGetPending(wallet.address, Number(STATE.epoch));
-        const next = new Map<string, any>();
-        STATE.pendingBuys.clear();
-        STATE.pendingSells.clear();
-        for (const o of pendingResp.buys ?? []) {
+function applyPendingResponse(pendingResp: Awaited<ReturnType<typeof apiGetPending>>): void {
+    const next = new Map<string, PendingOrder>();
+    STATE.pendingBuys.clear();
+    STATE.pendingSells.clear();
+
+    for (const [orders, side] of [
+        [pendingResp.buys ?? [], "buy"],
+        [pendingResp.sells ?? [], "sell"],
+    ] as const) {
+        for (const o of orders) {
             const order = {
                 id: String(o.id),
-                side: "buy",
+                side,
                 price: Number(o.price),
                 size: Number(o.size),
                 time: Number(o.time),
                 account: o.account,
-                epoch: BigInt(pendingResp.epoch)
+                epoch: BigInt(pendingResp.epoch),
             } as PendingOrder;
             const orderKey = getOrderKey(order);
-            if(!STATE.pendingBuys.has(orderKey)) STATE.pendingBuys.set(orderKey, order)
+            if (side === "buy") STATE.pendingBuys.set(orderKey, order);
+            else STATE.pendingSells.set(orderKey, order);
             next.set(order.id, order);
         }
-        for (const o of pendingResp.sells ?? []) {
-            const order = {
-                id: String(o.id),
-                side: "sell",
-                price: Number(o.price),
-                size: Number(o.size),
-                time: Number(o.time),
-                account: o.account,
-                epoch: BigInt(pendingResp.epoch)
-            } as PendingOrder;
-            const orderKey = getOrderKey(order);
-            if(!STATE.pendingSells.has(orderKey)) STATE.pendingSells.set(orderKey, order)
-            next.set(order.id, order);
-        }
-        STATE.pending = next;
-    } catch (e: any) {
-        warn("pending refresh error:", e?.message ?? e);
     }
-    console.log("=============runPendingRefresh:end",(new Date()).toUTCString(),"============================");
-    await sleep(CFG.PENDING_REFRESH_MS);
+
+    STATE.pending = next;
 }
 
 
@@ -315,12 +322,8 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     if (!book) return;
     if (shouldPauseForFairValue()) {
         warn("quote maintenance skipped (oracle fair value stale)");
-        await sleep(jitter(CFG.QUOTE_LOOP_MS, CFG.QUOTE_JITTER_MS));
         return;
     }
-
-    const position = await getPositionBalance(1n, wallet.address);
-    STATE.invBase = Number(position.balance) * (position.bSide ? -1 : 1)
 
     const epoch = await getCurrentEpoch();
     if(epoch != STATE.epoch) {
@@ -399,14 +402,7 @@ export async function runQuoteMaintenance(wallet: Wallet) {
         }
     }
 
-    const _book = await apiGetBook(Number(STATE.epoch));
-    STATE.book = _book;
-    STATE.lastMid = midPrice(_book);
-    const balance = await apiGetBalance();
-    STATE.baseBal = Number(balance.balance - balance.pending);
-    console.log("book refreshed:", STATE.lastMid, "bids:", _book.bids.length, "asks:", _book.asks.length, "total:", _book.asks.length + _book.bids.length);
     console.log("=============runQuoteMaintenance:end",(new Date()).toUTCString(),"============================");
-    await sleep(jitter(CFG.QUOTE_LOOP_MS, CFG.QUOTE_JITTER_MS));
 }
 
 export async function runAggression(wallet: Wallet) {

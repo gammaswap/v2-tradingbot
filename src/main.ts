@@ -2,11 +2,6 @@ import { CFG } from "./config/config.js";
 import { isBigIntString, log, sleep, warn } from "./utils/utils.js";
 import {
     cleanUpAllOrders,
-    runAggression,
-    runAssetEpochCheck,
-    runBookRefresh,
-    runPendingRefresh,
-    runQuoteMaintenance,
 } from "./runtime/loops.js";
 import { deriveAccountsFromMnemonic } from "@gammaswap/v2-exchange-sdk";
 import { Wallet, isAddress } from "ethers";
@@ -16,6 +11,8 @@ import { apiGetBalance, apiGetPosition } from "./api/api.js";
 import { Asset } from "./utils/types.js";
 import { startOracleFeed, type OracleFeed } from "./runtime/oracle.js";
 import { startOrderBookFeed, type OrderBookFeed } from "./runtime/orderbook.js";
+import { RuntimeEventQueue } from "./runtime/events.js";
+import { runRuntimeCoordinator } from "./runtime/coordinator.js";
 
 async function main() {
     log("starting bot", {
@@ -81,31 +78,22 @@ async function main() {
 
     if (STATE.baseBal < CFG.BASE_RESERVE_MIN) warn("START_BASE_BAL < BASE_RESERVE_MIN; bot may refuse quotes.");
 
-    const oracle = await startOracleFeed();
-    const orderbook = await startOrderBookFeed(wallet);
+    const queue = new RuntimeEventQueue();
+    const oracle = await startOracleFeed(queue);
+    const orderbook = await startOrderBookFeed(queue);
     registerShutdown(oracle, orderbook);
 
     if (CFG.USE_ORACLE_FAIR_VALUE) {
         const gotFirstPrice = await oracle.waitForFirstPrice(CFG.ORACLE_FIRST_PRICE_TIMEOUT_MS);
         if (!gotFirstPrice && CFG.REQUIRE_FRESH_FAIR_VALUE) {
             warn("No oracle price received before timeout; stopping because REQUIRE_FRESH_FAIR_VALUE is enabled.");
-            await oracle.close();
+            await Promise.all([oracle.close(), orderbook.close()]);
             return;
         }
         if (!gotFirstPrice) warn("No oracle price received before timeout; falling back to book mid until one arrives.");
     }
 
-    while (true) {
-        if(await runAssetEpochCheck(wallet)) {
-            await sleep(1000);
-            await runBookRefresh();
-            await runPendingRefresh(wallet);
-            await runQuoteMaintenance(wallet);
-            await runAggression(wallet);
-        } else {
-            await sleep(1000);
-        }
-    }
+    await runRuntimeCoordinator(wallet, queue);
 }
 
 function registerShutdown(oracle: OracleFeed, orderbook: OrderBookFeed) {
