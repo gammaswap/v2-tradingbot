@@ -66,6 +66,8 @@ const ASSET_ID = envStr("ASSET_ID", DEFAULT_ASSET_ID);
 export const CFG = {
     RPC_URL: envStr("RPC_URL", "http://localhost:8545"),
     API_URL: envApiUrl(),
+    ORDERBOOK_WS_URL: envStr("ORDERBOOK_WS_URL", "wss://exchange-api.gammaswap.com/ws/"),
+    ORACLE_FEED_WS_URL: envStr("ORACLE_FEED_WS_URL", "wss://exchange-api.gammaswap.com/oracle-ws/"),
     ORDERS_URL: envStr("ORDERS_URL", "https://exchange-api.gammaswap.com/api/orders"),
     CANCELS_URL: envStr("CANCELS_URL", "https://exchange-api.gammaswap.com/api/cancels"),
     CLAIM_URL: envStr("CLAIM_URL", "https://exchange-api.gammaswap.com/api/claim"),
@@ -100,7 +102,6 @@ export const CFG = {
 
     USE_ORACLE_FAIR_VALUE: envBool("USE_ORACLE_FAIR_VALUE", true),
     REQUIRE_FRESH_FAIR_VALUE: envBool("REQUIRE_FRESH_FAIR_VALUE", true),
-    ORACLE_FEED_WS_URL: envStr("ORACLE_FEED_WS_URL", "wss://exchange-api.gammaswap.com/oracle-ws/"),
     SYMBOL_ID: envStr("SYMBOL_ID", symbolIdFromAssetId(ASSET_ID)),
     ORACLE_STALE_PRICE_TIMEOUT_MS: envNum("ORACLE_STALE_PRICE_TIMEOUT_MS", 30000),
     ORACLE_FIRST_PRICE_TIMEOUT_MS: envNum("ORACLE_FIRST_PRICE_TIMEOUT_MS", 30000),

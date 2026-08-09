@@ -15,6 +15,7 @@ import { STATE } from "./runtime/state.js";
 import { apiGetBalance, apiGetPosition } from "./api/api.js";
 import { Asset } from "./utils/types.js";
 import { startOracleFeed, type OracleFeed } from "./runtime/oracle.js";
+import { startOrderBookFeed, type OrderBookFeed } from "./runtime/orderbook.js";
 
 async function main() {
     log("starting bot", {
@@ -26,6 +27,7 @@ async function main() {
         LEDGER_ADDRESS: CFG.LEDGER_ADDRESS,
         ASSET_ID: CFG.ASSET_ID,
         API_URL: CFG.API_URL,
+        ORDERBOOK_WS_URL: CFG.ORDERBOOK_WS_URL,
         ORACLE_FEED_WS_URL: CFG.ORACLE_FEED_WS_URL,
         SYMBOL_ID: CFG.SYMBOL_ID,
         USE_ORACLE_FAIR_VALUE: CFG.USE_ORACLE_FAIR_VALUE,
@@ -80,7 +82,8 @@ async function main() {
     if (STATE.baseBal < CFG.BASE_RESERVE_MIN) warn("START_BASE_BAL < BASE_RESERVE_MIN; bot may refuse quotes.");
 
     const oracle = await startOracleFeed();
-    registerShutdown(oracle);
+    const orderbook = await startOrderBookFeed(wallet);
+    registerShutdown(oracle, orderbook);
 
     if (CFG.USE_ORACLE_FAIR_VALUE) {
         const gotFirstPrice = await oracle.waitForFirstPrice(CFG.ORACLE_FIRST_PRICE_TIMEOUT_MS);
@@ -105,13 +108,13 @@ async function main() {
     }
 }
 
-function registerShutdown(oracle: OracleFeed) {
+function registerShutdown(oracle: OracleFeed, orderbook: OrderBookFeed) {
     let shuttingDown = false;
     const shutdown = (signal: NodeJS.Signals) => {
         if (shuttingDown) return;
         shuttingDown = true;
-        console.log("received", signal, "closing oracle websocket");
-        void oracle.close().finally(() => process.exit(0));
+        console.log("received", signal, "closing websocket feeds");
+        void Promise.all([oracle.close(), orderbook.close()]).finally(() => process.exit(0));
     };
 
     process.once("SIGINT", shutdown);
