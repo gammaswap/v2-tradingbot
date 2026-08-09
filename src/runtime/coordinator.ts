@@ -5,7 +5,7 @@ import { markFairValueStale, updateFairValueFromOracle } from "./fairValue.js";
 import { refreshTradingState, runAggression, runAssetEpochCheck, runQuoteMaintenance } from "./loops.js";
 import { RuntimeEvent, RuntimeEventQueue } from "./events.js";
 import { STATE } from "./state.js";
-import { jitter, log, nowMs, warn } from "../utils/utils.js";
+import { jitter, debug, log, nowMs, warn } from "../utils/utils.js";
 
 const EPOCH_CHECK_MS = 1_000;
 
@@ -73,7 +73,7 @@ function processEvents(events: RuntimeEvent[]): {
         if (event.type === "oracle-price") {
             STATE.oracle.connected = true;
             const estimate = updateFairValueFromOracle(event.update.price, event.update.ts);
-            log("oracle state updated", {
+            debug("oracle state updated", {
                 symbolId: event.update.symbolId.toString(),
                 price: event.update.price.toString(),
                 fairValue: estimate?.protocolPrice,
