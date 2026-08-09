@@ -329,7 +329,7 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     }
 
     const bookMid = midPrice(book);
-    const refPrice = referencePrice(book); // TODO: this is what needs to be adjusted to come up with a dynamic market
+    const refPrice = referencePrice(book);
     console.log("book >> bids:", book.bids.length, "asks:", book.asks.length," total:", book.asks.length + book.bids.length, "mid:", bookMid, "reference:", refPrice, "fairValue:", STATE.fairValue?.protocolPrice, "oracleStale:", STATE.oracle.stale);
     const { bids: targetBidPrices, asks: targetAskPrices } = buildTargetLadderPrices(refPrice); // This builds the target prices
     const { bidSizes, askSizes } = buildTargetSizes();
@@ -503,7 +503,7 @@ export async function runAggression(wallet: Wallet) {
         const resp = await apiSendOrder(wallet, { epoch: Number(STATE.epoch), side, price: aggressivePrice, size: tradeQty, tif: TimeInForce.IOC });
         log("aggressed", { side, qty: tradeQty, price: aggressivePrice, mid: bookMid, reference: refPrice });
 
-        const balance = await apiGetBalance(); // FIXME: this could be off due to caching, must account for it
+        const balance = await apiGetBalance();
         STATE.baseBal = Number(balance.balance - balance.pending);
         if(resp.data) {
             // @ts-ignore

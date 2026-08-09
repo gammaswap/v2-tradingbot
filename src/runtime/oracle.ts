@@ -3,7 +3,7 @@ import {
     type Unsubscribe,
 } from "@gammaswap/v2-exchange-sdk";
 import { CFG } from "../config/config.js";
-import { log, warn } from "../utils/utils.js";
+import { debug, log, warn } from "../utils/utils.js";
 import { markFairValueStale, updateFairValueFromOracle } from "./fairValue.js";
 import { STATE } from "./state.js";
 
@@ -45,7 +45,7 @@ export async function startOracleFeed(): Promise<OracleFeed> {
             STATE.oracle.connected = true;
             const estimate = updateFairValueFromOracle(update.price, update.ts);
             notifyFirstPrice();
-            log("oracle price update:", {
+            debug("oracle price update:", {
                 symbolId: update.symbolId.toString(),
                 price: update.price.toString(),
                 ts: update.ts.toString(),

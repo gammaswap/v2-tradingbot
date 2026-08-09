@@ -155,4 +155,5 @@ export const CFG = {
     INV_SKEW_STRENGTH: envNum("INV_SKEW_STRENGTH", 0.35),
 
     LOG_VERBOSE: envBool("LOG_VERBOSE", true),
+    LOG_DEBUG: envBool("LOG_DEBUG", true),
 } as const;
