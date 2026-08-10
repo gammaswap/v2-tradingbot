@@ -113,6 +113,7 @@ function processEvents(
     ownTradeOccurred: boolean;
 } {
     let needsResync = false;
+    let skipMarketEvents = false;
     let marketChanged = false;
     let tradeOccurred = false;
     let ownTradeOccurred = false;
@@ -120,6 +121,7 @@ function processEvents(
     for (const event of events) {
         if (event.type === "market-resync") {
             needsResync = true;
+            skipMarketEvents = true;
             warn("market resync requested:", event.reason);
             continue;
         }
@@ -141,6 +143,8 @@ function processEvents(
             continue;
         }
 
+        if (skipMarketEvents) continue;
+
         const result = applyMarketUpdate(book, event.update);
         if (result === "ignored" || result === "ignored-epoch" || result === "duplicate") {
             continue;
@@ -149,7 +153,7 @@ function processEvents(
         marketChanged = true;
         if (result === "buffered" || result === "invalid") {
             needsResync = true;
-            if (event.update.type === "trade") tradeOccurred = true;
+            skipMarketEvents = true;
             continue;
         }
 
