@@ -94,7 +94,13 @@ export function applyMarketUpdate(
         return "buffered";
     }
 
-    if (update.seqId <= state.seqId) return "duplicate";
+    // TODO: need to update backend to not reset seqId due to restart
+    //if (update.seqId <= state.seqId) return "duplicate";
+    if (update.seqId <= state.seqId) {
+        state.buffered.push(update);
+        state.needsResync = true;
+        return "buffered";
+    }
 
     if (update.seqId !== state.seqId + 1n) {
         state.buffered.push(update);
@@ -206,7 +212,7 @@ function applyCancel(
     state: LocalOrderBookState,
     update: WebSocketCancelUpdate,
 ): boolean {
-    const orderId = update.data.cancelId || update.data.orderId;
+    const orderId = update.data.cancelId;
     const order = state.orders.get(orderId);
     if (!order) return false;
 
