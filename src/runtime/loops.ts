@@ -179,6 +179,8 @@ export async function runQuoteMaintenance(wallet: Wallet) {
         return;
     }
 
+    await reconcileCancelReplaceIntents(wallet);
+
     const bookMid = midPrice(book);
     const refPrice = referencePrice(book);
     console.log("book >> bids:", book.bids.length, "asks:", book.asks.length," total:", book.asks.length + book.bids.length, "mid:", bookMid, "reference:", refPrice, "fairValue:", STATE.fairValue?.protocolPrice, "oracleStale:", STATE.oracle.stale);
@@ -206,16 +208,28 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     const cancelReplaces = buyCancelReplaces.concat(sellCancelReplaces);
     for(let i = 0; i < cancelReplaces.length; i++) {
         const instr = cancelReplaces[i];
-        const intent = ORDER_INTENTS.getOrCreate({
-            kind: "cancel-replace",
-            assetId: CFG.ASSET_ID,
-            epoch: STATE.epoch,
-            slot: `replace-${instr.quoteSlot ?? `${instr.side}-${i}`}`,
-            side: instr.side,
-            price: instr.price,
-            size: instr.size,
-            targetOrderHash: instr.cancelId,
-        });
+        const existingReplacement = ORDER_INTENTS.getOutstanding("cancel-replace")
+            .find((intent) =>
+                intent.kind === "cancel-replace" &&
+                intent.epoch === STATE.epoch &&
+                intent.targetOrderHash === instr.cancelId,
+            );
+        if (existingReplacement && existingReplacement.status !== "unknown") {
+            continue;
+        }
+        if (existingReplacement && !ORDER_INTENTS.canAttempt(existingReplacement)) {
+            continue;
+        }
+        const intent = existingReplacement ?? ORDER_INTENTS.getOrCreate({
+                kind: "cancel-replace",
+                assetId: CFG.ASSET_ID,
+                epoch: STATE.epoch,
+                slot: `replace-${instr.quoteSlot ?? `${instr.side}-${i}`}`,
+                side: instr.side,
+                price: instr.price,
+                size: instr.size,
+                targetOrderHash: instr.cancelId,
+            });
         ORDER_INTENTS.markAttempted(intent);
         try {
             const response = await apiCancelReplaceOrder(wallet,
@@ -257,23 +271,34 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     const newOrders = buyNewOrders.concat(sellNewOrders);
     for(let i = 0; i < newOrders.length; i++) {
         const instr = newOrders[i];
-        const intent = ORDER_INTENTS.getOrCreate({
+        const slot = instr.quoteSlot ?? `${instr.side}-${i}`;
+        const existingPlace = ORDER_INTENTS.getOutstanding("place")
+            .find((candidate) =>
+                candidate.kind === "place" &&
+                candidate.epoch === STATE.epoch &&
+                candidate.slot === slot,
+            );
+        if (existingPlace && (existingPlace.status !== "unknown" || !ORDER_INTENTS.canAttempt(existingPlace))) {
+            continue;
+        }
+        const intent = existingPlace ?? ORDER_INTENTS.getOrCreate({
             kind: "place",
             assetId: CFG.ASSET_ID,
             epoch: STATE.epoch,
-            slot: instr.quoteSlot ?? `${instr.side}-${i}`,
+            slot,
             side: instr.side,
             price: instr.price,
             size: instr.size,
         });
+        if (intent.kind !== "place") continue;
         ORDER_INTENTS.markAttempted(intent);
         try {
             const response = await apiSendOrder(wallet,
                 {
                     epoch: STATE.epoch,
-                    side: instr.side,
-                    price: instr.price,
-                    size: instr.size,
+                    side: intent.side,
+                    price: intent.price,
+                    size: intent.size,
                     nonce: intent.nonce,
                 });
             ORDER_INTENTS.markAccepted(intent, response.request?.orderHash ?? null);
@@ -353,6 +378,40 @@ export async function reconcileOrderIntents(wallet: Wallet): Promise<boolean> {
     }
 
     return ORDER_INTENTS.getOutstanding("cancel").length === 0;
+}
+
+/**
+ * A target order may have one unresolved cancel-replace at a time. Once the
+ * target disappears from pending orders, the cancel leg has reached a terminal
+ * state and a later quote pass may plan a new replacement if needed.
+ */
+export async function reconcileCancelReplaceIntents(wallet: Wallet): Promise<void> {
+    const replacements = ORDER_INTENTS.getOutstanding("cancel-replace");
+    const pendingByEpoch = new Map<string, Set<string>>();
+
+    for (const intent of replacements) {
+        if (intent.kind !== "cancel-replace") continue;
+        const epochKey = intent.epoch.toString();
+        if (pendingByEpoch.has(epochKey)) continue;
+        try {
+            const pending = await apiGetPending(wallet.address, intent.epoch);
+            pendingByEpoch.set(epochKey, new Set([
+                ...pending.buys.map((order) => order.id),
+                ...pending.sells.map((order) => order.id),
+            ]));
+            if (intent.epoch === STATE.epoch) applyPendingResponse(pending);
+        } catch (e: any) {
+            warn(`unable to reconcile cancel-replaces for epoch ${epochKey}:`, e?.message ?? e);
+        }
+    }
+
+    for (const intent of replacements) {
+        if (intent.kind !== "cancel-replace") continue;
+        const pending = pendingByEpoch.get(intent.epoch.toString());
+        if (pending && !pending.has(intent.targetOrderHash)) {
+            ORDER_INTENTS.markCompleted(intent);
+        }
+    }
 }
 
 export async function runAggression(wallet: Wallet) {

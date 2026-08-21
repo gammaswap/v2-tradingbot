@@ -28,6 +28,7 @@ export type OrderIntentInput =
 export type TrackedOrderIntent = OrderIntentInput & {
     intentId: string; nonce: bigint; status: IntentStatus;
     attempts: number; lastAttemptAt: number | null; requestHash: string | null;
+    nextRetryAt: number;
     replacementNonce?: bigint;
 };
 
@@ -65,6 +66,7 @@ export class OrderIntentManager {
             attempts: 0,
             lastAttemptAt: null,
             requestHash: null,
+            nextRetryAt: 0,
             replacementNonce: normalized.kind === "cancel-replace" ? this.nonceManager.next() : undefined,
         } as TrackedOrderIntent;
         this.store.set(intent);
@@ -78,10 +80,17 @@ export class OrderIntentManager {
         );
     }
 
+    canAttempt(intent: TrackedOrderIntent, now = Date.now()): boolean {
+        return now >= intent.nextRetryAt;
+    }
+
     markAttempted(intent: TrackedOrderIntent): void {
         intent.status = "attempted";
         intent.attempts += 1;
-        intent.lastAttemptAt = Date.now();
+        const now = Date.now();
+        intent.lastAttemptAt = now;
+        const retryDelayMs = Math.min(30_000, 1_000 * 2 ** Math.max(0, intent.attempts - 1));
+        intent.nextRetryAt = now + retryDelayMs;
         this.store.set(intent);
     }
 
