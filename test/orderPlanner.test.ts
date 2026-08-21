@@ -50,6 +50,7 @@ describe("order planning", () => {
             size: 1_000_000,
             side: "buy",
             cancelId: "one",
+            quoteSlot: "buy-0",
         }]);
     });
 
@@ -60,6 +61,7 @@ describe("order planning", () => {
             price: 800_000,
             size: 1_000_000,
             side: "sell",
+            quoteSlot: "sell-0",
         }]);
     });
 

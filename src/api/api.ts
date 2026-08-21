@@ -282,7 +282,7 @@ export async function apiLastResolutionPrice(): Promise<ApiResolutionPriceRespon
     return normalizeResolutionPrice(data);
 }
 
-export async function apiSendOrder(wallet: Wallet, order: { epoch: bigint | number, side: Side; price: number; size: number; tif?: 0n | 1n | 2n }) {
+export async function apiSendOrder(wallet: Wallet, order: { epoch: bigint | number, side: Side; price: number; size: number; tif?: 0n | 1n | 2n; nonce?: bigint }) {
     const client = getExchangeClient(wallet);
     const res = await client.placeOrder({
         assetId: CFG.ASSET_ID,
@@ -291,22 +291,24 @@ export async function apiSendOrder(wallet: Wallet, order: { epoch: bigint | numb
         price: protocolPriceToSdkInput(order.price),
         size: protocolAmountToSdkInput(order.size),
         timeInForce: order.tif ?? TimeInForce.GTC,
+        ...(order.nonce == null ? {} : { nonce: order.nonce }),
     });
 
     console.log("signedOrderMessage:", res.request);
     return res;
 }
 
-export async function apiCancelOrder(wallet: Wallet, epoch: bigint | number, orderHash: string) {
+export async function apiCancelOrder(wallet: Wallet, epoch: bigint | number, orderHash: string, nonce?: bigint) {
     const client = getExchangeClient(wallet);
     const input = {
         assetId: CFG.ASSET_ID,
         epoch: epoch.toString(),
     };
 
+    const nonceInput = nonce == null ? {} : { nonce };
     const res = orderHash.toLowerCase() === ZeroHash.toLowerCase()
-        ? await client.cancelAll(input)
-        : await client.cancelOrder({ ...input, orderHash });
+        ? await client.cancelAll({ ...input, ...nonceInput })
+        : await client.cancelOrder({ ...input, orderHash, ...nonceInput });
 
     console.log("signedCancelMessage:", res.request);
     return res;
@@ -332,6 +334,8 @@ export async function apiCancelReplaceOrder(
         price: number;
         size: number;
         allOrNothing?: boolean;
+        nonce: bigint;
+        replacementNonce: bigint;
     },
 ) {
     const client = getExchangeClient(wallet);
@@ -343,6 +347,8 @@ export async function apiCancelReplaceOrder(
         price: protocolPriceToSdkInput(input.price),
         size: protocolAmountToSdkInput(input.size),
         allOrNothing: input.allOrNothing ?? false,
+        nonce: input.nonce,
+        replacementNonce: input.replacementNonce,
     });
 
     console.log("signedCancelReplaceMessage:", res.request);

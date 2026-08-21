@@ -22,7 +22,8 @@ vi.mock("../src/api/api.js", () => ({
 }));
 
 const { STATE } = await import("../src/runtime/state.js");
-const { runAssetEpochCheck, runAggression, runQuoteMaintenance } = await import("../src/runtime/loops.js");
+const { reconcileOrderIntents, runAssetEpochCheck, runAggression, runQuoteMaintenance } = await import("../src/runtime/loops.js");
+const { ORDER_INTENTS } = await import("../src/runtime/orderIntent.js");
 
 function asset(epoch: bigint, overrides: Partial<ApiAssetResponse> = {}): ApiAssetResponse {
     return {
@@ -133,5 +134,43 @@ describe("resolved-epoch trading guards", () => {
         await runAggression({} as never);
 
         expect(apiSendOrder).not.toHaveBeenCalled();
+    });
+});
+
+describe("order intent reconciliation", () => {
+    it("retries a pending cancellation with its original nonce and waits for it to disappear", async () => {
+        const orderHash = "0xpending-cancel-test";
+        const intent = ORDER_INTENTS.getOrCreate({
+            kind: "cancel",
+            assetId: "123",
+            epoch: 4n,
+            slot: `cancel-${orderHash}`,
+            targetOrderHash: orderHash,
+        });
+        apiCancelOrder.mockResolvedValue({ request: { orderHash: "0xcancel" } });
+        apiGetPending
+            .mockResolvedValueOnce({ epoch: 4n, buys: [{ id: orderHash }], sells: [] })
+            .mockResolvedValueOnce({ epoch: 4n, buys: [], sells: [] });
+
+        const ready = await reconcileOrderIntents({ address: "0xwallet" } as never);
+
+        expect(ready).toBe(true);
+        expect(apiCancelOrder).toHaveBeenCalledWith(expect.anything(), 4n, orderHash, intent.nonce);
+        expect(ORDER_INTENTS.getOutstanding("cancel")).not.toContainEqual(intent);
+    });
+
+    it("blocks new orders while a cancellation target remains pending", async () => {
+        const orderHash = "0xstill-pending-cancel-test";
+        ORDER_INTENTS.getOrCreate({
+            kind: "cancel",
+            assetId: "123",
+            epoch: 4n,
+            slot: `cancel-${orderHash}`,
+            targetOrderHash: orderHash,
+        });
+        apiCancelOrder.mockResolvedValue({ request: { orderHash: "0xcancel" } });
+        apiGetPending.mockResolvedValue({ epoch: 4n, buys: [{ id: orderHash }], sells: [] });
+
+        await expect(reconcileOrderIntents({ address: "0xwallet" } as never)).resolves.toBe(false);
     });
 });

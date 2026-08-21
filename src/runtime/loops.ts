@@ -29,6 +29,7 @@ import { TimeInForce } from "@gammaswap/v2-exchange-sdk";
 import { planOrders } from "./orderPlanner.js";
 import { canTradeCurrentAsset } from "./tradingGuards.js";
 import { reconcileAssetEpoch } from "./assetLifecycle.js";
+import { ORDER_INTENTS } from "./orderIntent.js";
 
 export async function hasPendingOrders() {
     const resp = await apiGetBalance();
@@ -205,51 +206,149 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     const cancelReplaces = buyCancelReplaces.concat(sellCancelReplaces);
     for(let i = 0; i < cancelReplaces.length; i++) {
         const instr = cancelReplaces[i];
+        const intent = ORDER_INTENTS.getOrCreate({
+            kind: "cancel-replace",
+            assetId: CFG.ASSET_ID,
+            epoch: STATE.epoch,
+            slot: `replace-${instr.quoteSlot ?? `${instr.side}-${i}`}`,
+            side: instr.side,
+            price: instr.price,
+            size: instr.size,
+            targetOrderHash: instr.cancelId,
+        });
+        ORDER_INTENTS.markAttempted(intent);
         try {
-            await apiCancelReplaceOrder(wallet,
+            const response = await apiCancelReplaceOrder(wallet,
                 {
                     epoch: STATE.epoch,
                     orderHash: instr.cancelId,
                     side: instr.side,
                     price: instr.price,
                     size: instr.size,
-                    allOrNothing: false
+                    allOrNothing: false,
+                    nonce: intent.nonce,
+                    replacementNonce: intent.replacementNonce!,
                 });
+            ORDER_INTENTS.markAccepted(intent, response.request?.orderHash ?? null);
             log(`cancel replace`, { price: instr.price, size: instr.size, side: instr.side, cancelId: instr.cancelId });
         } catch (e: any) {
+            ORDER_INTENTS.markUnknown(intent);
             warn(`failed cancel replace cancelId: ${instr.cancelId}, price: ${instr.price}, size: ${instr.size},` +
                 `side: ${instr.side}, error:`, e?.message ?? e);
         }
     }
 
     const cancels = buyCancels.concat(sellCancels);
-    for(let i = 0; i < cancels.length; i++) {
-        try {
-            await apiCancelOrder(wallet, STATE.epoch, cancels[i]);
-            log("canceled order with id:", { id: cancels[i] });
-        } catch (e: any) {
-            warn(`failed to cancel id: ${cancels[i]}, error:`, e?.message ?? e);
-        }
+    for (const orderHash of cancels) {
+        ORDER_INTENTS.getOrCreate({
+            kind: "cancel",
+            assetId: CFG.ASSET_ID,
+            epoch: STATE.epoch,
+            slot: orderHash,
+            targetOrderHash: orderHash,
+        });
+    }
+
+    if (!(await reconcileOrderIntents(wallet))) {
+        warn("quote maintenance paused: unresolved cancellations remain");
+        return;
     }
 
     const newOrders = buyNewOrders.concat(sellNewOrders);
     for(let i = 0; i < newOrders.length; i++) {
         const instr = newOrders[i];
+        const intent = ORDER_INTENTS.getOrCreate({
+            kind: "place",
+            assetId: CFG.ASSET_ID,
+            epoch: STATE.epoch,
+            slot: instr.quoteSlot ?? `${instr.side}-${i}`,
+            side: instr.side,
+            price: instr.price,
+            size: instr.size,
+        });
+        ORDER_INTENTS.markAttempted(intent);
         try {
-            await apiSendOrder(wallet,
+            const response = await apiSendOrder(wallet,
                 {
                     epoch: STATE.epoch,
                     side: instr.side,
                     price: instr.price,
-                    size: instr.size
+                    size: instr.size,
+                    nonce: intent.nonce,
                 });
+            ORDER_INTENTS.markAccepted(intent, response.request?.orderHash ?? null);
             log("placed order", { price: instr.price, size: instr.size, side: instr.side });
         } catch (e: any) {
+            ORDER_INTENTS.markUnknown(intent);
             warn(`failed to place order price: ${instr.price}, size: ${instr.size}, side: ${instr.side}, error:`, e?.message ?? e);
         }
     }
 
     console.log("=============runQuoteMaintenance:end",(new Date()).toUTCString(),"============================");
+}
+
+/**
+ * Verifies that every outstanding ordinary cancellation has reached a
+ * terminal target-order state before passive orders are placed. A target that
+ * disappeared from pending orders is considered complete: it was canceled or
+ * filled before the cancellation could finish.
+ */
+export async function reconcileOrderIntents(wallet: Wallet): Promise<boolean> {
+    const cancellations = ORDER_INTENTS.getOutstanding("cancel");
+    if (cancellations.length === 0) return true;
+
+    const pendingByEpoch = new Map<string, Set<string>>();
+    for (const intent of cancellations) {
+        const epochKey = intent.epoch.toString();
+        if (pendingByEpoch.has(epochKey)) continue;
+        try {
+            const pending = await apiGetPending(wallet.address, intent.epoch);
+            pendingByEpoch.set(epochKey, new Set([
+                ...pending.buys.map((order) => order.id),
+                ...pending.sells.map((order) => order.id),
+            ]));
+        } catch (e: any) {
+            warn(`unable to reconcile cancellations for epoch ${epochKey}:`, e?.message ?? e);
+            return false;
+        }
+    }
+
+    for (const intent of cancellations) {
+        if (intent.kind !== "cancel") continue;
+        const pending = pendingByEpoch.get(intent.epoch.toString());
+        if (pending?.has(intent.targetOrderHash)) {
+            ORDER_INTENTS.markAttempted(intent);
+            try {
+                const response = await apiCancelOrder(wallet, intent.epoch, intent.targetOrderHash, intent.nonce);
+                ORDER_INTENTS.markAccepted(intent, response.request?.orderHash ?? null);
+                log("cancellation submitted", { id: intent.targetOrderHash, attempt: intent.attempts });
+            } catch (e: any) {
+                ORDER_INTENTS.markUnknown(intent);
+                warn(`failed to cancel id: ${intent.targetOrderHash}, error:`, e?.message ?? e);
+            }
+        } else {
+            ORDER_INTENTS.markCompleted(intent);
+        }
+    }
+
+    // Re-read pending state after submitting cancellations. This prevents new
+    // orders from being placed merely because the cancellation request was
+    // accepted while the old order was still active.
+    const remaining = ORDER_INTENTS.getOutstanding("cancel");
+    if (remaining.length === 0) return true;
+    for (const intent of remaining) {
+        if (intent.kind !== "cancel") continue;
+        try {
+            const pending = await apiGetPending(wallet.address, intent.epoch);
+            const stillPending = [...pending.buys, ...pending.sells]
+                .some((order) => order.id === intent.targetOrderHash);
+            if (!stillPending) ORDER_INTENTS.markCompleted(intent);
+        } catch (e: any) {
+            warn(`unable to verify cancellation ${intent.targetOrderHash}:`, e?.message ?? e);
+        }
+    }
+
+    return ORDER_INTENTS.getOutstanding("cancel").length === 0;
 }
 
 export async function runAggression(wallet: Wallet) {
@@ -341,7 +440,26 @@ export async function runAggression(wallet: Wallet) {
 
     console.log("aggressivePrice:", aggressivePrice, "side:", side, "qty:", tradeQty, "mid:", bookMid, "reference:", refPrice);
     try {
-        const resp = await apiSendOrder(wallet, { epoch: STATE.epoch, side, price: aggressivePrice, size: tradeQty, tif: TimeInForce.IOC });
+        const intent = ORDER_INTENTS.getOrCreate({
+            kind: "place",
+            assetId: CFG.ASSET_ID,
+            epoch: STATE.epoch,
+            slot: `aggression-${side}`,
+            side,
+            price: aggressivePrice,
+            size: tradeQty,
+            timeInForce: TimeInForce.IOC,
+        });
+        ORDER_INTENTS.markAttempted(intent);
+        const resp = await apiSendOrder(wallet, {
+            epoch: STATE.epoch,
+            side,
+            price: aggressivePrice,
+            size: tradeQty,
+            tif: TimeInForce.IOC,
+            nonce: intent.nonce,
+        });
+        ORDER_INTENTS.markAccepted(intent, resp.request?.orderHash ?? null);
         log("aggressed", { side, qty: tradeQty, price: aggressivePrice, mid: bookMid, reference: refPrice });
 
         const balance = await apiGetBalance();

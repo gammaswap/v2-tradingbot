@@ -36,13 +36,15 @@ export type CancelReplaceInstruction = {
     size: number;
     side: Side;
     cancelId: string;
-}
+    quoteSlot?: string;
+};
 
 export type NewOrderInstruction = {
     price: number;
     size: number;
     side: Side;
-}
+    quoteSlot?: string;
+};
 
 export type PendingOrder = {
     id: string;

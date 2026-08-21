@@ -36,7 +36,7 @@ export function planOrders(
 
         if (marginChange <= 0) {
             if (shouldCancelReplace(oldOrder, price, size)) {
-                cancelReplaces.push({ price, size, side: oldOrder.side, cancelId: oldOrder.id });
+                cancelReplaces.push({ price, size, side: oldOrder.side, cancelId: oldOrder.id, quoteSlot: `${side}-${i}` });
                 collateral += marginChange;
             }
             continue;
@@ -64,6 +64,7 @@ export function planOrders(
                     size: replacementSize,
                     side: oldOrder.side,
                     cancelId: oldOrder.id,
+                    quoteSlot: `${side}-${i}`,
                 });
                 collateral += replacementMarginChange;
             }
@@ -80,7 +81,7 @@ export function planOrders(
             const newMargin = Math.floor(size * (isBuy ? price : 1_000_000 - price) / 1_000_000);
             if (!canPlaceOrder(isBuy, size, price, collateral)) continue;
 
-            newOrders.push({ price, size, side });
+            newOrders.push({ price, size, side, quoteSlot: `${side}-${i}` });
             collateral += newMargin;
         }
     } else if (oldOrders.length > newPrices.length) {
