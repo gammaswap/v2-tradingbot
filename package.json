@@ -42,7 +42,7 @@
   },
   "dependencies": {
     "@gammaswap/v2-exchange": "^0.12.0",
-    "@gammaswap/v2-exchange-sdk": "^0.1.0",
+    "@gammaswap/v2-exchange-sdk": "^0.2.0",
     "axios": "1.13.2",
     "data-structure-typed": "^2.6.4",
     "dotenv": "^17.2.3",
