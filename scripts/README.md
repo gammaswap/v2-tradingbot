@@ -17,11 +17,11 @@ npm install @gammaswap/v2-exchange-sdk
 
 ```ts
 import {
-  createInfoClient,
-  createExchangeClient,
-  createDepositClient,
-  createExchangeWebSocketClient,
-  createOracleWebSocketClient,
+    createInfoClient,
+    createExchangeClient,
+    createDepositClient,
+    createExchangeWebSocketClient,
+    createOracleWebSocketClient,
 } from "@gammaswap/v2-exchange-sdk";
 ```
 
@@ -33,7 +33,62 @@ import { createOracleWebSocketClient } from "@gammaswap/v2-exchange-sdk/oracle-w
 import { parseUnsignedInteger } from "@gammaswap/v2-exchange-sdk/integer-inputs";
 import { parseAddress } from "@gammaswap/v2-exchange-sdk/string-inputs";
 import { TimeInForce } from "@gammaswap/v2-exchange-sdk/constants";
+import { decodeAssetId } from "@gammaswap/v2-exchange-sdk/assetIdUtils";
 ```
+
+## Asset ID utilities
+
+An exchange `assetId` is a packed `uint256`. It contains the base asset ID,
+market type, start time, epoch period length, strike, range, and reserved bits.
+The utilities in `assetIdUtils` encode and decode this representation without
+floating-point arithmetic. The 64-bit base asset ID and other protocol-sized
+values are represented as `bigint` or decimal strings.
+
+### Encode and decode an asset ID
+
+Use `encodeAssetId()` when constructing an asset ID from its packed fields, and
+`decodeAssetId()` when you need to inspect an existing asset ID:
+
+```ts
+import { decodeAssetId, encodeAssetId } from "@gammaswap/v2-exchange-sdk";
+
+const assetId = encodeAssetId(
+  "12345678901234567890", // uint64 base asset ID
+  1, // market type
+  1_700_000_000, // start time in Unix seconds
+  900, // epoch period: 15 minutes
+  "50000000", // strike
+  0, // range
+);
+
+const decoded = decodeAssetId(assetId);
+console.log(decoded.id); // "12345678901234567890"
+console.log(decoded.periodLength); // 900
+console.log(decoded.expiration); // startTime + periodLength
+```
+
+`decodeAssetId()` returns the 64-bit `id` as a decimal string, preserving the
+full value without JavaScript number precision loss. The `strike` and
+`reserved` fields are also returned as decimal strings. The function returns
+`expiration` as a convenience value; expiration is not stored as a separate
+packed field.
+
+### Convert epoch periods to timeframes
+
+`getExpirationTf()` formats a duration in seconds, while `parseExpirationTf()`
+converts a timeframe back to seconds:
+
+```ts
+import { getExpirationTf, parseExpirationTf } from "@gammaswap/v2-exchange-sdk";
+
+getExpirationTf(900); // "15m"
+parseExpirationTf("15m"); // 900
+parseExpirationTf("1h"); // 3600
+```
+
+Supported units are seconds (`s`), minutes (`m`), hours (`h`), days (`d`),
+weeks (`w`), months (`M`), and years (`y`). Timeframe values must be positive
+whole numbers.
 
 ## Input Units
 
@@ -119,10 +174,28 @@ const info = createInfoClient({
 - `fetch`: optional replacement for `globalThis.fetch`, useful in tests or
   custom runtimes.
 - `headers`: optional headers added to every request.
+- `timeoutMs`: optional default timeout for HTTP requests. Defaults to 30,000
+  ms; individual calls can override it.
+
+Every HTTP method accepts an optional second `HttpRequestOptions` argument:
+
+```ts
+const controller = new AbortController();
+const balance = await info.getBalance(account, {
+  timeoutMs: 10_000,
+  signal: controller.signal,
+});
+```
+
+Use `signal` to cancel a request from the caller. Timeouts throw
+`HttpTimeoutError`; caller cancellation throws `HttpAbortError`. The same
+request options are supported by `ExchangeClient` action methods.
 
 ### Available functions:
 
+- `getHealth()`
 - `getAsset(inputOrAssetId)`
+- `getAssetAtEpoch(input)`
 - `getResolutionPrice(input)`
 - `getLastResolutionPrice(inputOrAssetId)`
 - `getBalance(inputOrAccount)`
@@ -130,36 +203,58 @@ const info = createInfoClient({
 - `getBookOrders(input)`
 - `getTopOfBook(input)`
 - `getPosition(input)`
+- `getClaimable(input)`
+- `getMarkPrice(inputOrAssetId)`
+- `getSettlementPrice(input)`
 - `getAgentApproval(inputOrAccount)`
 - `getAgentApprovalNonce(inputOrAccount)`
 - `getExchangeConfig(inputOrChainId)`
 
 ### GET request inputs:
 
-| Function                                 | Route                                    | Input fields                                                                      |
-| ---------------------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------- |
-| `getAsset(inputOrAssetId)`               | `GET /asset/:assetId`                    | `assetId`: market asset id. Accepts `{ assetId }` or the asset id directly.       |
-| `getResolutionPrice(input)`              | `GET /resolve/:assetId/:epoch`           | `assetId`: market asset id. `epoch`: market epoch.                                |
-| `getLastResolutionPrice(inputOrAssetId)` | `GET /resolve/last/epoch/:assetId`       | `assetId`: market asset id. Accepts `{ assetId }` or the asset id directly.       |
-| `getBalance(inputOrAccount)`             | `GET /balance/:account`                  | `account`: account address. Accepts `{ account }` or the address directly.        |
-| `getOrderBook(input)`                    | `GET /book/:assetId/:epoch`              | `assetId`: market asset id. `epoch`: market epoch.                                |
-| `getBookOrders(input)`                   | `GET /book/:assetId/:epoch/:account`     | `assetId`: market asset id. `epoch`: market epoch. `account`: account address.    |
-| `getTopOfBook(input)`                    | `GET /book/market/top/:assetId/:epoch`   | `assetId`: market asset id. `epoch`: market epoch.                                |
-| `getPosition(input)`                     | `GET /position/:account/:assetId/:epoch` | `account`: account address. `assetId`: market asset id. `epoch`: market epoch.    |
-| `getAgentApproval(inputOrAccount)`       | `GET /agents/status/:master`             | `account`: master account address. Accepts `{ account }` or the address directly. |
-| `getAgentApprovalNonce(inputOrAccount)`  | `GET /agents/status/:master`             | Same input as `getAgentApproval`; returns only the parsed approval nonce.         |
-| `getExchangeConfig(inputOrChainId)`      | `GET /config/chains/:chainId`            | `chainId`: exchange chain id. Accepts `{ chainId }` or the chain id directly.     |
+| Function                                 | Route                                     | Input fields                                                                      |
+| ---------------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------- |
+| `getHealth()`                            | `GET /health`                             | No input.                                                                         |
+| `getAsset(inputOrAssetId)`               | `GET /asset/:assetId`                     | `assetId`: market asset id. Accepts `{ assetId }` or the asset id directly.       |
+| `getAssetAtEpoch(input)`                 | `GET /asset/:assetId/:epoch`              | `assetId`: market asset id. `epoch`: requested market epoch.                      |
+| `getResolutionPrice(input)`              | `GET /resolve/:assetId/:epoch`            | `assetId`: market asset id. `epoch`: market epoch.                                |
+| `getLastResolutionPrice(inputOrAssetId)` | `GET /resolve/last/epoch/:assetId`        | `assetId`: market asset id. Accepts `{ assetId }` or the asset id directly.       |
+| `getBalance(inputOrAccount)`             | `GET /balance/:account`                   | `account`: account address. Accepts `{ account }` or the address directly.        |
+| `getOrderBook(input)`                    | `GET /book/:assetId/:epoch`               | `assetId`: market asset id. `epoch`: market epoch.                                |
+| `getBookOrders(input)`                   | `GET /book/:assetId/:epoch/:account`      | `assetId`: market asset id. `epoch`: market epoch. `account`: account address.    |
+| `getTopOfBook(input)`                    | `GET /book/market/top/:assetId/:epoch`    | `assetId`: market asset id. `epoch`: market epoch.                                |
+| `getPosition(input)`                     | `GET /position/:account/:assetId/:epoch`  | `account`: account address. `assetId`: market asset id. `epoch`: market epoch.    |
+| `getClaimable(input)`                    | `GET /claim/:assetId/:epoch/:account`     | `account`: account address. `assetId`: market asset id. `epoch`: market epoch.    |
+| `getMarkPrice(inputOrAssetId)`           | `GET /resolve/mark/:assetId`              | `assetId`: market asset id. Accepts `{ assetId }` or the asset id directly.       |
+| `getSettlementPrice(input)`              | `GET /resolve/settlement/:assetId/:epoch` | `assetId`: market asset id. `epoch`: market epoch.                                |
+| `getAgentApproval(inputOrAccount)`       | `GET /agents/status/:master`              | `account`: master account address. Accepts `{ account }` or the address directly. |
+| `getAgentApprovalNonce(inputOrAccount)`  | `GET /agents/status/:master`              | Same input as `getAgentApproval`; returns only the parsed approval nonce.         |
+| `getExchangeConfig(inputOrChainId)`      | `GET /config/chains/:chainId`             | `chainId`: exchange chain id. Accepts `{ chainId }` or the chain id directly.     |
 
 ### Notes:
 
 - This client does not sign messages and does not need a wallet.
+- Successful informational responses are validated against the API response
+  schemas. Protocol numeric fields are returned as `bigint`; timestamps and
+  sequence IDs are also converted to `bigint` to avoid precision loss.
+- HTTP errors remain `HttpResponseError` instances and preserve the API's raw
+  error payload in `error.data`.
+- Network and other fetch-level failures are normalized to
+  `HttpTransportError`; the original error is available as `error.cause` and
+  the requested URL as `error.url`.
 - `apiUrl` is normalized with a trailing slash internally.
 - `getExchangeConfig()` fetches configured contract addresses from the API, but
   the SDK also has hard-coded defaults for supported chain IDs.
+- `getAsset(inputOrAssetId)` reads the current asset state from the latest
+  exchange epoch, including its current strike price, resolution price,
+  resolution status, and expiration.
+- `getAssetAtEpoch({ assetId, epoch })` reads the state for the explicitly
+  requested epoch, including that epoch's strike price, resolution price, and
+  expiration.
 - `getResolutionPrice({ assetId, epoch })` fetches the resolution price for a
-  specific asset and epoch from `/resolve/:assetId/:epoch`. It requires an input
-  object because it has two fields, matching the multi-field request style used
-  by `getOrderBook()`, `getBookOrders()`, `getTopOfBook()`, and `getPosition()`.
+  specific asset and epoch from `/resolve/:assetId/:epoch`. It remains available
+  for compatibility and for consumers that need the standalone resolution
+  response. It requires an input object because it has two fields.
 - `getLastResolutionPrice(inputOrAssetId)` fetches the latest resolution price
   for an asset from `/resolve/last/epoch/:assetId`. Like other single-field
   read calls, it accepts either `{ assetId }` or the asset ID directly.
@@ -189,6 +284,8 @@ const exchange = createExchangeClient({
   has no SDK default or when testing custom deployments.
 - `fetch`: optional replacement for `globalThis.fetch`.
 - `headers`: optional headers added to every HTTP request.
+- `timeoutMs`: optional default timeout for HTTP requests. Defaults to 30,000
+  ms; individual calls can override it.
 - `infoClient`: optional `InfoClient` instance. If omitted, the exchange client
   creates one using the same `apiUrl`, `fetch`, and `headers`.
 - `nonceManager`: optional `NonceManager`. If omitted, a local nonce manager is
@@ -482,23 +579,33 @@ the relevant client, and make the API call or transaction directly in each file.
 Common commands:
 
 ```sh
+pnpm sample:health
 pnpm sample:asset
+pnpm sample:asset-at-epoch
+pnpm sample:asset-id
 pnpm sample:balance
 pnpm sample:book
 pnpm sample:book-orders
 pnpm sample:book-top
 pnpm sample:resolution
 pnpm sample:last-resolution
+pnpm sample:claimable
+pnpm sample:mark-price
+pnpm sample:settlement-price
 pnpm sample:order
 pnpm sample:cancel
 pnpm sample:cancel-replace
 pnpm sample:deposit
 pnpm sample:withdrawal
+pnpm sample:agent:approve
+pnpm sample:agent:revoke
+pnpm sample:agent:status
 pnpm sample:agent:order
 pnpm sample:agent:cancel
 pnpm sample:agent:cancel-replace
 pnpm sample:agent:claim
-pnpm sample:ws
+pnpm sample:ws:book
+pnpm sample:ws:oracle
 ```
 
 The older direct API examples live in `scripts/api`.
@@ -512,4 +619,19 @@ pnpm typecheck
 pnpm lint
 pnpm format:check
 pnpm test
+pnpm validate:package
 ```
+
+`pnpm validate:package` inspects the package contents with the available pack
+dry-run command (`pnpm pack --dry-run`, or `npm pack --dry-run` when the
+installed pnpm version does not support that option), creates the actual
+publishable tarball with pnpm, installs it into a temporary consumer project,
+and tests the package root and public subpath imports from that packed
+artifact.
+
+### Release validation
+
+CI runs the build, tests, typecheck, lint, formatting check, and packed-package
+validation. The packed-package check installs the generated tarball into a
+temporary consumer project and verifies the package root and public subpath
+imports before publishing.
