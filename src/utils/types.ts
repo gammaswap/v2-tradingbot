@@ -101,22 +101,29 @@ export type ApiResolutionPriceResponse = {
     isNull: boolean;
 };
 
-export type ApiBookResponse = BookSnapshot;
-
-export interface Asset {
-    strikePrice: bigint;
-    oracle: string;
+export type ApiAssetResponse = {
+    assetId: bigint;
+    epoch: bigint;
+    registered: boolean;
     expiration: bigint;
     assetType: bigint;
-    registered: boolean;
-    epoch: bigint;
-}
-
-export interface AssetEpochData {
-    expiration: bigint;
     strikePrice: bigint;
     resolutionPrice: bigint;
+    isResolved: boolean;
+    ledger: string;
+};
+
+export type ApiBookResponse = BookSnapshot;
+
+export interface Asset extends ApiAssetResponse {
+    strikePrice: bigint;
+    expiration: bigint;
 }
+
+export type AssetEpochCheckResult = {
+    changed: boolean;
+    resolved: boolean;
+};
 
 /**
  * AssetId encoding/decoding utilities

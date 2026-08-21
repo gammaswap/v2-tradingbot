@@ -54,21 +54,23 @@ export async function runRuntimeCoordinator(
         const now = nowMs();
         if (now >= nextEpochCheck) {
             const epochBefore = STATE.epoch;
-            const epochWasValid = await runAssetEpochCheck(wallet);
-            if (!epochWasValid || STATE.epoch !== epochBefore) {
+            const epochStatus = await runAssetEpochCheck(wallet);
+            if (epochStatus.changed || STATE.epoch !== epochBefore) {
                 bookReady = await resyncBook(localBook);
                 await refreshPrivateState(wallet);
             }
             nextEpochCheck = now + EPOCH_CHECK_MS;
         }
 
-        if (bookReady && (now >= nextQuote || actions.tradeOccurred || actions.needsResync)) {
+        const tradingEnabled = bookReady && STATE.asset != null && !STATE.asset.isResolved;
+
+        if (tradingEnabled && (now >= nextQuote || actions.tradeOccurred || actions.needsResync)) {
             await runQuoteMaintenance(wallet);
             await refreshPrivateState(wallet);
             nextQuote = now + jitter(CFG.QUOTE_LOOP_MS, CFG.QUOTE_JITTER_MS);
         }
 
-        if (bookReady && now >= nextAggression) {
+        if (tradingEnabled && now >= nextAggression) {
             await runAggression(wallet);
             await refreshPrivateState(wallet);
             nextAggression = now + jitter(CFG.AGGRESS_MS, CFG.AGGRESS_JITTER_MS);

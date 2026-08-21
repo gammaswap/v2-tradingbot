@@ -5,10 +5,8 @@ import {
 } from "./runtime/loops.js";
 import { deriveAccountsFromMnemonic } from "@gammaswap/v2-exchange-sdk";
 import { Wallet, isAddress } from "ethers";
-import { getAssetById, isAssetRegistered } from "./chain/blockchain.js";
 import { STATE } from "./runtime/state.js";
-import { apiGetBalance, apiGetPosition } from "./api/api.js";
-import { Asset } from "./utils/types.js";
+import { apiGetAsset, apiGetBalance, apiGetPosition } from "./api/api.js";
 import { startOracleFeed, type OracleFeed } from "./runtime/oracle.js";
 import { startOrderBookFeed, type OrderBookFeed } from "./runtime/orderbook.js";
 import { RuntimeEventQueue } from "./runtime/events.js";
@@ -44,7 +42,8 @@ async function main() {
         return;
     }
 
-    if(!await isAssetRegistered(BigInt(CFG.ASSET_ID))) {
+    const asset = await apiGetAsset();
+    if(!asset.registered) {
         warn("ASSET_ID is unregistered!:", CFG.ASSET_ID);
         return;
     }
@@ -55,7 +54,6 @@ async function main() {
     const wallet = new Wallet(account.privateKey);
     console.log("Using address :", wallet.address);
 
-    const asset: Asset = await getAssetById(BigInt(CFG.ASSET_ID));
     STATE.asset = asset;
     STATE.epoch = asset.epoch;
     log("asset:", asset);

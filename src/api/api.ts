@@ -12,6 +12,7 @@ import {
 import { CFG, type Side } from "../config/config.js";
 import type {
     ApiBalancesResponse,
+    ApiAssetResponse,
     ApiBookResponse,
     ApiPendingResponse,
     ApiPositionResponse,
@@ -212,6 +213,20 @@ function normalizeResolutionPrice(data: any): ApiResolutionPriceResponse {
     };
 }
 
+function normalizeAsset(data: any): ApiAssetResponse {
+    return {
+        assetId: parseBigIntField(data.assetId, "asset.assetId"),
+        epoch: parseBigIntField(data.epoch, "asset.epoch"),
+        registered: Boolean(data.registered),
+        expiration: parseBigIntField(data.expiration, "asset.expiration"),
+        assetType: parseBigIntField(data.assetType, "asset.assetType"),
+        strikePrice: parseBigIntField(data.strikePrice, "asset.strikePrice"),
+        resolutionPrice: parseBigIntField(data.resolutionPrice, "asset.resolutionPrice"),
+        isResolved: Boolean(data.isResolved),
+        ledger: String(data.ledger),
+    };
+}
+
 function unwrapData<T>(result: HttpResult<T>): T {
     return result.data;
 }
@@ -219,6 +234,19 @@ function unwrapData<T>(result: HttpResult<T>): T {
 export async function apiGetBook(epoch: number): Promise<ApiBookResponse> {
     const data = unwrapData(await infoClient.getOrderBook({ assetId: CFG.ASSET_ID, epoch: epoch.toString() }));
     return normalizeBook(data);
+}
+
+export async function apiGetAsset(): Promise<ApiAssetResponse> {
+    const data = unwrapData(await infoClient.getAsset(CFG.ASSET_ID));
+    return normalizeAsset(data);
+}
+
+export async function apiGetAssetAtEpoch(epoch: bigint | number): Promise<ApiAssetResponse> {
+    const data = unwrapData(await infoClient.getAssetAtEpoch({
+        assetId: CFG.ASSET_ID,
+        epoch: epoch.toString(),
+    }));
+    return normalizeAsset(data);
 }
 
 export async function apiGetBalance(): Promise<ApiBalancesResponse> {

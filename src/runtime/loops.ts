@@ -4,9 +4,9 @@ import {
     apiCancelReplaceOrder,
     apiClaim,
     apiGetBalance,
+    apiGetAsset,
     apiGetPending,
     apiGetPosition,
-    apiLastResolutionPrice,
     apiSendOrder
 } from "../api/api.js";
 import { STATE } from "./state.js";
@@ -26,11 +26,9 @@ import {
     shouldCancelReplace,
 } from "./strategy.js";
 import { Wallet, ZeroHash } from "ethers";
-import { getAssetById } from "../chain/blockchain.js";
-import { updateFairValueFromOracle } from "./fairValue.js";
-import { PendingOrder, CancelReplaceInstruction, NewOrderInstruction } from "../utils/types.js";
+import { markFairValueStale, updateFairValueFromOracle } from "./fairValue.js";
+import { PendingOrder, CancelReplaceInstruction, NewOrderInstruction, AssetEpochCheckResult } from "../utils/types.js";
 import { TimeInForce } from "@gammaswap/v2-exchange-sdk";
-import { decodeAssetId } from "../utils/assetIdUtils.js";
 
 export async function hasPendingOrders() {
     const resp = await apiGetBalance();
@@ -90,46 +88,10 @@ export async function cancelAllOrders(wallet: Wallet) {
     console.log("==============cancelAllOrders:end", epoch,"========================");
 }
 
-export async function getCurrentEpoch() : Promise<bigint> {
-    let epoch = 0n;
-    const resolution = await apiLastResolutionPrice();
-    if(!resolution.isNull) {
-        epoch = BigInt(resolution.epoch) + 1n;
-    }
-    return epoch;
-}
-
-function calculateExpiration(startTime: number, periodLength: number, epoch: number) : number {
-    return startTime + periodLength * (epoch + 1);
-}
-
-export async function getCurrentAssetStatus() : Promise<{ epoch: bigint, strikePrice: bigint, periodLength: number, expiration: number }> {
-    let epoch = 0n;
-    const assetData = decodeAssetId(BigInt(CFG.ASSET_ID));
-    const resolution = await apiLastResolutionPrice();
-    if(!resolution.isNull) {
-        return {
-            epoch: BigInt(resolution.epoch) + 1n,
-            strikePrice: BigInt(resolution.price),
-            periodLength: assetData.periodLength,
-            expiration: calculateExpiration(assetData.startTime, assetData.periodLength, Number(resolution.epoch))
-        };
-    } else {
-        return {
-            epoch,
-            strikePrice: BigInt(assetData.strike),
-            periodLength: assetData.periodLength,
-            expiration: calculateExpiration(assetData.startTime, assetData.periodLength, Number(epoch))
-        };
-    }
-}
-
-export async function runAssetEpochCheck(wallet: Wallet) {
+export async function runAssetEpochCheck(wallet: Wallet): Promise<AssetEpochCheckResult> {
     console.log("=============runAssetEpochCheck:start",(new Date()).toUTCString(),"============================");
-    const assetStatus = await getCurrentAssetStatus();
-    const epoch = assetStatus.epoch;
-    const strikePrice = assetStatus.strikePrice;
-    const expiration = BigInt(assetStatus.expiration);
+    const currentAsset = await apiGetAsset();
+    const epoch = currentAsset.epoch;
     if(epoch != STATE.epoch) {
         let pos;
         try {
@@ -148,24 +110,25 @@ export async function runAssetEpochCheck(wallet: Wallet) {
         if(await hasPendingOrders()) {
             await cancelAllOrders(wallet);
             console.log("cancelled all orders, return false");
-            return false;
+            return { changed: false, resolved: currentAsset.isResolved };
         } else {
             // just move to next period
             STATE.epoch = epoch;
-            try {
-                STATE.asset = await getAssetById(BigInt(CFG.ASSET_ID));
-                STATE.asset.strikePrice = strikePrice;
-                STATE.asset.expiration = expiration;
-                if (STATE.oracle.price != null) updateFairValueFromOracle(STATE.oracle.price, STATE.oracle.ts);
-                console.log("asset refreshed:", STATE.asset);
-            } catch(e: any) {
-                console.log("asset refresh error:", e?.message ?? e);
-            }
+            STATE.asset = currentAsset;
+            if (STATE.oracle.price != null) updateFairValueFromOracle(STATE.oracle.price, STATE.oracle.ts);
+            console.log("asset refreshed:", STATE.asset);
             console.log("asset epoch changed:", STATE.epoch);
+            console.log("=============runAssetEpochCheck:end",(new Date()).toUTCString(),"============================");
+            return { changed: true, resolved: currentAsset.isResolved };
         }
     }
+    STATE.asset = currentAsset;
+    if (currentAsset.isResolved) {
+        markFairValueStale();
+        console.log("current asset epoch is resolved; trading is paused:", currentAsset.epoch.toString());
+    }
     console.log("=============runAssetEpochCheck:end",(new Date()).toUTCString(),"============================");
-    return true;
+    return { changed: false, resolved: currentAsset.isResolved };
 }
 
 export async function refreshPrivateState(wallet: Wallet): Promise<void> {
@@ -313,14 +276,17 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     console.log("=============runQuoteMaintenance:start",(new Date()).toUTCString(),"============================");
     const book = STATE.book;
     if (!book) return;
+    if (!STATE.asset || STATE.asset.isResolved) {
+        log("quote maintenance skipped: current asset is unavailable or resolved");
+        return;
+    }
     if (shouldPauseForFairValue()) {
         warn("quote maintenance skipped (oracle fair value stale)");
         return;
     }
 
-    const epoch = await getCurrentEpoch();
-    if(epoch != STATE.epoch) {
-        console.log("quote maintenance skipped (epoch mismatch)", { epoch, STATE_epoch: STATE.epoch });
+    if(STATE.asset.epoch != STATE.epoch) {
+        console.log("quote maintenance skipped (epoch mismatch)", { epoch: STATE.asset.epoch, STATE_epoch: STATE.epoch });
         return;
     }
 
@@ -401,6 +367,10 @@ export async function runQuoteMaintenance(wallet: Wallet) {
 export async function runAggression(wallet: Wallet) {
     const book = STATE.book;
     if (!book) return;
+    if (!STATE.asset || STATE.asset.isResolved) {
+        log("aggression skipped: current asset is unavailable or resolved");
+        return;
+    }
     if (shouldPauseForFairValue()) {
         console.log("aggression skipped (oracle fair value stale)");
         return;
@@ -415,9 +385,8 @@ export async function runAggression(wallet: Wallet) {
     }
     STATE.lastTradeTime = currTime;
 
-    const epoch = await getCurrentEpoch(); // TODO: we shouldn't need to do this everywhere
-    if(epoch != STATE.epoch) {
-        console.log("aggression skipped (epoch mismatch)", { epoch, STATE_epoch: STATE.epoch });
+    if(STATE.asset.epoch != STATE.epoch) {
+        console.log("aggression skipped (epoch mismatch)", { epoch: STATE.asset.epoch, STATE_epoch: STATE.epoch });
         return;
     }
 
