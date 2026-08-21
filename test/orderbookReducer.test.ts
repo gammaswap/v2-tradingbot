@@ -39,7 +39,7 @@ describe("local order book reducer", () => {
     it("buffers updates until a snapshot establishes a sequence", () => {
         const state = createLocalOrderBookState(1n);
 
-        expect(applyMarketUpdate(state, orderUpdate(11))).toBe("buffered");
+        expect(applyMarketUpdate(state, orderUpdate(11n))).toBe("buffered");
         expect(state.needsResync).toBe(true);
         expect(state.buffered).toHaveLength(1);
     });
