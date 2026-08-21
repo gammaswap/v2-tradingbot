@@ -321,6 +321,10 @@ export async function reconcileOrderIntents(wallet: Wallet): Promise<boolean> {
             try {
                 const response = await apiCancelOrder(wallet, intent.epoch, intent.targetOrderHash, intent.nonce);
                 ORDER_INTENTS.markAccepted(intent, response.request?.orderHash ?? null);
+                const cancelStatus = (response.data as any)?.status;
+                if (cancelStatus === "CANCEL_FAILED" || cancelStatus === "CANCEL_NOT_COMMITTED") {
+                    ORDER_INTENTS.markUnknown(intent);
+                }
                 log("cancellation submitted", { id: intent.targetOrderHash, attempt: intent.attempts });
             } catch (e: any) {
                 ORDER_INTENTS.markUnknown(intent);
@@ -460,6 +464,9 @@ export async function runAggression(wallet: Wallet) {
             nonce: intent.nonce,
         });
         ORDER_INTENTS.markAccepted(intent, resp.request?.orderHash ?? null);
+        if (isTerminalOrderStatus((resp.data as any)?.status)) {
+            ORDER_INTENTS.markCompleted(intent);
+        }
         log("aggressed", { side, qty: tradeQty, price: aggressivePrice, mid: bookMid, reference: refPrice });
 
         const balance = await apiGetBalance();
@@ -481,4 +488,11 @@ export async function runAggression(wallet: Wallet) {
     }
 
     console.log("========================runAggression:end",(new Date()).toUTCString(),"==========================");
+}
+
+function isTerminalOrderStatus(status: unknown): boolean {
+    return status === "FILLED" ||
+        status === "PARTIALLY_FILLED" ||
+        status === "CANCELLED" ||
+        status === "REJECTED";
 }
