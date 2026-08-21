@@ -37,11 +37,15 @@ const sdkFetch: FetchLike = async (url, init = {}) => {
     return fetch(url, { ...init, headers });
 };
 
-const infoClient = createInfoClient({
-    apiUrl: CFG.API_URL,
-    fetch: sdkFetch,
-    timeoutMs: CFG.API_TIMEOUT_MS,
-});
+export function getInfoClientOptions() {
+    return {
+        apiUrl: CFG.API_URL,
+        fetch: sdkFetch,
+        timeoutMs: CFG.API_TIMEOUT_MS,
+    };
+}
+
+const infoClient = createInfoClient(getInfoClientOptions());
 
 const exchangeClients = new Map<string, ExchangeClient>();
 
@@ -214,7 +218,7 @@ function normalizeResolutionPrice(data: any): ApiResolutionPriceResponse {
     };
 }
 
-function normalizeAsset(data: any): ApiAssetResponse {
+export function normalizeAsset(data: any): ApiAssetResponse {
     return {
         assetId: parseBigIntField(data.assetId, "asset.assetId"),
         epoch: parseBigIntField(data.epoch, "asset.epoch"),
