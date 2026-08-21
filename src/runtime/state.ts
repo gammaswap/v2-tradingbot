@@ -29,44 +29,61 @@ function compareBuyOrderKeys(a: OrderKey, b: OrderKey): number {
     return a.id.localeCompare(b.id);
 }
 
-export const STATE = {
-    asset: null as Asset | null,
-    book: null as BookSnapshot | null,
-    pending: new Map<string, PendingOrder>(),
-    pendingBuys: new TreeMap<OrderKey, PendingOrder>(
-        [],
-        { comparator: compareBuyOrderKeys },
-    ),
-    pendingSells: new TreeMap<OrderKey, PendingOrder>(
-        [],
-        { comparator: compareSellOrderKeys },
-    ),
-    localOrderTs: new Map<string, number>(),
-
-    // optional local ledger (first iteration)
-    baseBal: 0,
-    invBase: 0,
-    epoch: 0n,
-
-    lastMid: CFG.CENTER_PRICE,
-    fairValue: null as {
+export type RuntimeState = {
+    asset: Asset | null;
+    book: BookSnapshot | null;
+    pending: Map<string, PendingOrder>;
+    pendingBuys: TreeMap<OrderKey, PendingOrder>;
+    pendingSells: TreeMap<OrderKey, PendingOrder>;
+    localOrderTs: Map<string, number>;
+    baseBal: number;
+    invBase: number;
+    epoch: bigint;
+    lastMid: number;
+    fairValue: {
         protocolPrice: number;
         probability: number;
         spot: bigint;
         strike: bigint;
         expiresInSec: number;
         updatedAtMs: number;
-    } | null,
-
+    } | null;
     oracle: {
-        symbolId: CFG.SYMBOL_ID,
-        price: null as bigint | null,
-        ts: null as bigint | null,
-        receivedAtMs: 0,
-        stale: true,
-        connected: false,
-    },
-
-    account: CFG.USER_ADDRESS,
-    lastTradeTime: 0
+        symbolId: string;
+        price: bigint | null;
+        ts: bigint | null;
+        receivedAtMs: number;
+        stale: boolean;
+        connected: boolean;
+    };
+    account: string;
+    lastTradeTime: number;
 };
+
+export function createInitialState(): RuntimeState {
+    return {
+        asset: null,
+        book: null,
+        pending: new Map(),
+        pendingBuys: new TreeMap([], { comparator: compareBuyOrderKeys }),
+        pendingSells: new TreeMap([], { comparator: compareSellOrderKeys }),
+        localOrderTs: new Map(),
+        baseBal: 0,
+        invBase: 0,
+        epoch: 0n,
+        lastMid: CFG.CENTER_PRICE,
+        fairValue: null,
+        oracle: {
+            symbolId: CFG.SYMBOL_ID,
+            price: null,
+            ts: null,
+            receivedAtMs: 0,
+            stale: true,
+            connected: false,
+        },
+        account: CFG.USER_ADDRESS,
+        lastTradeTime: 0,
+    };
+}
+
+export const STATE = createInitialState();

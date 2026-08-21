@@ -21,14 +21,14 @@ import {
     depthToWipe,
     canAggressBuy,
     canAggressSell,
-    availableCollateral,
-    canPlaceOrder,
-    shouldCancelReplace,
 } from "./strategy.js";
 import { Wallet, ZeroHash } from "ethers";
 import { markFairValueStale, updateFairValueFromOracle } from "./fairValue.js";
-import { PendingOrder, CancelReplaceInstruction, NewOrderInstruction, AssetEpochCheckResult } from "../utils/types.js";
+import { PendingOrder, AssetEpochCheckResult } from "../utils/types.js";
 import { TimeInForce } from "@gammaswap/v2-exchange-sdk";
+import { planOrders } from "./orderPlanner.js";
+import { canTradeCurrentAsset } from "./tradingGuards.js";
+import { reconcileAssetEpoch } from "./assetLifecycle.js";
 
 export async function hasPendingOrders() {
     const resp = await apiGetBalance();
@@ -91,44 +91,19 @@ export async function cancelAllOrders(wallet: Wallet) {
 export async function runAssetEpochCheck(wallet: Wallet): Promise<AssetEpochCheckResult> {
     console.log("=============runAssetEpochCheck:start",(new Date()).toUTCString(),"============================");
     const currentAsset = await apiGetAsset();
-    const epoch = currentAsset.epoch;
-    if(epoch != STATE.epoch) {
-        let pos;
-        try {
-            pos = await apiGetPosition(Number(STATE.epoch));
-        } catch(e: any) {
-           console.log("position check error:", e?.message ?? e);
-        }
-        console.log("asset epoch check >> epoch:", epoch, "STATE.epoch:", STATE.epoch, "pos:", pos);
-        try {
-            if(pos && pos.size > 0n) {
-                await apiClaim(wallet, Number(STATE.epoch));
-            }
-        } catch(e: any) {
-            console.log("claim error:", e?.message ?? e);
-        }
-        if(await hasPendingOrders()) {
-            await cancelAllOrders(wallet);
-            console.log("cancelled all orders, return false");
-            return { changed: false, resolved: currentAsset.isResolved };
-        } else {
-            // just move to next period
-            STATE.epoch = epoch;
-            STATE.asset = currentAsset;
+    const result = await reconcileAssetEpoch(STATE, currentAsset, wallet, {
+        getPosition: async (epoch) => apiGetPosition(Number(epoch)),
+        claim: async (claimWallet, epoch) => apiClaim(claimWallet, Number(epoch)),
+        hasPendingOrders,
+        cancelAllOrders,
+        refreshFairValue: () => {
             if (STATE.oracle.price != null) updateFairValueFromOracle(STATE.oracle.price, STATE.oracle.ts);
-            console.log("asset refreshed:", STATE.asset);
-            console.log("asset epoch changed:", STATE.epoch);
-            console.log("=============runAssetEpochCheck:end",(new Date()).toUTCString(),"============================");
-            return { changed: true, resolved: currentAsset.isResolved };
-        }
-    }
-    STATE.asset = currentAsset;
-    if (currentAsset.isResolved) {
-        markFairValueStale();
-        console.log("current asset epoch is resolved; trading is paused:", currentAsset.epoch.toString());
-    }
+        },
+        markResolved: markFairValueStale,
+    });
+    console.log("asset refreshed:", STATE.asset);
     console.log("=============runAssetEpochCheck:end",(new Date()).toUTCString(),"============================");
-    return { changed: false, resolved: currentAsset.isResolved };
+    return result;
 }
 
 export async function refreshPrivateState(wallet: Wallet): Promise<void> {
@@ -190,103 +165,16 @@ function applyPendingResponse(pendingResp: Awaited<ReturnType<typeof apiGetPendi
 }
 
 
-function prepareOrders(oldOrders: PendingOrder[], newPrices: number[], newSizes: number[], skewMul: number, isBuy: boolean) : {
-    cancelReplaces: CancelReplaceInstruction[],
-    cancels: string[],
-    newOrders: NewOrderInstruction[]
-} {
-    const minLength = Math.min(oldOrders.length, newPrices.length);
-    const cancelReplaces: any[] = [];
-    const cancels: any[] = [];
-    const newOrders: any[] = [];
-    let collateral = availableCollateral();
-    for(let i = 0; i < minLength; i++) {
-        const oldOrder = oldOrders[i];
-        const price = newPrices[i]
-        const size = roundToLot(newSizes[i] * skewMul);
-        const oldMarginPrice =  isBuy ? oldOrder.price : 1000000 - oldOrder.price;
-        const newMarginPrice = isBuy ? price : 1000000 - price;
-        const oldMargin = Math.floor(oldOrder.size * oldMarginPrice / 1000000);
-        const newMargin = Math.floor(size * newMarginPrice / 1000000);
-        const marginChange = newMargin - oldMargin;
-        if(marginChange <= 0) { // no risk change or decreasing risk
-            if(shouldCancelReplace(oldOrder, price, size)) {
-                // create new cancel replace order
-                cancelReplaces.push({
-                    price: price,
-                    size: size,
-                    side: oldOrder.side,
-                    cancelId: oldOrder.id
-                })
-                collateral += marginChange;
-            }
-        } else if(marginChange > 0) { // increasing risk
-            let _canPlaceOrder = canPlaceOrder(isBuy, size, price, collateral + oldMargin);
-            let _size = size;
-            let _marginChange = marginChange;
-            if(!_canPlaceOrder) {
-                _size = oldOrder.size; // lower risk
-                const _newMargin = Math.floor(_size * newMarginPrice / 1000000);
-                _marginChange = _newMargin - oldMargin;
-                _canPlaceOrder = _marginChange <= 0 || canPlaceOrder(isBuy, _size, price, collateral + oldMargin);
-            }
-            if(_canPlaceOrder) {
-                if(shouldCancelReplace(oldOrder, price, _size)) {
-                    // create new cancel replace order
-                    cancelReplaces.push({
-                        price: price,
-                        size: _size,
-                        side: oldOrder.side,
-                        cancelId: oldOrder.id
-                    })
-                    collateral += _marginChange;
-                }
-            } else {
-                cancels.push(oldOrder.id)
-                collateral -= oldMargin;
-            }
-        }
-    }
-    if(oldOrders.length < newPrices.length) { // less orders, should add more orders
-        for(let i = minLength; i < newPrices.length; i++) {
-            const price = newPrices[i]
-            const size = roundToLot(newSizes[i] * skewMul);
-            const newMargin = Math.floor(size * (isBuy ? price : 1000000 - price) / 1000000);
-            const _canPlaceOrder = canPlaceOrder(isBuy, size, price, collateral);
-            if(!_canPlaceOrder) continue;
-            // add new order
-            newOrders.push({
-                price: price,
-                size: size,
-                side: isBuy ? "buy" : "sell"
-            })
-            collateral += newMargin;
-        }
-    } else if(oldOrders.length > newPrices.length) {
-        for(let i = minLength; i < oldOrders.length; i++) {
-            // cancel old order
-            cancels.push(oldOrders[i].id)
-        }
-    }
-
-    return { cancelReplaces, cancels, newOrders };
-}
-
 export async function runQuoteMaintenance(wallet: Wallet) {
     console.log("=============runQuoteMaintenance:start",(new Date()).toUTCString(),"============================");
     const book = STATE.book;
     if (!book) return;
-    if (!STATE.asset || STATE.asset.isResolved) {
+    if (!canTradeCurrentAsset(STATE)) {
         log("quote maintenance skipped: current asset is unavailable or resolved");
         return;
     }
     if (shouldPauseForFairValue()) {
         warn("quote maintenance skipped (oracle fair value stale)");
-        return;
-    }
-
-    if(STATE.asset.epoch != STATE.epoch) {
-        console.log("quote maintenance skipped (epoch mismatch)", { epoch: STATE.asset.epoch, STATE_epoch: STATE.epoch });
         return;
     }
 
@@ -311,8 +199,8 @@ export async function runQuoteMaintenance(wallet: Wallet) {
 
     const pendingBids = Array.from(STATE.pendingBuys.values()) as PendingOrder[];
     const pendingSells = Array.from(STATE.pendingSells.values()) as PendingOrder[];
-    const { cancelReplaces: buyCancelReplaces, cancels: buyCancels, newOrders: buyNewOrders } = prepareOrders(pendingBids, targetBidPrices, bidSizes, bidSkewMul, true);
-    const { cancelReplaces: sellCancelReplaces, cancels: sellCancels, newOrders: sellNewOrders } = prepareOrders(pendingSells, targetAskPrices, askSizes, askSkewMul, false);
+    const { cancelReplaces: buyCancelReplaces, cancels: buyCancels, newOrders: buyNewOrders } = planOrders(pendingBids, targetBidPrices, bidSizes, bidSkewMul, "buy");
+    const { cancelReplaces: sellCancelReplaces, cancels: sellCancels, newOrders: sellNewOrders } = planOrders(pendingSells, targetAskPrices, askSizes, askSkewMul, "sell");
 
     const cancelReplaces = buyCancelReplaces.concat(sellCancelReplaces);
     for(let i = 0; i < cancelReplaces.length; i++) {
@@ -367,7 +255,7 @@ export async function runQuoteMaintenance(wallet: Wallet) {
 export async function runAggression(wallet: Wallet) {
     const book = STATE.book;
     if (!book) return;
-    if (!STATE.asset || STATE.asset.isResolved) {
+    if (!canTradeCurrentAsset(STATE)) {
         log("aggression skipped: current asset is unavailable or resolved");
         return;
     }
@@ -384,11 +272,6 @@ export async function runAggression(wallet: Wallet) {
         return;
     }
     STATE.lastTradeTime = currTime;
-
-    if(STATE.asset.epoch != STATE.epoch) {
-        console.log("aggression skipped (epoch mismatch)", { epoch: STATE.asset.epoch, STATE_epoch: STATE.epoch });
-        return;
-    }
 
     console.log("========================runAggression:start",(new Date()).toUTCString(),"==========================");
     const bookMid = midPrice(book);
