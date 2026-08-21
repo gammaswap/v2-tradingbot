@@ -6,7 +6,7 @@ export type AssetLifecycleDependencies = {
     getPosition(epoch: bigint): Promise<ApiPositionResponse>;
     claim(wallet: Wallet, epoch: bigint): Promise<unknown>;
     hasPendingOrders(): Promise<boolean>;
-    cancelAllOrders(wallet: Wallet): Promise<void>;
+    cancelAllOrders(wallet: Wallet, startingEpoch?: bigint): Promise<void>;
     refreshFairValue(): void;
     markResolved(): void;
 };
@@ -23,25 +23,30 @@ export async function reconcileAssetEpoch(
         return { changed: false, resolved: currentAsset.isResolved };
     }
 
-    const previousEpoch = state.epoch;
-    let position: ApiPositionResponse | null = null;
-    try {
-        position = await deps.getPosition(previousEpoch);
-    } catch {
-        // A position lookup failure should not prevent the bot from cleaning
-        // up orders and observing the next asset epoch.
+    if (currentAsset.epoch < state.epoch) {
+        return { changed: false, resolved: state.asset?.isResolved ?? false };
     }
-    if (position && position.size > 0n) {
+
+    const previousEpoch = state.epoch;
+    for (let epoch = previousEpoch; epoch < currentAsset.epoch; epoch++) {
+        let position: ApiPositionResponse | null = null;
         try {
-            await deps.claim(wallet, previousEpoch);
+            position = await deps.getPosition(epoch);
         } catch {
-            // Preserve the previous runtime behavior: claim failures are
-            // logged by the caller and do not block epoch reconciliation.
+            // A position lookup failure should not prevent observing the next
+            // asset epoch.
+        }
+        if (position && position.size > 0n) {
+            try {
+                await deps.claim(wallet, epoch);
+            } catch {
+                // Claim failures do not block epoch reconciliation.
+            }
         }
     }
 
     if (await deps.hasPendingOrders()) {
-        await deps.cancelAllOrders(wallet);
+        await deps.cancelAllOrders(wallet, currentAsset.epoch);
         return { changed: false, resolved: currentAsset.isResolved };
     }
 

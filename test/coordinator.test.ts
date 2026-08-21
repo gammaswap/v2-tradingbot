@@ -59,6 +59,8 @@ function context() {
         nextEpochCheck: 2_000_000_000_000,
         nextQuote: 0,
         nextAggression: 2_000_000_000_000,
+        bookReady: true,
+        assetReady: true,
     };
 }
 

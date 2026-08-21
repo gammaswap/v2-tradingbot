@@ -1,6 +1,7 @@
 export type Side = "buy" | "sell";
 
 const DEFAULT_ASSET_ID = "261336857817713630688382311349658711122006440411137";
+const DEFAULT_TEST_MNEMONIC = "test test test test test test test test test test test junk";
 
 function envNum(name: string, def: number): number {
     const v = process.env[name];
@@ -63,10 +64,34 @@ function symbolIdFromAssetId(assetId: string): string {
 
 const ASSET_ID = envStr("ASSET_ID", DEFAULT_ASSET_ID);
 
+export function validateProductionConfig(env: NodeJS.ProcessEnv = process.env): string[] {
+    const errors: string[] = [];
+    const enabled = ["1", "true", "yes", "y", "on"].includes(
+        (env.PRODUCTION_MODE ?? "").toLowerCase(),
+    );
+    if (!enabled) return errors;
+
+    if (!env.MNEMONIC || env.MNEMONIC === DEFAULT_TEST_MNEMONIC) {
+        errors.push("MNEMONIC must be explicitly configured and cannot use the test mnemonic");
+    }
+    if (!env.RPC_URL || env.RPC_URL === "http://localhost:8545") {
+        errors.push("RPC_URL must be explicitly configured for production");
+    }
+    if (!env.API_URL) {
+        errors.push("API_URL must be explicitly configured for production");
+    }
+    if (!env.CHAIN_ID) errors.push("CHAIN_ID must be explicitly configured for production");
+    if (!env.EXCHANGE_ADDRESS) errors.push("EXCHANGE_ADDRESS must be explicitly configured for production");
+    if (!env.LEDGER_ADDRESS) errors.push("LEDGER_ADDRESS must be explicitly configured for production");
+
+    return errors;
+}
+
 export const CFG = {
     RPC_URL: envStr("RPC_URL", "http://localhost:8545"),
     API_URL: envApiUrl(),
     API_TIMEOUT_MS: envNum("API_TIMEOUT_MS", 30_000),
+    PRODUCTION_MODE: envBool("PRODUCTION_MODE", false),
     ORDERBOOK_WS_URL: envStr("ORDERBOOK_WS_URL", "wss://exchange-api.gammaswap.com/ws/"),
     ORACLE_FEED_WS_URL: envStr("ORACLE_FEED_WS_URL", "wss://exchange-api.gammaswap.com/oracle-ws/"),
     ORDERS_URL: envStr("ORDERS_URL", "https://exchange-api.gammaswap.com/api/orders"),
@@ -84,7 +109,7 @@ export const CFG = {
 
     API_KEY: envStr("API_KEY", ""),
     API_SECRET: envStr("API_SECRET", ""),
-    MNEMONIC: envStr("MNEMONIC", "test test test test test test test test test test test junk"),
+    MNEMONIC: envStr("MNEMONIC", DEFAULT_TEST_MNEMONIC),
     WALLET_INDEX: envNum("WALLET_INDEX", 0),
     CHAIN_ID: envNum("CHAIN_ID", 84532), // baseSepolia
     PERMIT2_ADDRESS: envStr("PERMIT2_ADDRESS", "0x000000000022D473030F116dDEE9F6B43aC78BA3"),

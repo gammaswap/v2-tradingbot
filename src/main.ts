@@ -1,4 +1,4 @@
-import { CFG } from "./config/config.js";
+import { CFG, validateProductionConfig } from "./config/config.js";
 import { isBigIntString, log, sleep, warn } from "./utils/utils.js";
 import {
     cleanUpAllOrders,
@@ -13,6 +13,12 @@ import { RuntimeEventQueue } from "./runtime/events.js";
 import { runRuntimeCoordinator } from "./runtime/coordinator.js";
 
 async function main() {
+    const productionConfigErrors = validateProductionConfig();
+    if (productionConfigErrors.length > 0) {
+        for (const error of productionConfigErrors) warn("production configuration error:", error);
+        return;
+    }
+
     log("starting bot", {
         LEVELS_PER_SIDE: CFG.LEVELS_PER_SIDE,
         WIPE_LEVELS: CFG.WIPE_LEVELS,
@@ -68,7 +74,7 @@ async function main() {
         return;
     }
 
-    const position = await apiGetPosition(Number(STATE.epoch));
+    const position = await apiGetPosition(STATE.epoch);
     STATE.invBase = Number(position.balance) * (position.bSide ? -1 : 1)
     console.log("invBase:", STATE.invBase);
     STATE.baseBal = Number(resp.balance);

@@ -57,8 +57,8 @@ export async function cleanUpAllOrders(wallet: Wallet) {
     }
 }
 
-export async function cancelAllOrders(wallet: Wallet) {
-    let epoch = Number(STATE.epoch);
+export async function cancelAllOrders(wallet: Wallet, startingEpoch: bigint = STATE.epoch) {
+    let epoch = startingEpoch;
     let done = false;
     console.log("==============cancelAllOrders:start", epoch,"========================");
     while(!done && epoch >= 0n) {
@@ -92,8 +92,8 @@ export async function runAssetEpochCheck(wallet: Wallet): Promise<AssetEpochChec
     console.log("=============runAssetEpochCheck:start",(new Date()).toUTCString(),"============================");
     const currentAsset = await apiGetAsset();
     const result = await reconcileAssetEpoch(STATE, currentAsset, wallet, {
-        getPosition: async (epoch) => apiGetPosition(Number(epoch)),
-        claim: async (claimWallet, epoch) => apiClaim(claimWallet, Number(epoch)),
+        getPosition: async (epoch) => apiGetPosition(epoch),
+        claim: async (claimWallet, epoch) => apiClaim(claimWallet, epoch),
         hasPendingOrders,
         cancelAllOrders,
         refreshFairValue: () => {
@@ -112,9 +112,9 @@ export async function refreshPrivateState(wallet: Wallet): Promise<void> {
 
     try {
         const [pendingResp, balance, position] = await Promise.all([
-            apiGetPending(wallet.address, Number(epoch)),
+            apiGetPending(wallet.address, epoch),
             apiGetBalance(),
-            apiGetPosition(Number(epoch)),
+            apiGetPosition(epoch),
         ]);
 
         // Do not apply a snapshot for an epoch that changed while requests were pending.
@@ -208,7 +208,7 @@ export async function runQuoteMaintenance(wallet: Wallet) {
         try {
             await apiCancelReplaceOrder(wallet,
                 {
-                    epoch: Number(STATE.epoch),
+                    epoch: STATE.epoch,
                     orderHash: instr.cancelId,
                     side: instr.side,
                     price: instr.price,
@@ -225,7 +225,7 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     const cancels = buyCancels.concat(sellCancels);
     for(let i = 0; i < cancels.length; i++) {
         try {
-            await apiCancelOrder(wallet, Number(STATE.epoch), cancels[i]);
+            await apiCancelOrder(wallet, STATE.epoch, cancels[i]);
             log("canceled order with id:", { id: cancels[i] });
         } catch (e: any) {
             warn(`failed to cancel id: ${cancels[i]}, error:`, e?.message ?? e);
@@ -238,7 +238,7 @@ export async function runQuoteMaintenance(wallet: Wallet) {
         try {
             await apiSendOrder(wallet,
                 {
-                    epoch: Number(STATE.epoch),
+                    epoch: STATE.epoch,
                     side: instr.side,
                     price: instr.price,
                     size: instr.size
@@ -341,7 +341,7 @@ export async function runAggression(wallet: Wallet) {
 
     console.log("aggressivePrice:", aggressivePrice, "side:", side, "qty:", tradeQty, "mid:", bookMid, "reference:", refPrice);
     try {
-        const resp = await apiSendOrder(wallet, { epoch: Number(STATE.epoch), side, price: aggressivePrice, size: tradeQty, tif: TimeInForce.IOC });
+        const resp = await apiSendOrder(wallet, { epoch: STATE.epoch, side, price: aggressivePrice, size: tradeQty, tif: TimeInForce.IOC });
         log("aggressed", { side, qty: tradeQty, price: aggressivePrice, mid: bookMid, reference: refPrice });
 
         const balance = await apiGetBalance();

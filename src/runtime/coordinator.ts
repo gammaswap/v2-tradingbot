@@ -25,6 +25,8 @@ export type CoordinatorStepContext = {
     nextEpochCheck: number;
     nextQuote: number;
     nextAggression: number;
+    bookReady: boolean;
+    assetReady: boolean;
 };
 
 export async function runRuntimeCoordinator(
@@ -45,6 +47,8 @@ export async function runRuntimeCoordinator(
         nextEpochCheck: nowMs(),
         nextQuote: nowMs(),
         nextAggression: nowMs() + jitter(CFG.AGGRESS_MS, CFG.AGGRESS_JITTER_MS),
+        bookReady: true,
+        assetReady: true,
     };
 
     while (true) {
@@ -59,7 +63,7 @@ export async function runCoordinatorStep(context: CoordinatorStepContext): Promi
 
         const events = queue.drain();
         const actions = processEvents(localBook, events);
-        let bookReady = true;
+        let bookReady = context.bookReady && !localBook.needsResync;
 
         if (actions.needsResync) {
             bookReady = await resyncBook(localBook);
@@ -74,15 +78,23 @@ export async function runCoordinatorStep(context: CoordinatorStepContext): Promi
         const now = nowMs();
         if (now >= context.nextEpochCheck) {
             const epochBefore = STATE.epoch;
-            const epochStatus = await runAssetEpochCheck(wallet);
-            if (epochStatus.changed || STATE.epoch !== epochBefore) {
-                bookReady = await resyncBook(localBook);
-                await refreshPrivateState(wallet);
+            try {
+                const epochStatus = await runAssetEpochCheck(wallet);
+                context.assetReady = true;
+                if (epochStatus.changed || STATE.epoch !== epochBefore) {
+                    bookReady = await resyncBook(localBook);
+                    await refreshPrivateState(wallet);
+                }
+            } catch (error: any) {
+                context.assetReady = false;
+                bookReady = false;
+                warn("asset state refresh failed; trading is paused:", error?.message ?? error);
             }
             context.nextEpochCheck = now + EPOCH_CHECK_MS;
         }
 
-        const tradingEnabled = bookReady && STATE.asset != null && !STATE.asset.isResolved;
+        context.bookReady = bookReady && !localBook.needsResync;
+        const tradingEnabled = context.bookReady && context.assetReady && STATE.asset != null && !STATE.asset.isResolved;
 
         if (tradingEnabled && (now >= context.nextQuote || actions.tradeOccurred || actions.needsResync)) {
             await runQuoteMaintenance(wallet);
@@ -99,7 +111,7 @@ export async function runCoordinatorStep(context: CoordinatorStepContext): Promi
 
 async function resyncBook(state: LocalOrderBookState): Promise<boolean> {
     try {
-        const snapshot = await apiGetBook(Number(STATE.epoch));
+        const snapshot = await apiGetBook(STATE.epoch);
         const ready = installBookSnapshot(state, snapshot);
         if (!ready) {
             warn("REST book snapshot did not cover buffered websocket events; another resync is required");

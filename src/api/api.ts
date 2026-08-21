@@ -236,7 +236,7 @@ function unwrapData<T>(result: HttpResult<T>): T {
     return result.data;
 }
 
-export async function apiGetBook(epoch: number): Promise<ApiBookResponse> {
+export async function apiGetBook(epoch: bigint | number): Promise<ApiBookResponse> {
     const data = unwrapData(await infoClient.getOrderBook({ assetId: CFG.ASSET_ID, epoch: epoch.toString() }));
     return normalizeBook(data);
 }
@@ -259,22 +259,22 @@ export async function apiGetBalance(): Promise<ApiBalancesResponse> {
     return normalizeBalance(data);
 }
 
-export async function apiGetPosition(epoch: number): Promise<ApiPositionResponse> {
+export async function apiGetPosition(epoch: bigint | number): Promise<ApiPositionResponse> {
     const data = unwrapData(await infoClient.getPosition({
         account: CFG.USER_ADDRESS,
         assetId: CFG.ASSET_ID,
         epoch: epoch.toString(),
     }));
-    return normalizePosition(data, epoch);
+    return normalizePosition(data, Number(epoch));
 }
 
-export async function apiGetPending(address: string, epoch: number): Promise<ApiPendingResponse> {
+export async function apiGetPending(address: string, epoch: bigint | number): Promise<ApiPendingResponse> {
     const data = unwrapData(await infoClient.getBookOrders({
         assetId: CFG.ASSET_ID,
         epoch: epoch.toString(),
         account: address,
     }));
-    return normalizePending(data, address, epoch);
+    return normalizePending(data, address, Number(epoch));
 }
 
 export async function apiLastResolutionPrice(): Promise<ApiResolutionPriceResponse> {
@@ -282,7 +282,7 @@ export async function apiLastResolutionPrice(): Promise<ApiResolutionPriceRespon
     return normalizeResolutionPrice(data);
 }
 
-export async function apiSendOrder(wallet: Wallet, order: { epoch: number, side: Side; price: number; size: number; tif?: 0n | 1n | 2n }) {
+export async function apiSendOrder(wallet: Wallet, order: { epoch: bigint | number, side: Side; price: number; size: number; tif?: 0n | 1n | 2n }) {
     const client = getExchangeClient(wallet);
     const res = await client.placeOrder({
         assetId: CFG.ASSET_ID,
@@ -297,7 +297,7 @@ export async function apiSendOrder(wallet: Wallet, order: { epoch: number, side:
     return res;
 }
 
-export async function apiCancelOrder(wallet: Wallet, epoch: number, orderHash: string) {
+export async function apiCancelOrder(wallet: Wallet, epoch: bigint | number, orderHash: string) {
     const client = getExchangeClient(wallet);
     const input = {
         assetId: CFG.ASSET_ID,
@@ -312,7 +312,7 @@ export async function apiCancelOrder(wallet: Wallet, epoch: number, orderHash: s
     return res;
 }
 
-export async function apiClaim(wallet: Wallet, epoch: number) {
+export async function apiClaim(wallet: Wallet, epoch: bigint | number) {
     const client = getExchangeClient(wallet);
     const res = await client.claim({
         assetId: CFG.ASSET_ID,
@@ -326,7 +326,7 @@ export async function apiClaim(wallet: Wallet, epoch: number) {
 export async function apiCancelReplaceOrder(
     wallet: Wallet,
     input: {
-        epoch: number;
+        epoch: bigint | number;
         orderHash: string;
         side: Side;
         price: number;

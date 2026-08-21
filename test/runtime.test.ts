@@ -99,8 +99,8 @@ describe("asset epoch lifecycle", () => {
         const result = await promise;
 
         expect(result).toEqual({ changed: true, resolved: false });
-        expect(apiGetPosition).toHaveBeenCalledWith(4);
-        expect(apiClaim).toHaveBeenCalledWith(expect.anything(), 4);
+        expect(apiGetPosition).toHaveBeenCalledWith(4n);
+        expect(apiClaim).toHaveBeenCalledWith(expect.anything(), 4n);
         expect(STATE.epoch).toBe(5n);
         expect(STATE.asset?.strikePrice).toBe(700_000n);
     });

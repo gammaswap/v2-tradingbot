@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { validateProductionConfig } from "../src/config/config.js";
 
 const originalTimeout = process.env.API_TIMEOUT_MS;
 
@@ -31,5 +32,25 @@ describe("API timeout configuration", () => {
 
         const { CFG } = await import("../src/config/config.js");
         expect(CFG.API_TIMEOUT_MS).toBe(30_000);
+    });
+});
+
+describe("production configuration validation", () => {
+    it("rejects the development defaults in production mode", () => {
+        const errors = validateProductionConfig({
+            PRODUCTION_MODE: "true",
+            MNEMONIC: "test test test test test test test test test test test junk",
+            RPC_URL: "http://localhost:8545",
+        });
+
+        expect(errors).toEqual(expect.arrayContaining([
+            expect.stringContaining("MNEMONIC"),
+            expect.stringContaining("RPC_URL"),
+            expect.stringContaining("API_URL"),
+        ]));
+    });
+
+    it("does not enforce production settings in development mode", () => {
+        expect(validateProductionConfig({})).toEqual([]);
     });
 });
