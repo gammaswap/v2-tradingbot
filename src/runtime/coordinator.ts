@@ -18,6 +18,15 @@ import { jitter, debug, log, nowMs, warn } from "../utils/utils.js";
 
 const EPOCH_CHECK_MS = 1_000;
 
+export type CoordinatorStepContext = {
+    wallet: Wallet;
+    queue: RuntimeEventQueue;
+    localBook: LocalOrderBookState;
+    nextEpochCheck: number;
+    nextQuote: number;
+    nextAggression: number;
+};
+
 export async function runRuntimeCoordinator(
     wallet: Wallet,
     queue: RuntimeEventQueue,
@@ -29,12 +38,23 @@ export async function runRuntimeCoordinator(
     }
     await refreshPrivateState(wallet);
 
-    let nextEpochCheck = nowMs();
-    let nextQuote = nowMs();
-    let nextAggression = nowMs() + jitter(CFG.AGGRESS_MS, CFG.AGGRESS_JITTER_MS);
+    const context: CoordinatorStepContext = {
+        wallet,
+        queue,
+        localBook,
+        nextEpochCheck: nowMs(),
+        nextQuote: nowMs(),
+        nextAggression: nowMs() + jitter(CFG.AGGRESS_MS, CFG.AGGRESS_JITTER_MS),
+    };
 
     while (true) {
-        const nextAction = Math.min(nextEpochCheck, nextQuote, nextAggression);
+        await runCoordinatorStep(context);
+    }
+}
+
+export async function runCoordinatorStep(context: CoordinatorStepContext): Promise<void> {
+        const { queue, localBook, wallet } = context;
+        const nextAction = Math.min(context.nextEpochCheck, context.nextQuote, context.nextAggression);
         await queue.wait(Math.max(0, nextAction - nowMs()));
 
         const events = queue.drain();
@@ -52,30 +72,29 @@ export async function runRuntimeCoordinator(
         }
 
         const now = nowMs();
-        if (now >= nextEpochCheck) {
+        if (now >= context.nextEpochCheck) {
             const epochBefore = STATE.epoch;
             const epochStatus = await runAssetEpochCheck(wallet);
             if (epochStatus.changed || STATE.epoch !== epochBefore) {
                 bookReady = await resyncBook(localBook);
                 await refreshPrivateState(wallet);
             }
-            nextEpochCheck = now + EPOCH_CHECK_MS;
+            context.nextEpochCheck = now + EPOCH_CHECK_MS;
         }
 
         const tradingEnabled = bookReady && STATE.asset != null && !STATE.asset.isResolved;
 
-        if (tradingEnabled && (now >= nextQuote || actions.tradeOccurred || actions.needsResync)) {
+        if (tradingEnabled && (now >= context.nextQuote || actions.tradeOccurred || actions.needsResync)) {
             await runQuoteMaintenance(wallet);
             await refreshPrivateState(wallet);
-            nextQuote = now + jitter(CFG.QUOTE_LOOP_MS, CFG.QUOTE_JITTER_MS);
+            context.nextQuote = now + jitter(CFG.QUOTE_LOOP_MS, CFG.QUOTE_JITTER_MS);
         }
 
-        if (tradingEnabled && now >= nextAggression) {
+        if (tradingEnabled && now >= context.nextAggression) {
             await runAggression(wallet);
             await refreshPrivateState(wallet);
-            nextAggression = now + jitter(CFG.AGGRESS_MS, CFG.AGGRESS_JITTER_MS);
+            context.nextAggression = now + jitter(CFG.AGGRESS_MS, CFG.AGGRESS_JITTER_MS);
         }
-    }
 }
 
 async function resyncBook(state: LocalOrderBookState): Promise<boolean> {

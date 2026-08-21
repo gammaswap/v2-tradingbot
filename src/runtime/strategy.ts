@@ -30,12 +30,11 @@ export function shouldPauseForFairValue(): boolean {
 
 export function shouldCancelReplace(o: PendingOrder, newPrice: number, newSize: number, tolTicks: number = 1) : boolean {
     const tol = CFG.TICK_SIZE * tolTicks + 1;//1e-12;
-    if (Math.abs(o.price - newPrice) <= tol) {
-        return false;
-    }
-
     const tolSize = 10000 * 1000; // 10 USD = $0.01 x 1000
-    if (Math.abs(o.size - newSize) <= tolSize) {
+    if (
+        Math.abs(o.price - newPrice) <= tol &&
+        Math.abs(o.size - newSize) <= tolSize
+    ) {
         return false;
     }
 
