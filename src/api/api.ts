@@ -40,6 +40,7 @@ const sdkFetch: FetchLike = async (url, init = {}) => {
 const infoClient = createInfoClient({
     apiUrl: CFG.API_URL,
     fetch: sdkFetch,
+    timeoutMs: CFG.API_TIMEOUT_MS,
 });
 
 const exchangeClients = new Map<string, ExchangeClient>();

@@ -66,6 +66,7 @@ const ASSET_ID = envStr("ASSET_ID", DEFAULT_ASSET_ID);
 export const CFG = {
     RPC_URL: envStr("RPC_URL", "http://localhost:8545"),
     API_URL: envApiUrl(),
+    API_TIMEOUT_MS: envNum("API_TIMEOUT_MS", 30_000),
     ORDERBOOK_WS_URL: envStr("ORDERBOOK_WS_URL", "wss://exchange-api.gammaswap.com/ws/"),
     ORACLE_FEED_WS_URL: envStr("ORACLE_FEED_WS_URL", "wss://exchange-api.gammaswap.com/oracle-ws/"),
     ORDERS_URL: envStr("ORDERS_URL", "https://exchange-api.gammaswap.com/api/orders"),
