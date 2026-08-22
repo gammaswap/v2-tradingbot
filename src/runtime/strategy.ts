@@ -2,6 +2,7 @@ import { CFG, type Side } from "../config/config.js";
 import type { BookSnapshot, PendingOrder } from "../utils/types.js";
 import { STATE } from "./state.js";
 import { clamp, nowMs, randBetween, roundToTick, tanh } from "../utils/utils.js";
+import { protocolNotional, protocolNotionalBigInt, protocolValueToSafeNumber } from "../utils/protocolMath.js";
 
 export function bestBidAsk(book: BookSnapshot | null): { bid: number | null; ask: number | null } {
     if (!book) return { bid: null, ask: null };
@@ -54,12 +55,17 @@ export function referencePrice(book: BookSnapshot | null): number {
 export function depthToWipe(book: BookSnapshot, side: Side, levels: number): { qty: number; notional: number } {
     const arr = side === "buy" ? book.asks : book.bids;
     let qty = 0;
-    let notional = 0;
+    let notional = 0n;
     for (let i = 0; i < Math.min(levels, arr.length); i++) {
-        qty += Number(arr[i].size);
-        notional += Math.floor(Number(arr[i].size) * Number(arr[i].price) / 1000000);
+        const size = Number(arr[i].size);
+        const price = Number(arr[i].price);
+        qty += size;
+        notional += protocolNotionalBigInt(size, price);
     }
-    return { qty, notional };
+    return {
+        qty,
+        notional: protocolValueToSafeNumber(notional, "depth notional"),
+    };
 }
 
 export function nearestOrderAtPrice(pending: Map<string, PendingOrder>, side: Side, price: number, tolTicks = 1) {
@@ -125,24 +131,24 @@ export function canPlaceOrder(isBuy: boolean, size: number, price: number, colla
 export function canPlaceAsk(size: number, price: number, collateral?: number): boolean {
     const _collateral = collateral ?? availableCollateral();
     console.log("availableCollateral():", availableCollateral(), "collateral:", collateral, " size:", size, "price:", price, " =>")
-    return Math.floor(size * (1000000 - price) / 1000000) <= _collateral;
+    return protocolNotional(size, 1_000_000 - price) <= _collateral;
 }
 
 export function canPlaceBid(size: number, price: number, collateral?: number): boolean {
     const _collateral = collateral ?? availableCollateral();
     console.log("availableCollateral():", availableCollateral(), "collateral:", collateral, "size:", size, "price:", price, " =>")
-    return Math.floor(size * price / 1000000) <= _collateral;
+    return protocolNotional(size, price) <= _collateral;
 }
 
 export function canAggressBuy(qty: number, estPrice: number): boolean {
-    const value = Math.floor(qty * estPrice / 1000000);
+    const value = protocolNotional(qty, estPrice);
     if (value > availableCollateral()) return false;
     if (STATE.invBase + qty > CFG.INV_MAX_ABS) return false;
     return true;
 }
 
 export function canAggressSell(qty: number, estPrice: number): boolean {
-    const value = Math.floor(qty * (1000000 - estPrice) / 1000000);
+    const value = protocolNotional(qty, 1_000_000 - estPrice);
     if (value > availableCollateral()) return false;
     if (STATE.invBase - qty < -CFG.INV_MAX_ABS) return false;
     return true;

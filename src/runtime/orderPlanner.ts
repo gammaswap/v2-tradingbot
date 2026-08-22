@@ -2,6 +2,7 @@ import { CFG, type Side } from "../config/config.js";
 import type { CancelReplaceInstruction, NewOrderInstruction, PendingOrder } from "../utils/types.js";
 import { availableCollateral, canPlaceOrder, shouldCancelReplace } from "./strategy.js";
 import { roundToLot } from "../utils/utils.js";
+import { protocolNotional } from "../utils/protocolMath.js";
 
 export type OrderPlan = {
     cancelReplaces: CancelReplaceInstruction[];
@@ -35,8 +36,8 @@ export function planOrders(
         const size = roundToLot(newSizes[i] * skewMul);
         const oldMarginPrice = isBuy ? oldOrder.price : 1_000_000 - oldOrder.price;
         const newMarginPrice = isBuy ? price : 1_000_000 - price;
-        const oldMargin = Math.floor(oldOrder.size * oldMarginPrice / 1_000_000);
-        const newMargin = Math.floor(size * newMarginPrice / 1_000_000);
+        const oldMargin = protocolNotional(oldOrder.size, oldMarginPrice);
+        const newMargin = protocolNotional(size, newMarginPrice);
         const marginChange = newMargin - oldMargin;
 
         if (marginChange <= 0) {
@@ -52,7 +53,7 @@ export function planOrders(
         let permitted = canPlaceOrder(isBuy, size, price, collateral + oldMargin);
         if (!permitted) {
             replacementSize = oldOrder.size;
-            const replacementMargin = Math.floor(replacementSize * newMarginPrice / 1_000_000);
+            const replacementMargin = protocolNotional(replacementSize, newMarginPrice);
             replacementMarginChange = replacementMargin - oldMargin;
             permitted = replacementMarginChange <= 0 || canPlaceOrder(
                 isBuy,
@@ -83,7 +84,7 @@ export function planOrders(
         for (let i = minLength; i < newPrices.length; i++) {
             const price = newPrices[i];
             const size = roundToLot(newSizes[i] * skewMul);
-            const newMargin = Math.floor(size * (isBuy ? price : 1_000_000 - price) / 1_000_000);
+            const newMargin = protocolNotional(size, isBuy ? price : 1_000_000 - price);
             if (!canPlaceOrder(isBuy, size, price, collateral)) continue;
 
             newOrders.push({ price, size, side, quoteSlot: makeQuoteSlot(side, price) });
