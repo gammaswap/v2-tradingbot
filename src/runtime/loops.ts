@@ -216,13 +216,6 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     for(let i = 0; i < cancelReplaces.length; i++) {
         const instr = cancelReplaces[i];
         const quoteSlot = instr.quoteSlot ?? makeQuoteSlot(instr.side, instr.price);
-        if (QUOTE_COOLDOWNS.isCoolingDown({
-            assetId: CFG.ASSET_ID,
-            epoch: STATE.epoch,
-            quoteSlot,
-        })) {
-            continue;
-        }
         const existingReplacement = ORDER_INTENTS.getOutstanding("cancel-replace")
             .find((intent) =>
                 intent.kind === "cancel-replace" &&
