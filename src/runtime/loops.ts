@@ -380,12 +380,23 @@ export async function reconcileOrderIntents(wallet: Wallet): Promise<boolean> {
     // accepted while the old order was still active.
     const remaining = ORDER_INTENTS.getOutstanding("cancel");
     if (remaining.length === 0) return true;
+
+    const verificationByEpoch = new Map<string, Set<string>>();
+
     for (const intent of remaining) {
         if (intent.kind !== "cancel") continue;
+        const epochKey = intent.epoch.toString();
         try {
-            const pending = await apiGetPending(wallet.address, intent.epoch);
-            const stillPending = [...pending.buys, ...pending.sells]
-                .some((order) => order.id === intent.targetOrderHash);
+            let pendingIds = verificationByEpoch.get(epochKey);
+            if (!pendingIds) {
+                const result = await apiGetPending(wallet.address, intent.epoch);
+                pendingIds = new Set([
+                    ...result.buys.map(order => order.id),
+                    ...result.sells.map(order => order.id),
+                ])
+                verificationByEpoch.set(epochKey, pendingIds);
+            }
+            const stillPending = pendingIds?.has(intent.targetOrderHash) ?? false;
             if (!stillPending) ORDER_INTENTS.markCompleted(intent);
         } catch (e: any) {
             warn(`unable to verify cancellation ${intent.targetOrderHash}:`, e?.message ?? e);
