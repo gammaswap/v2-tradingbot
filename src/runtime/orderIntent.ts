@@ -4,6 +4,17 @@ export type IntentStatus =
     | "reserved" | "attempted" | "accepted" | "unknown"
     | "rejected" | "completed" | "unfulfillable";
 
+export type IntentOutcome =
+    | "order-accepted"
+    | "order-filled"
+    | "order-partially-filled"
+    | "order-cancelled"
+    | "order-rejected"
+    | "cancel-succeeded"
+    | "cancel-failed"
+    | "cancel-replace-succeeded"
+    | "cancel-succeeded-replacement-failed";
+
 type IntentBase = { assetId: string; epoch: bigint; slot: string };
 
 export type PlaceOrderIntentInput = IntentBase & {
@@ -28,7 +39,7 @@ export type OrderIntentInput =
 export type TrackedOrderIntent = OrderIntentInput & {
     intentId: string; nonce: bigint; status: IntentStatus;
     attempts: number; lastAttemptAt: number | null; requestHash: string | null;
-    nextRetryAt: number;
+    nextRetryAt: number; outcome?: IntentOutcome;
     replacementNonce?: bigint;
 };
 
@@ -100,8 +111,17 @@ export class OrderIntentManager {
         this.store.set(intent);
     }
 
-    markUnknown(intent: TrackedOrderIntent): void { intent.status = "unknown"; this.store.set(intent); }
-    markCompleted(intent: TrackedOrderIntent): void { intent.status = "completed"; this.store.set(intent); }
+    markUnknown(intent: TrackedOrderIntent, requestHash: string | null = null): void {
+        intent.status = "unknown";
+        if (requestHash != null) intent.requestHash = requestHash;
+        this.store.set(intent);
+    }
+    markCompleted(intent: TrackedOrderIntent, outcome?: IntentOutcome, requestHash: string | null = null): void {
+        intent.status = "completed";
+        intent.outcome = outcome;
+        if (requestHash != null) intent.requestHash = requestHash;
+        this.store.set(intent);
+    }
     markUnfulfillable(intent: TrackedOrderIntent): void { intent.status = "unfulfillable"; this.store.set(intent); }
 }
 
