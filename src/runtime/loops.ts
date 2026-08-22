@@ -246,6 +246,7 @@ export async function runQuoteMaintenance(wallet: Wallet) {
                     price: instr.price,
                     size: instr.size,
                     allOrNothing: false,
+                    timeInForce: 3n,
                     nonce: intent.nonce,
                     replacementNonce: intent.replacementNonce!,
                 });
@@ -295,6 +296,7 @@ export async function runQuoteMaintenance(wallet: Wallet) {
             side: instr.side,
             price: instr.price,
             size: instr.size,
+            timeInForce: 3n,
         });
         if (intent.kind !== "place") continue;
         ORDER_INTENTS.markAttempted(intent);
@@ -305,6 +307,7 @@ export async function runQuoteMaintenance(wallet: Wallet) {
                     side: intent.side,
                     price: intent.price,
                     size: intent.size,
+                    tif: 3n,
                     nonce: intent.nonce,
                 });
             handlePlaceOrderResponse(intent, response);

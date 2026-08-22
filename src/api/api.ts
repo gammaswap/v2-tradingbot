@@ -282,7 +282,7 @@ export async function apiLastResolutionPrice(): Promise<ApiResolutionPriceRespon
     return normalizeResolutionPrice(data);
 }
 
-export async function apiSendOrder(wallet: Wallet, order: { epoch: bigint | number, side: Side; price: number; size: number; tif?: 0n | 1n | 2n; nonce?: bigint }) {
+export async function apiSendOrder(wallet: Wallet, order: { epoch: bigint | number, side: Side; price: number; size: number; tif?: 0n | 1n | 2n | 3n; nonce?: bigint }) {
     const client = getExchangeClient(wallet);
     const res = await client.placeOrder({
         assetId: CFG.ASSET_ID,
@@ -334,6 +334,7 @@ export async function apiCancelReplaceOrder(
         price: number;
         size: number;
         allOrNothing?: boolean;
+        timeInForce?: 0n | 1n | 2n | 3n;
         nonce: bigint;
         replacementNonce: bigint;
     },
@@ -346,6 +347,9 @@ export async function apiCancelReplaceOrder(
         side: input.side === "buy" ? OrderSide.BUY : OrderSide.SELL,
         price: protocolPriceToSdkInput(input.price),
         size: protocolAmountToSdkInput(input.size),
+        // The installed SDK exposes GTC/FOK/IOC constants but the API also
+        // supports ALO as value 3.
+        timeInForce: input.timeInForce ?? 3n,
         allOrNothing: input.allOrNothing ?? false,
         nonce: input.nonce,
         replacementNonce: input.replacementNonce,

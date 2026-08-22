@@ -11,6 +11,8 @@ export type IntentOutcome =
     | "order-cancelled"
     | "order-rejected"
     | "cancel-succeeded"
+    | "cancel-already-completed"
+    | "cancel-not-committed"
     | "cancel-failed"
     | "cancel-replace-succeeded"
     | "cancel-succeeded-replacement-failed";
@@ -19,7 +21,7 @@ type IntentBase = { assetId: string; epoch: bigint; slot: string };
 
 export type PlaceOrderIntentInput = IntentBase & {
     kind: "place"; side: "buy" | "sell"; price: number; size: number;
-    timeInForce?: 0n | 1n | 2n;
+    timeInForce?: 0n | 1n | 2n | 3n;
 };
 
 export type CancelOrderIntentInput = IntentBase & {
@@ -28,7 +30,7 @@ export type CancelOrderIntentInput = IntentBase & {
 
 export type CancelReplaceIntentInput = IntentBase & {
     kind: "cancel-replace"; targetOrderHash: string; side: "buy" | "sell";
-    price: number; size: number; timeInForce?: 0n | 1n | 2n;
+    price: number; size: number; timeInForce?: 0n | 1n | 2n | 3n;
 };
 
 export type OrderIntentInput =

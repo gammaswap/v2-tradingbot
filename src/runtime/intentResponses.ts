@@ -34,6 +34,12 @@ export function handleCancelResponse(intent: TrackedOrderIntent, response: ApiRe
     const status = response.data?.status;
     if (status === "CANCELLED") {
         ORDER_INTENTS.markCompleted(intent, "cancel-succeeded", requestHash(response));
+    } else if (status === "CANCEL_FAILED") {
+        // The target order is already gone, so the cancellation goal is
+        // complete even though this request did not cancel it.
+        ORDER_INTENTS.markCompleted(intent, "cancel-already-completed", requestHash(response));
+    } else if (status === "CANCEL_NOT_COMMITTED") {
+        ORDER_INTENTS.markCompleted(intent, "cancel-not-committed", requestHash(response));
     } else {
         // The target may still be pending, so retain the intent for a
         // backoff-controlled retry and pending-order verification.
@@ -49,6 +55,10 @@ export function handleCancelReplaceResponse(intent: TrackedOrderIntent, response
 
     if (status === "SUCCESS") {
         ORDER_INTENTS.markCompleted(intent, "cancel-replace-succeeded", hash);
+    } else if (status === "CANCEL_FAILED") {
+        ORDER_INTENTS.markCompleted(intent, "cancel-already-completed", hash);
+    } else if (status === "CANCEL_NOT_COMMITTED") {
+        ORDER_INTENTS.markCompleted(intent, "cancel-not-committed", hash);
     } else if (
         status === "CANCEL_COMMITTED_REPLACEMENT_FAILED" ||
         (status === "REPLACEMENT_FAILED" && cancelStatus === "CANCELLED")

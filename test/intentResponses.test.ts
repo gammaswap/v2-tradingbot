@@ -31,7 +31,7 @@ describe("intent response handling", () => {
         expect(intent.outcome).toBe("order-accepted");
     });
 
-    it("keeps failed cancellations retryable", () => {
+    it("completes cancellations when the target is already gone", () => {
         const intent = ORDER_INTENTS.getOrCreate({
             kind: "cancel",
             assetId: "response-test",
@@ -42,7 +42,8 @@ describe("intent response handling", () => {
 
         handleCancelResponse(intent, { data: { status: "CANCEL_FAILED" } });
 
-        expect(intent.status).toBe("unknown");
+        expect(intent.status).toBe("completed");
+        expect(intent.outcome).toBe("cancel-already-completed");
     });
 
     it("completes a successful cancel-replace", () => {
