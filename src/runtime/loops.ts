@@ -35,6 +35,7 @@ import {
     handleCancelResponse,
     handlePlaceOrderResponse,
 } from "./intentResponses.js";
+import { QUOTE_COOLDOWNS } from "./quoteCooldown.js";
 
 export async function hasPendingOrders() {
     const resp = await apiGetBalance();
@@ -214,6 +215,14 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     const cancelReplaces = buyCancelReplaces.concat(sellCancelReplaces);
     for(let i = 0; i < cancelReplaces.length; i++) {
         const instr = cancelReplaces[i];
+        const quoteSlot = instr.quoteSlot ?? makeQuoteSlot(instr.side, instr.price);
+        if (QUOTE_COOLDOWNS.isCoolingDown({
+            assetId: CFG.ASSET_ID,
+            epoch: STATE.epoch,
+            quoteSlot,
+        })) {
+            continue;
+        }
         const existingReplacement = ORDER_INTENTS.getOutstanding("cancel-replace")
             .find((intent) =>
                 intent.kind === "cancel-replace" &&
@@ -230,7 +239,7 @@ export async function runQuoteMaintenance(wallet: Wallet) {
                 kind: "cancel-replace",
                 assetId: CFG.ASSET_ID,
                 epoch: STATE.epoch,
-                slot: instr.quoteSlot ?? makeQuoteSlot(instr.side, instr.price),
+                slot: quoteSlot,
                 side: instr.side,
                 price: instr.price,
                 size: instr.size,
@@ -279,6 +288,13 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     for(let i = 0; i < newOrders.length; i++) {
         const instr = newOrders[i];
         const slot = instr.quoteSlot ?? makeQuoteSlot(instr.side, instr.price);
+        if (QUOTE_COOLDOWNS.isCoolingDown({
+            assetId: CFG.ASSET_ID,
+            epoch: STATE.epoch,
+            quoteSlot: slot,
+        })) {
+            continue;
+        }
         const existingPlace = ORDER_INTENTS.getOutstanding("place")
             .find((candidate) =>
                 candidate.kind === "place" &&

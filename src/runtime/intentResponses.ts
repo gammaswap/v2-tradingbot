@@ -3,6 +3,7 @@ import {
     type TrackedOrderIntent,
     type IntentOutcome,
 } from "./orderIntent.js";
+import { QUOTE_COOLDOWNS } from "./quoteCooldown.js";
 
 type ApiResponse = {
     request?: { orderHash?: string };
@@ -11,6 +12,14 @@ type ApiResponse = {
 
 function requestHash(response: ApiResponse): string | null {
     return response.request?.orderHash ?? null;
+}
+
+function startQuoteCooldown(intent: TrackedOrderIntent, reason: string): void {
+    QUOTE_COOLDOWNS.start({
+        assetId: intent.assetId,
+        epoch: intent.epoch,
+        quoteSlot: intent.slot,
+    }, reason);
 }
 
 export function handlePlaceOrderResponse(intent: TrackedOrderIntent, response: ApiResponse): void {
@@ -25,6 +34,9 @@ export function handlePlaceOrderResponse(intent: TrackedOrderIntent, response: A
     const outcome = outcomes[status];
     if (outcome != null) {
         ORDER_INTENTS.markCompleted(intent, outcome, requestHash(response));
+        if (outcome === "order-rejected") {
+            startQuoteCooldown(intent, `new order rejected: ${response.data?.reason ?? "unknown"}`);
+        }
     } else {
         ORDER_INTENTS.markUnknown(intent, requestHash(response));
     }
@@ -66,6 +78,10 @@ export function handleCancelReplaceResponse(intent: TrackedOrderIntent, response
         // The old order is gone; the next quote pass can create a new
         // replacement intent using the current desired price and size.
         ORDER_INTENTS.markCompleted(intent, "cancel-succeeded-replacement-failed", hash);
+        startQuoteCooldown(intent, `replacement failed: ${data.replacement?.reason ?? data.reason ?? "unknown"}`);
+    } else if (status === "REPLACEMENT_FAILED") {
+        ORDER_INTENTS.markCompleted(intent, "replacement-failed", hash);
+        startQuoteCooldown(intent, `replacement failed: ${data.replacement?.reason ?? data.reason ?? "unknown"}`);
     } else {
         ORDER_INTENTS.markUnknown(intent, hash);
     }

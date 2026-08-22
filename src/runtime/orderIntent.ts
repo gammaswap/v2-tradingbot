@@ -13,6 +13,7 @@ export type IntentOutcome =
     | "cancel-succeeded"
     | "cancel-already-completed"
     | "cancel-not-committed"
+    | "replacement-failed"
     | "cancel-failed"
     | "cancel-replace-succeeded"
     | "cancel-succeeded-replacement-failed";

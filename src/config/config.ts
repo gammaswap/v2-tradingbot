@@ -91,6 +91,7 @@ export const CFG = {
     RPC_URL: envStr("RPC_URL", "http://localhost:8545"),
     API_URL: envApiUrl(),
     API_TIMEOUT_MS: envNum("API_TIMEOUT_MS", 30_000),
+    ORDER_FAILURE_COOLDOWN_MS: envNum("ORDER_FAILURE_COOLDOWN_MS", 5_000),
     PRODUCTION_MODE: envBool("PRODUCTION_MODE", false),
     ORDERBOOK_WS_URL: envStr("ORDERBOOK_WS_URL", "wss://exchange-api.gammaswap.com/ws/"),
     ORACLE_FEED_WS_URL: envStr("ORACLE_FEED_WS_URL", "wss://exchange-api.gammaswap.com/oracle-ws/"),
