@@ -11,6 +11,7 @@ import { startOracleFeed, type OracleFeed } from "./runtime/oracle.js";
 import { startOrderBookFeed, type OrderBookFeed } from "./runtime/orderbook.js";
 import { RuntimeEventQueue } from "./runtime/events.js";
 import { runRuntimeCoordinator } from "./runtime/coordinator.js";
+import { protocolValueToSafeNumber } from "./utils/protocolMath.js";
 
 async function main() {
     const productionConfigErrors = validateProductionConfig();
@@ -75,9 +76,9 @@ async function main() {
     }
 
     const position = await apiGetPosition(STATE.epoch);
-    STATE.invBase = Number(position.balance) * (position.bSide ? -1 : 1)
+    STATE.invBase = protocolValueToSafeNumber(position.balance, "position balance") * (position.bSide ? -1 : 1)
     console.log("invBase:", STATE.invBase);
-    STATE.baseBal = Number(resp.balance);
+    STATE.baseBal = protocolValueToSafeNumber(resp.balance, "base balance");
     console.log("userBalance:", STATE.baseBal);
 
     if (STATE.baseBal < CFG.BASE_RESERVE_MIN) warn("START_BASE_BAL < BASE_RESERVE_MIN; bot may refuse quotes.");

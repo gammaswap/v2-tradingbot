@@ -36,6 +36,7 @@ import {
     handlePlaceOrderResponse,
 } from "./intentResponses.js";
 import { QUOTE_COOLDOWNS } from "./quoteCooldown.js";
+import { protocolValueToSafeNumber } from "../utils/protocolMath.js";
 
 export async function hasPendingOrders() {
     const resp = await apiGetBalance();
@@ -128,8 +129,14 @@ export async function refreshPrivateState(wallet: Wallet): Promise<void> {
         if (STATE.epoch !== epoch) return;
 
         applyPendingResponse(pendingResp);
-        STATE.baseBal = Number(balance.balance - balance.pending);
-        STATE.invBase = Number(position.balance) * (position.bSide ? -1 : 1);
+        STATE.baseBal = protocolValueToSafeNumber(
+            balance.balance - balance.pending,
+            "available base balance",
+        );
+        STATE.invBase = protocolValueToSafeNumber(
+            position.balance,
+            "position balance",
+        ) * (position.bSide ? -1 : 1);
         console.log("trading state refreshed:", {
             pending: STATE.pending.size,
             baseBal: STATE.baseBal,
@@ -597,12 +604,18 @@ export async function runAggression(wallet: Wallet) {
         log("aggressed", { side, qty: tradeQty, price: aggressivePrice, mid: bookMid, reference: refPrice });
 
         const balance = await apiGetBalance();
-        STATE.baseBal = Number(balance.balance - balance.pending);
+        STATE.baseBal = protocolValueToSafeNumber(
+            balance.balance - balance.pending,
+            "available base balance",
+        );
         if(resp.data) {
             // @ts-ignore
             if(resp.data?.status == "FILLED" || resp.data?.status == "PARTIALLY_FILLED") {
                 // @ts-ignore
-                const tradeQty = Number(resp.data?.filled);
+                const tradeQty = protocolValueToSafeNumber(
+                    BigInt((resp.data as { filled?: string | number | bigint })?.filled ?? 0),
+                    "aggression fill",
+                );
                 if (side === "buy") {
                     STATE.invBase += tradeQty;
                 } else {

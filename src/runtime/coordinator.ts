@@ -15,6 +15,7 @@ import {
     type LocalOrderBookState,
 } from "./orderbookReducer.js";
 import { jitter, debug, log, nowMs, warn } from "../utils/utils.js";
+import { protocolValueToSafeNumber } from "../utils/protocolMath.js";
 
 const EPOCH_CHECK_MS = 1_000;
 
@@ -204,7 +205,7 @@ function applyTradeHint(update: WebSocketTradeUpdate): boolean {
     const order = STATE.pending.get(update.data.orderId);
     if (!order) return false;
 
-    const fill = Number(update.data.fill);
+    const fill = protocolValueToSafeNumber(BigInt(update.data.fill), "trade fill");
     if (fill <= 0) return false;
 
     STATE.invBase += order.side === "buy" ? fill : -fill;
