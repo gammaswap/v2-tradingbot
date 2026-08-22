@@ -180,6 +180,7 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     }
 
     await reconcileCancelReplaceIntents(wallet);
+    await reconcilePlaceIntents(wallet);
 
     const bookMid = midPrice(book);
     const refPrice = referencePrice(book);
@@ -342,6 +343,7 @@ export async function reconcileOrderIntents(wallet: Wallet): Promise<boolean> {
         if (intent.kind !== "cancel") continue;
         const pending = pendingByEpoch.get(intent.epoch.toString());
         if (pending?.has(intent.targetOrderHash)) {
+            if (!ORDER_INTENTS.canAttempt(intent)) continue;
             ORDER_INTENTS.markAttempted(intent);
             try {
                 const response = await apiCancelOrder(wallet, intent.epoch, intent.targetOrderHash, intent.nonce);
@@ -378,6 +380,47 @@ export async function reconcileOrderIntents(wallet: Wallet): Promise<boolean> {
     }
 
     return ORDER_INTENTS.getOutstanding("cancel").length === 0;
+}
+
+/**
+ * Passive orders do not need to reserve a quote slot forever after the API has
+ * accepted them. Once the pending snapshot has observed the request hash, the
+ * request is no longer retryable. If an accepted order is absent, it has also
+ * reached a terminal state from the bot's perspective (filled, canceled, or
+ * otherwise removed by the relayer).
+ *
+ * Unknown requests are kept retryable when they are absent because the bot
+ * still does not know whether the original submission reached the relayer.
+ */
+export async function reconcilePlaceIntents(wallet: Wallet): Promise<void> {
+    const places = ORDER_INTENTS.getOutstanding("place")
+        .filter((intent) => intent.kind === "place" && intent.timeInForce !== TimeInForce.IOC);
+    if (places.length === 0) return;
+
+    const pendingByEpoch = new Map<string, Set<string>>();
+    for (const intent of places) {
+        const epochKey = intent.epoch.toString();
+        if (pendingByEpoch.has(epochKey)) continue;
+        try {
+            const pending = await apiGetPending(wallet.address, intent.epoch);
+            pendingByEpoch.set(epochKey, new Set([
+                ...pending.buys.map((order) => order.id),
+                ...pending.sells.map((order) => order.id),
+            ]));
+            if (intent.epoch === STATE.epoch) applyPendingResponse(pending);
+        } catch (e: any) {
+            warn(`unable to reconcile passive orders for epoch ${epochKey}:`, e?.message ?? e);
+        }
+    }
+
+    for (const intent of places) {
+        if (intent.kind !== "place") continue;
+        const pending = pendingByEpoch.get(intent.epoch.toString());
+        const requestIsPending = intent.requestHash != null && pending?.has(intent.requestHash);
+        if (intent.status === "accepted" || requestIsPending) {
+            ORDER_INTENTS.markCompleted(intent);
+        }
+    }
 }
 
 /**
