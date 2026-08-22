@@ -26,7 +26,7 @@ import { Wallet, ZeroHash } from "ethers";
 import { markFairValueStale, updateFairValueFromOracle } from "./fairValue.js";
 import { PendingOrder, AssetEpochCheckResult } from "../utils/types.js";
 import { TimeInForce } from "@gammaswap/v2-exchange-sdk";
-import { planOrders } from "./orderPlanner.js";
+import { makeQuoteSlot, planOrders } from "./orderPlanner.js";
 import { canTradeCurrentAsset } from "./tradingGuards.js";
 import { reconcileAssetEpoch } from "./assetLifecycle.js";
 import { ORDER_INTENTS } from "./orderIntent.js";
@@ -230,7 +230,7 @@ export async function runQuoteMaintenance(wallet: Wallet) {
                 kind: "cancel-replace",
                 assetId: CFG.ASSET_ID,
                 epoch: STATE.epoch,
-                slot: `replace-${instr.quoteSlot ?? `${instr.side}-${i}`}`,
+                slot: instr.quoteSlot ?? makeQuoteSlot(instr.side, instr.price),
                 side: instr.side,
                 price: instr.price,
                 size: instr.size,
@@ -278,7 +278,7 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     const newOrders = buyNewOrders.concat(sellNewOrders);
     for(let i = 0; i < newOrders.length; i++) {
         const instr = newOrders[i];
-        const slot = instr.quoteSlot ?? `${instr.side}-${i}`;
+        const slot = instr.quoteSlot ?? makeQuoteSlot(instr.side, instr.price);
         const existingPlace = ORDER_INTENTS.getOutstanding("place")
             .find((candidate) =>
                 candidate.kind === "place" &&

@@ -9,6 +9,11 @@ export type OrderPlan = {
     newOrders: NewOrderInstruction[];
 };
 
+/** Identifies one passive quote level independently of its array position. */
+export function makeQuoteSlot(side: Side, price: number): string {
+    return `${side}:${price.toString()}`;
+}
+
 export function planOrders(
     oldOrders: PendingOrder[],
     newPrices: number[],
@@ -36,7 +41,7 @@ export function planOrders(
 
         if (marginChange <= 0) {
             if (shouldCancelReplace(oldOrder, price, size)) {
-                cancelReplaces.push({ price, size, side: oldOrder.side, cancelId: oldOrder.id, quoteSlot: `${side}-${i}` });
+                cancelReplaces.push({ price, size, side: oldOrder.side, cancelId: oldOrder.id, quoteSlot: makeQuoteSlot(side, price) });
                 collateral += marginChange;
             }
             continue;
@@ -64,7 +69,7 @@ export function planOrders(
                     size: replacementSize,
                     side: oldOrder.side,
                     cancelId: oldOrder.id,
-                    quoteSlot: `${side}-${i}`,
+                    quoteSlot: makeQuoteSlot(side, price),
                 });
                 collateral += replacementMarginChange;
             }
@@ -81,7 +86,7 @@ export function planOrders(
             const newMargin = Math.floor(size * (isBuy ? price : 1_000_000 - price) / 1_000_000);
             if (!canPlaceOrder(isBuy, size, price, collateral)) continue;
 
-            newOrders.push({ price, size, side, quoteSlot: `${side}-${i}` });
+            newOrders.push({ price, size, side, quoteSlot: makeQuoteSlot(side, price) });
             collateral += newMargin;
         }
     } else if (oldOrders.length > newPrices.length) {
