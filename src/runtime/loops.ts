@@ -356,11 +356,14 @@ export async function reconcileOrderIntents(wallet: Wallet): Promise<boolean> {
         }
     }
 
+    let attemptedCancellation = false;
+
     for (const intent of cancellations) {
         if (intent.kind !== "cancel") continue;
         const pending = pendingByEpoch.get(intent.epoch.toString());
         if (pending?.has(intent.targetOrderHash)) {
             if (!ORDER_INTENTS.canAttempt(intent)) continue;
+            attemptedCancellation = true;
             ORDER_INTENTS.markAttempted(intent);
             try {
                 const response = await apiCancelOrder(wallet, intent.epoch, intent.targetOrderHash, intent.nonce);
@@ -380,6 +383,7 @@ export async function reconcileOrderIntents(wallet: Wallet): Promise<boolean> {
     // accepted while the old order was still active.
     const remaining = ORDER_INTENTS.getOutstanding("cancel");
     if (remaining.length === 0) return true;
+    if (!attemptedCancellation) return false;
 
     const verificationByEpoch = new Map<string, Set<string>>();
 
@@ -393,7 +397,7 @@ export async function reconcileOrderIntents(wallet: Wallet): Promise<boolean> {
                 pendingIds = new Set([
                     ...result.buys.map(order => order.id),
                     ...result.sells.map(order => order.id),
-                ])
+                ]);
                 verificationByEpoch.set(epochKey, pendingIds);
             }
             const stillPending = pendingIds?.has(intent.targetOrderHash) ?? false;
