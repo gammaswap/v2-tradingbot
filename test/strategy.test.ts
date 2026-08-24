@@ -1,16 +1,22 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { CFG } from "../src/config/config.js";
 import { STATE } from "../src/runtime/state.js";
-import { availableCollateral, buildTargetLadderPrices } from "../src/runtime/strategy.js";
+import {
+    availableCollateral,
+    buildTargetLadderPrices,
+    capOrderSizeByMargin,
+} from "../src/runtime/strategy.js";
 
 const originalBaseBal = STATE.baseBal;
 const originalReserve = CFG.BASE_RESERVE_MIN;
 const originalExposurePercent = CFG.MAX_CAPITAL_EXPOSURE_PERCENT;
+const originalOrderMarginPercent = CFG.MAX_ORDER_MARGIN_PERCENT;
 
 afterEach(() => {
     STATE.baseBal = originalBaseBal;
     (CFG as any).BASE_RESERVE_MIN = originalReserve;
     (CFG as any).MAX_CAPITAL_EXPOSURE_PERCENT = originalExposurePercent;
+    (CFG as any).MAX_ORDER_MARGIN_PERCENT = originalOrderMarginPercent;
 });
 
 describe("target quote ladder prices", () => {
@@ -64,5 +70,15 @@ describe("capital exposure limits", () => {
         (CFG as any).MAX_CAPITAL_EXPOSURE_PERCENT = 100;
 
         expect(availableCollateral()).toBe(8_500_000);
+    });
+
+    it("caps an order using its side-specific margin price", () => {
+        STATE.baseBal = 10_000_000;
+        (CFG as any).BASE_RESERVE_MIN = 0;
+        (CFG as any).MAX_CAPITAL_EXPOSURE_PERCENT = 100;
+        (CFG as any).MAX_ORDER_MARGIN_PERCENT = 10;
+
+        // A 10% margin budget is 1,000,000; at 50 cents that supports 2,000,000 size.
+        expect(capOrderSizeByMargin(true, 100_000_000, 500_000, 10_000_000)).toBe(2_000_000);
     });
 });

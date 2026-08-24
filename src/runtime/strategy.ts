@@ -1,9 +1,14 @@
 import { CFG, type Side } from "../config/config.js";
 import type { BookSnapshot, PendingOrder } from "../utils/types.js";
 import { STATE } from "./state.js";
-import { clamp, nowMs, randBetween, roundToTick, tanh } from "../utils/utils.js";
+import { clamp, nowMs, randBetween, roundDownToOrderLot, roundToTick, tanh } from "../utils/utils.js";
 import { protocolNotional, protocolNotionalBigInt, protocolValueToSafeNumber } from "../utils/protocolMath.js";
-import { PROTOCOL_MIN_PRICE, PROTOCOL_MAX_PRICE } from "../utils/protocolPrice.js";
+import {
+    maxSizeForMargin,
+    PROTOCOL_MIN_PRICE,
+    PROTOCOL_MAX_PRICE,
+    PROTOCOL_MIN_SIZE,
+} from "../utils/protocolPrice.js";
 
 export function bestBidAsk(book: BookSnapshot | null): { bid: number | null; ask: number | null } {
     if (!book) return { bid: null, ask: null };
@@ -176,6 +181,7 @@ export function canPlaceBid(size: number, price: number, collateral?: number): b
 }
 
 export function canAggressBuy(qty: number, estPrice: number): boolean {
+    if (qty < PROTOCOL_MIN_SIZE) return false;
     const value = protocolNotional(qty, estPrice);
     if (value > availableCollateral()) return false;
     if (STATE.invBase + qty > CFG.INV_MAX_ABS) return false;
@@ -183,10 +189,38 @@ export function canAggressBuy(qty: number, estPrice: number): boolean {
 }
 
 export function canAggressSell(qty: number, estPrice: number): boolean {
+    if (qty < PROTOCOL_MIN_SIZE) return false;
     const value = protocolNotional(qty, 1_000_000 - estPrice);
     if (value > availableCollateral()) return false;
     if (STATE.invBase - qty < -CFG.INV_MAX_ABS) return false;
     return true;
+}
+
+export function capOrderSizeByMargin(
+    isBuy: boolean,
+    size: number,
+    price: number,
+    collateral: number = availableCollateral(),
+): number {
+    if (!Number.isFinite(size) || size <= 0) return 0;
+
+    // Unit-level planner callers may provide collateral without initializing
+    // the runtime balance. In the live bot STATE.baseBal is refreshed first;
+    // the fallback keeps the planner deterministic for isolated callers.
+    const balance = STATE.baseBal > 0 ? STATE.baseBal : collateral;
+    const marginBudget = Math.floor(Math.min(
+        Math.max(0, collateral),
+        Math.max(0, balance) * CFG.MAX_ORDER_MARGIN_PERCENT / 100,
+    ));
+    if (marginBudget <= 0) return 0;
+
+    const maxSize = maxSizeForMargin(
+        isBuy ? "buy" : "sell",
+        price,
+        marginBudget,
+    );
+    const maxSizeNumber = protocolValueToSafeNumber(maxSize, "maximum order size");
+    return roundDownToOrderLot(Math.min(size, maxSizeNumber));
 }
 
 // ---- direction choice ----

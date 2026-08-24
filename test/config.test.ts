@@ -116,4 +116,14 @@ describe("price configuration validation", () => {
             "MAX_CAPITAL_EXPOSURE_PERCENT must be between 0 and 100",
         );
     });
+
+    it("rejects an invalid per-order margin percentage", () => {
+        expect(validateRiskConfiguration({
+            MAX_CAPITAL_EXPOSURE_PERCENT: 100,
+            MAX_ORDER_MARGIN_PERCENT: 101,
+            BASE_RESERVE_MIN: 1_500_000,
+        } as never)).toContain(
+            "MAX_ORDER_MARGIN_PERCENT must be between 0 and 100",
+        );
+    });
 });

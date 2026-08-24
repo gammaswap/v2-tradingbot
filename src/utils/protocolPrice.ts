@@ -70,3 +70,22 @@ export function assertProtocolOrder(
         throw new Error(`order margin ${margin} is below protocol minimum ${PROTOCOL_MIN_ORDER_MARGIN}`);
     }
 }
+
+export function maxSizeForMargin(
+    side: "buy" | "sell",
+    price: number | bigint,
+    marginBudget: number | bigint,
+): bigint {
+    assertProtocolPrice(price);
+    if (typeof marginBudget === "number" && (!Number.isSafeInteger(marginBudget) || marginBudget < 0)) {
+        throw new Error(`margin budget must be a non-negative safe integer: ${marginBudget}`);
+    }
+
+    const priceValue = typeof price === "bigint" ? price : BigInt(price);
+    const budgetValue = typeof marginBudget === "bigint" ? marginBudget : BigInt(marginBudget);
+    const effectivePrice = side === "buy"
+        ? priceValue
+        : PROTOCOL_SCALE - priceValue;
+
+    return (budgetValue * PROTOCOL_SCALE) / effectivePrice;
+}

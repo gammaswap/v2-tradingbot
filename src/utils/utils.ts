@@ -36,6 +36,12 @@ export function roundToOrderLot(size: number): number {
     return Math.min(rounded, CFG.MAX_ORDER_SIZE);
 }
 
+export function roundDownToOrderLot(size: number): number {
+    if (!Number.isFinite(size) || size <= 0 || CFG.LOT_SIZE <= 0) return 0;
+    const rounded = Math.floor(size / CFG.LOT_SIZE) * CFG.LOT_SIZE;
+    return Math.min(rounded, CFG.MAX_ORDER_SIZE);
+}
+
 export function jitter(baseMs: number, jitterMs: number) {
     const j = (Math.random() * 2 - 1) * jitterMs;
     return Math.max(50, Math.floor(baseMs + j));

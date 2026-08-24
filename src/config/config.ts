@@ -191,6 +191,13 @@ export function validateRiskConfiguration(config = CFG): string[] {
     if (!Number.isFinite(config.BASE_RESERVE_MIN) || config.BASE_RESERVE_MIN < 0) {
         errors.push("BASE_RESERVE_MIN must be non-negative");
     }
+    if (
+        !Number.isFinite(config.MAX_ORDER_MARGIN_PERCENT) ||
+        config.MAX_ORDER_MARGIN_PERCENT < 0 ||
+        config.MAX_ORDER_MARGIN_PERCENT > 100
+    ) {
+        errors.push("MAX_ORDER_MARGIN_PERCENT must be between 0 and 100");
+    }
 
     return errors;
 }
@@ -287,6 +294,7 @@ export const CFG = {
     START_QUOTE_BAL: envNum("START_QUOTE_BAL", 10000 * 1000000),
     BASE_RESERVE_MIN: envNum("BASE_RESERVE_MIN", 1500 * 1000000),
     MAX_CAPITAL_EXPOSURE_PERCENT: envNum("MAX_CAPITAL_EXPOSURE_PERCENT", 70),
+    MAX_ORDER_MARGIN_PERCENT: envNum("MAX_ORDER_MARGIN_PERCENT", 100),
 
     INV_TARGET: envNum("INV_TARGET", 0),
     INV_MAX_ABS: envNum("INV_MAX_ABS", 5000 * 1000000),

@@ -21,6 +21,7 @@ import {
     depthToWipe,
     canAggressBuy,
     canAggressSell,
+    capOrderSizeByMargin,
 } from "./strategy.js";
 import { Wallet, ZeroHash } from "ethers";
 import { markFairValueStale, updateFairValueFromOracle } from "./fairValue.js";
@@ -541,6 +542,7 @@ export async function runAggression(wallet: Wallet) {
     let tradeQty = roundToOrderLot((side === "buy" ? reqBuy : reqSell) * (1 + CFG.SLIP_BUFFER));
     console.log("tradeQty1:", tradeQty);
     tradeQty = roundToOrderLot(Math.min(tradeQty, CFG.MAX_AGGRESS_QTY));
+    tradeQty = capOrderSizeByMargin(side === "buy", tradeQty, refPrice);
     console.log("tradeQty2:", tradeQty);
 
     const feasibleChosen = side === "buy"
@@ -554,6 +556,7 @@ export async function runAggression(wallet: Wallet) {
         const otherReq = other === "buy" ? reqBuy : reqSell;
         console.log("otherReq:", otherReq);
         let otherQty = roundToOrderLot(Math.min(otherReq * (1 + CFG.SLIP_BUFFER), CFG.MAX_AGGRESS_QTY));
+        otherQty = capOrderSizeByMargin(other === "buy", otherQty, refPrice);
         console.log("otherQty:", otherQty);
 
         const feasibleOther = other === "buy"

@@ -1,6 +1,6 @@
 import { CFG, type Side } from "../config/config.js";
 import type { CancelReplaceInstruction, NewOrderInstruction, PendingOrder } from "../utils/types.js";
-import { availableCollateral, canPlaceOrder, shouldCancelReplace } from "./strategy.js";
+import { availableCollateral, canPlaceOrder, capOrderSizeByMargin, shouldCancelReplace } from "./strategy.js";
 import { roundToOrderLot } from "../utils/utils.js";
 import { protocolNotional } from "../utils/protocolMath.js";
 
@@ -33,12 +33,19 @@ export function planOrders(
     for (let i = 0; i < minLength; i++) {
         const oldOrder = oldOrders[i];
         const price = newPrices[i];
-        const size = roundToOrderLot(newSizes[i] * skewMul);
+        const requestedSize = roundToOrderLot(newSizes[i] * skewMul);
         const oldMarginPrice = isBuy ? oldOrder.price : 1_000_000 - oldOrder.price;
         const newMarginPrice = isBuy ? price : 1_000_000 - price;
         const oldMargin = protocolNotional(oldOrder.size, oldMarginPrice);
+        const size = capOrderSizeByMargin(isBuy, requestedSize, price, collateral + oldMargin);
         const newMargin = protocolNotional(size, newMarginPrice);
         const marginChange = newMargin - oldMargin;
+
+        if (size < CFG.LOT_SIZE) {
+            cancels.push(oldOrder.id);
+            collateral -= oldMargin;
+            continue;
+        }
 
         if (marginChange <= 0) {
             if (shouldCancelReplace(oldOrder, price, size)) {
@@ -52,7 +59,17 @@ export function planOrders(
         let replacementMarginChange = marginChange;
         let permitted = canPlaceOrder(isBuy, size, price, collateral + oldMargin);
         if (!permitted) {
-            replacementSize = oldOrder.size;
+            replacementSize = capOrderSizeByMargin(
+                isBuy,
+                oldOrder.size,
+                price,
+                collateral + oldMargin,
+            );
+            if (replacementSize < CFG.LOT_SIZE) {
+                cancels.push(oldOrder.id);
+                collateral -= oldMargin;
+                continue;
+            }
             const replacementMargin = protocolNotional(replacementSize, newMarginPrice);
             replacementMarginChange = replacementMargin - oldMargin;
             permitted = replacementMarginChange <= 0 || canPlaceOrder(
@@ -83,7 +100,9 @@ export function planOrders(
     if (oldOrders.length < newPrices.length) {
         for (let i = minLength; i < newPrices.length; i++) {
             const price = newPrices[i];
-            const size = roundToOrderLot(newSizes[i] * skewMul);
+            const requestedSize = roundToOrderLot(newSizes[i] * skewMul);
+            const size = capOrderSizeByMargin(isBuy, requestedSize, price, collateral);
+            if (size < CFG.LOT_SIZE) continue;
             const newMargin = protocolNotional(size, isBuy ? price : 1_000_000 - price);
             if (!canPlaceOrder(isBuy, size, price, collateral)) continue;
 
