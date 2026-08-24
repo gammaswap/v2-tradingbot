@@ -142,7 +142,17 @@ export function buildTargetSizes(): { bidSizes: number[]; askSizes: number[] } {
 // ---- solvency/inventory checks ----
 
 export function availableCollateral(): number {
-    return Math.max(0, STATE.baseBal - CFG.BASE_RESERVE_MIN);
+    const reserveLimitedCollateral = Math.max(
+        0,
+        STATE.baseBal - CFG.BASE_RESERVE_MIN,
+    );
+    const percentageLimitedCollateral =
+        Math.max(0, STATE.baseBal) * CFG.MAX_CAPITAL_EXPOSURE_PERCENT / 100;
+
+    return Math.min(
+        reserveLimitedCollateral,
+        percentageLimitedCollateral,
+    );
 }
 
 export function canPlaceOrder(isBuy: boolean, size: number, price: number, collateral?: number): boolean {

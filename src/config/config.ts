@@ -75,6 +75,7 @@ export function validateProductionConfig(env: NodeJS.ProcessEnv = process.env): 
     const errors: string[] = [];
     errors.push(...validatePriceConfiguration());
     errors.push(...validateOrderSizeConfiguration());
+    errors.push(...validateRiskConfiguration());
     const enabled = ["1", "true", "yes", "y", "on"].includes(
         (env.PRODUCTION_MODE ?? "").toLowerCase(),
     );
@@ -176,6 +177,24 @@ export function validateOrderSizeConfiguration(config = CFG): string[] {
     return errors;
 }
 
+export function validateRiskConfiguration(config = CFG): string[] {
+    const errors: string[] = [];
+
+    if (
+        !Number.isFinite(config.MAX_CAPITAL_EXPOSURE_PERCENT) ||
+        config.MAX_CAPITAL_EXPOSURE_PERCENT < 0 ||
+        config.MAX_CAPITAL_EXPOSURE_PERCENT > 100
+    ) {
+        errors.push("MAX_CAPITAL_EXPOSURE_PERCENT must be between 0 and 100");
+    }
+
+    if (!Number.isFinite(config.BASE_RESERVE_MIN) || config.BASE_RESERVE_MIN < 0) {
+        errors.push("BASE_RESERVE_MIN must be non-negative");
+    }
+
+    return errors;
+}
+
 export const CFG = {
     RPC_URL: envStr("RPC_URL", "http://localhost:8545"),
     API_URL: envApiUrl(),
@@ -267,6 +286,7 @@ export const CFG = {
     START_BASE_BAL: envNum("START_BASE_BAL", 10000 * 1000000),
     START_QUOTE_BAL: envNum("START_QUOTE_BAL", 10000 * 1000000),
     BASE_RESERVE_MIN: envNum("BASE_RESERVE_MIN", 1500 * 1000000),
+    MAX_CAPITAL_EXPOSURE_PERCENT: envNum("MAX_CAPITAL_EXPOSURE_PERCENT", 70),
 
     INV_TARGET: envNum("INV_TARGET", 0),
     INV_MAX_ABS: envNum("INV_MAX_ABS", 5000 * 1000000),

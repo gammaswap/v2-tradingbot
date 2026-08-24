@@ -3,6 +3,7 @@ import {
     validateOrderSizeConfiguration,
     validatePriceConfiguration,
     validateProductionConfig,
+    validateRiskConfiguration,
 } from "../src/config/config.js";
 
 const originalTimeout = process.env.API_TIMEOUT_MS;
@@ -105,5 +106,14 @@ describe("price configuration validation", () => {
             expect.stringContaining("LOT_SIZE"),
             expect.stringContaining("MAX_AGGRESS_QTY"),
         ]));
+    });
+
+    it("rejects an invalid capital exposure percentage", () => {
+        expect(validateRiskConfiguration({
+            MAX_CAPITAL_EXPOSURE_PERCENT: 101,
+            BASE_RESERVE_MIN: 1_500_000,
+        } as never)).toContain(
+            "MAX_CAPITAL_EXPOSURE_PERCENT must be between 0 and 100",
+        );
     });
 });
