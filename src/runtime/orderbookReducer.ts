@@ -94,8 +94,6 @@ export function applyMarketUpdate(
         return "buffered";
     }
 
-    // TODO: need to update backend to not reset seqId due to restart
-    //if (update.seqId <= state.seqId) return "duplicate";
     if (update.seqId <= state.seqId) {
         state.buffered.push(update);
         state.needsResync = true;
