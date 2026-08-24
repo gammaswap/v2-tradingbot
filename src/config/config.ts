@@ -2,6 +2,9 @@ export type Side = "buy" | "sell";
 import {
     PROTOCOL_MIN_PRICE,
     PROTOCOL_MAX_PRICE,
+    PROTOCOL_MIN_SIZE,
+    PROTOCOL_MAX_SIZE,
+    SDK_SIZE_STEP,
 } from "../utils/protocolPrice.js";
 
 const DEFAULT_ASSET_ID = "261336857817713630688382311349658711122006440411137";
@@ -71,6 +74,7 @@ const ASSET_ID = envStr("ASSET_ID", DEFAULT_ASSET_ID);
 export function validateProductionConfig(env: NodeJS.ProcessEnv = process.env): string[] {
     const errors: string[] = [];
     errors.push(...validatePriceConfiguration());
+    errors.push(...validateOrderSizeConfiguration());
     const enabled = ["1", "true", "yes", "y", "on"].includes(
         (env.PRODUCTION_MODE ?? "").toLowerCase(),
     );
@@ -136,6 +140,42 @@ export function validatePriceConfiguration(config = CFG): string[] {
     return errors;
 }
 
+export function validateOrderSizeConfiguration(config = CFG): string[] {
+    const errors: string[] = [];
+    const sizes = [
+        ["LOT_SIZE", config.LOT_SIZE],
+        ["QUOTE_BASE_SIZE_MIN", config.QUOTE_BASE_SIZE_MIN],
+        ["QUOTE_BASE_SIZE_MAX", config.QUOTE_BASE_SIZE_MAX],
+        ["MAX_AGGRESS_QTY", config.MAX_AGGRESS_QTY],
+        ["MAX_ORDER_SIZE", config.MAX_ORDER_SIZE],
+    ] as const;
+
+    for (const [name, value] of sizes) {
+        if (!Number.isSafeInteger(value)) {
+            errors.push(`${name} must be a safe integer`);
+            continue;
+        }
+        if (value < PROTOCOL_MIN_SIZE || value > PROTOCOL_MAX_SIZE) {
+            errors.push(`${name} must be between ${PROTOCOL_MIN_SIZE} and ${PROTOCOL_MAX_SIZE}`);
+        }
+        if (value % SDK_SIZE_STEP !== 0) {
+            errors.push(`${name} must be a multiple of ${SDK_SIZE_STEP}`);
+        }
+    }
+
+    if (config.QUOTE_BASE_SIZE_MIN > config.QUOTE_BASE_SIZE_MAX) {
+        errors.push("QUOTE_BASE_SIZE_MIN must not exceed QUOTE_BASE_SIZE_MAX");
+    }
+    if (config.QUOTE_BASE_SIZE_MAX > config.MAX_ORDER_SIZE) {
+        errors.push("QUOTE_BASE_SIZE_MAX must not exceed MAX_ORDER_SIZE");
+    }
+    if (config.MAX_AGGRESS_QTY > config.MAX_ORDER_SIZE) {
+        errors.push("MAX_AGGRESS_QTY must not exceed MAX_ORDER_SIZE");
+    }
+
+    return errors;
+}
+
 export const CFG = {
     RPC_URL: envStr("RPC_URL", "http://localhost:8545"),
     API_URL: envApiUrl(),
@@ -189,6 +229,7 @@ export const CFG = {
 
     TICK_SIZE: envNum("TICK_SIZE", 1000),// 0.001
     LOT_SIZE: envNum("LOT_SIZE", 10000),// 0.01
+    MAX_ORDER_SIZE: envNum("MAX_ORDER_SIZE", 100000 * 1000000),
 
     LEVELS_PER_SIDE: Math.max(1, Math.floor(envNum("LEVELS_PER_SIDE", 5))),
     LEVEL_SPACING_NEAR: envNum("LEVEL_SPACING_NEAR", 2000), // 0.002

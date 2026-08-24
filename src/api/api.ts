@@ -20,7 +20,7 @@ import type {
     BookLevel,
     PendingOrder,
 } from "../utils/types.js";
-import { assertProtocolPrice } from "../utils/protocolPrice.js";
+import { assertProtocolOrder, assertProtocolPrice } from "../utils/protocolPrice.js";
 
 const PRICE_TENTH_CENT_SCALE = 1_000n;
 const SIZE_HUNDREDTH_SCALE = 10_000n;
@@ -285,6 +285,7 @@ export async function apiLastResolutionPrice(): Promise<ApiResolutionPriceRespon
 }
 
 export async function apiSendOrder(wallet: Wallet, order: { epoch: bigint | number, side: Side; price: number; size: number; tif?: 0n | 1n | 2n | 3n; nonce?: bigint }) {
+    assertProtocolOrder(order.side, order.size, order.price);
     const client = getExchangeClient(wallet);
     const res = await client.placeOrder({
         assetId: CFG.ASSET_ID,
@@ -341,6 +342,7 @@ export async function apiCancelReplaceOrder(
         replacementNonce: bigint;
     },
 ) {
+    assertProtocolOrder(input.side, input.size, input.price);
     const client = getExchangeClient(wallet);
     const res = await client.cancelReplaceOrder({
         assetId: CFG.ASSET_ID,

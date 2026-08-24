@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { validatePriceConfiguration, validateProductionConfig } from "../src/config/config.js";
+import {
+    validateOrderSizeConfiguration,
+    validatePriceConfiguration,
+    validateProductionConfig,
+} from "../src/config/config.js";
 
 const originalTimeout = process.env.API_TIMEOUT_MS;
 
@@ -86,5 +90,20 @@ describe("price configuration validation", () => {
         } as never);
 
         expect(errors).toContain("CENTER_PRICE must be between SOFT_MIN_PRICE and SOFT_MAX_PRICE");
+    });
+
+    it("rejects order sizes outside the protocol limits", () => {
+        const errors = validateOrderSizeConfiguration({
+            LOT_SIZE: 1,
+            QUOTE_BASE_SIZE_MIN: 10_000,
+            QUOTE_BASE_SIZE_MAX: 100_000_000_000,
+            MAX_AGGRESS_QTY: 100_000_000_001,
+            MAX_ORDER_SIZE: 100_000_000_000,
+        } as never);
+
+        expect(errors).toEqual(expect.arrayContaining([
+            expect.stringContaining("LOT_SIZE"),
+            expect.stringContaining("MAX_AGGRESS_QTY"),
+        ]));
     });
 });

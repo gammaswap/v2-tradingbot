@@ -10,7 +10,7 @@ import {
     apiSendOrder
 } from "../api/api.js";
 import { STATE } from "./state.js";
-import { jitter, log, nowMs, sleep, warn, clamp, roundToTick, roundToLot, getOrderKey } from "../utils/utils.js";
+import { jitter, log, nowMs, sleep, warn, clamp, roundToTick, roundToOrderLot, getOrderKey } from "../utils/utils.js";
 import {
     midPrice,
     referencePrice,
@@ -538,9 +538,9 @@ export async function runAggression(wallet: Wallet) {
     const reqSell = depthToWipe(book, "sell", CFG.WIPE_LEVELS).qty;
     console.log("reqBuy:", reqBuy);
     console.log("reqSell:", reqSell);
-    let tradeQty = roundToLot((side === "buy" ? reqBuy : reqSell) * (1 + CFG.SLIP_BUFFER));
+    let tradeQty = roundToOrderLot((side === "buy" ? reqBuy : reqSell) * (1 + CFG.SLIP_BUFFER));
     console.log("tradeQty1:", tradeQty);
-    tradeQty = roundToLot(Math.floor(Math.min(tradeQty, CFG.MAX_AGGRESS_QTY)));
+    tradeQty = roundToOrderLot(Math.min(tradeQty, CFG.MAX_AGGRESS_QTY));
     console.log("tradeQty2:", tradeQty);
 
     const feasibleChosen = side === "buy"
@@ -553,7 +553,7 @@ export async function runAggression(wallet: Wallet) {
         console.log("other:", other);
         const otherReq = other === "buy" ? reqBuy : reqSell;
         console.log("otherReq:", otherReq);
-        let otherQty = roundToLot(Math.min(otherReq * (1 + CFG.SLIP_BUFFER), CFG.MAX_AGGRESS_QTY));
+        let otherQty = roundToOrderLot(Math.min(otherReq * (1 + CFG.SLIP_BUFFER), CFG.MAX_AGGRESS_QTY));
         console.log("otherQty:", otherQty);
 
         const feasibleOther = other === "buy"

@@ -1,7 +1,7 @@
 import { CFG, type Side } from "../config/config.js";
 import type { CancelReplaceInstruction, NewOrderInstruction, PendingOrder } from "../utils/types.js";
 import { availableCollateral, canPlaceOrder, shouldCancelReplace } from "./strategy.js";
-import { roundToLot } from "../utils/utils.js";
+import { roundToOrderLot } from "../utils/utils.js";
 import { protocolNotional } from "../utils/protocolMath.js";
 
 export type OrderPlan = {
@@ -33,7 +33,7 @@ export function planOrders(
     for (let i = 0; i < minLength; i++) {
         const oldOrder = oldOrders[i];
         const price = newPrices[i];
-        const size = roundToLot(newSizes[i] * skewMul);
+        const size = roundToOrderLot(newSizes[i] * skewMul);
         const oldMarginPrice = isBuy ? oldOrder.price : 1_000_000 - oldOrder.price;
         const newMarginPrice = isBuy ? price : 1_000_000 - price;
         const oldMargin = protocolNotional(oldOrder.size, oldMarginPrice);
@@ -83,7 +83,7 @@ export function planOrders(
     if (oldOrders.length < newPrices.length) {
         for (let i = minLength; i < newPrices.length; i++) {
             const price = newPrices[i];
-            const size = roundToLot(newSizes[i] * skewMul);
+            const size = roundToOrderLot(newSizes[i] * skewMul);
             const newMargin = protocolNotional(size, isBuy ? price : 1_000_000 - price);
             if (!canPlaceOrder(isBuy, size, price, collateral)) continue;
 
