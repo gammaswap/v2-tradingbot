@@ -20,6 +20,7 @@ import type {
     BookLevel,
     PendingOrder,
 } from "../utils/types.js";
+import { assertProtocolPrice } from "../utils/protocolPrice.js";
 
 const PRICE_TENTH_CENT_SCALE = 1_000n;
 const SIZE_HUNDREDTH_SCALE = 10_000n;
@@ -89,6 +90,7 @@ function isNonZeroAddress(value: string): boolean {
 }
 
 export function protocolPriceToSdkInput(price: number | bigint): string {
+    assertProtocolPrice(price);
     const value = toProtocolBigInt(price, "price");
     if (value % PRICE_TENTH_CENT_SCALE !== 0n) {
         throw new Error(`price ${value.toString()} cannot be represented as SDK price input`);

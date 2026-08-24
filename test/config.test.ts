@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { validateProductionConfig } from "../src/config/config.js";
+import { validatePriceConfiguration, validateProductionConfig } from "../src/config/config.js";
 
 const originalTimeout = process.env.API_TIMEOUT_MS;
 
@@ -52,5 +52,39 @@ describe("production configuration validation", () => {
 
     it("does not enforce production settings in development mode", () => {
         expect(validateProductionConfig({})).toEqual([]);
+    });
+});
+
+describe("price configuration validation", () => {
+    it("accepts the default nested strategy range", async () => {
+        const { CFG } = await import("../src/config/config.js");
+        expect(validatePriceConfiguration(CFG)).toEqual([]);
+    });
+
+    it("rejects strategy prices outside the protocol range", () => {
+        const errors = validatePriceConfiguration({
+            HARD_MIN_PRICE: 999,
+            HARD_MAX_PRICE: 1_000_000,
+            SOFT_MIN_PRICE: 2_000,
+            SOFT_MAX_PRICE: 998_000,
+            CENTER_PRICE: 500_000,
+        } as never);
+
+        expect(errors).toEqual(expect.arrayContaining([
+            expect.stringContaining("HARD_MIN_PRICE"),
+            expect.stringContaining("HARD_MAX_PRICE"),
+        ]));
+    });
+
+    it("requires the center price to remain inside the soft range", () => {
+        const errors = validatePriceConfiguration({
+            HARD_MIN_PRICE: 100_000,
+            HARD_MAX_PRICE: 900_000,
+            SOFT_MIN_PRICE: 300_000,
+            SOFT_MAX_PRICE: 700_000,
+            CENTER_PRICE: 800_000,
+        } as never);
+
+        expect(errors).toContain("CENTER_PRICE must be between SOFT_MIN_PRICE and SOFT_MAX_PRICE");
     });
 });

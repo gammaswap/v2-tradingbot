@@ -2,6 +2,7 @@ import { CFG } from "../config/config.js";
 import type { Asset } from "../utils/types.js";
 import { clamp, nowMs } from "../utils/utils.js";
 import { STATE } from "./state.js";
+import { PROTOCOL_MIN_PRICE, PROTOCOL_MAX_PRICE } from "../utils/protocolPrice.js";
 
 const PROTOCOL_PRICE_SCALE = 1_000_000;
 const SECONDS_PER_YEAR = 365 * 24 * 60 * 60;
@@ -77,7 +78,11 @@ function probabilityAboveStrike(spot: number, strike: number, expiresInSec: numb
 function roundToProtocolTick(value: number): number {
     const tick = CFG.TICK_SIZE;
     if (tick <= 0) return Math.round(value);
-    return clamp(Math.round(value / tick) * tick, 0, PROTOCOL_PRICE_SCALE);
+    return clamp(
+        Math.round(value / tick) * tick,
+        PROTOCOL_MIN_PRICE,
+        PROTOCOL_MAX_PRICE,
+    );
 }
 
 function normalCdf(x: number): number {

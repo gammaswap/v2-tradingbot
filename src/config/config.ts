@@ -1,4 +1,8 @@
 export type Side = "buy" | "sell";
+import {
+    PROTOCOL_MIN_PRICE,
+    PROTOCOL_MAX_PRICE,
+} from "../utils/protocolPrice.js";
 
 const DEFAULT_ASSET_ID = "261336857817713630688382311349658711122006440411137";
 const DEFAULT_TEST_MNEMONIC = "test test test test test test test test test test test junk";
@@ -66,6 +70,7 @@ const ASSET_ID = envStr("ASSET_ID", DEFAULT_ASSET_ID);
 
 export function validateProductionConfig(env: NodeJS.ProcessEnv = process.env): string[] {
     const errors: string[] = [];
+    errors.push(...validatePriceConfiguration());
     const enabled = ["1", "true", "yes", "y", "on"].includes(
         (env.PRODUCTION_MODE ?? "").toLowerCase(),
     );
@@ -83,6 +88,50 @@ export function validateProductionConfig(env: NodeJS.ProcessEnv = process.env): 
     if (!env.CHAIN_ID) errors.push("CHAIN_ID must be explicitly configured for production");
     if (!env.EXCHANGE_ADDRESS) errors.push("EXCHANGE_ADDRESS must be explicitly configured for production");
     if (!env.LEDGER_ADDRESS) errors.push("LEDGER_ADDRESS must be explicitly configured for production");
+
+    return errors;
+}
+
+export function validatePriceConfiguration(config = CFG): string[] {
+    const errors: string[] = [];
+    const prices = [
+        ["HARD_MIN_PRICE", config.HARD_MIN_PRICE],
+        ["HARD_MAX_PRICE", config.HARD_MAX_PRICE],
+        ["SOFT_MIN_PRICE", config.SOFT_MIN_PRICE],
+        ["SOFT_MAX_PRICE", config.SOFT_MAX_PRICE],
+        ["CENTER_PRICE", config.CENTER_PRICE],
+    ] as const;
+
+    for (const [name, value] of prices) {
+        if (!Number.isSafeInteger(value)) {
+            errors.push(`${name} must be a safe integer`);
+            continue;
+        }
+        if (value < PROTOCOL_MIN_PRICE || value > PROTOCOL_MAX_PRICE) {
+            errors.push(
+                `${name} must be between ${PROTOCOL_MIN_PRICE} and ${PROTOCOL_MAX_PRICE}`,
+            );
+        }
+    }
+
+    if (config.HARD_MIN_PRICE > config.HARD_MAX_PRICE) {
+        errors.push("HARD_MIN_PRICE must not exceed HARD_MAX_PRICE");
+    }
+    if (config.SOFT_MIN_PRICE > config.SOFT_MAX_PRICE) {
+        errors.push("SOFT_MIN_PRICE must not exceed SOFT_MAX_PRICE");
+    }
+    if (config.SOFT_MIN_PRICE < config.HARD_MIN_PRICE) {
+        errors.push("SOFT_MIN_PRICE must not be below HARD_MIN_PRICE");
+    }
+    if (config.SOFT_MAX_PRICE > config.HARD_MAX_PRICE) {
+        errors.push("SOFT_MAX_PRICE must not exceed HARD_MAX_PRICE");
+    }
+    if (
+        config.CENTER_PRICE < config.SOFT_MIN_PRICE ||
+        config.CENTER_PRICE > config.SOFT_MAX_PRICE
+    ) {
+        errors.push("CENTER_PRICE must be between SOFT_MIN_PRICE and SOFT_MAX_PRICE");
+    }
 
     return errors;
 }

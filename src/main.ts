@@ -14,9 +14,9 @@ import { runRuntimeCoordinator } from "./runtime/coordinator.js";
 import { protocolValueToSafeNumber } from "./utils/protocolMath.js";
 
 async function main() {
-    const productionConfigErrors = validateProductionConfig();
-    if (productionConfigErrors.length > 0) {
-        for (const error of productionConfigErrors) warn("production configuration error:", error);
+    const configurationErrors = validateProductionConfig();
+    if (configurationErrors.length > 0) {
+        for (const error of configurationErrors) warn("configuration error:", error);
         return;
     }
 

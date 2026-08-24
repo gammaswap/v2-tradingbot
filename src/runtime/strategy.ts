@@ -3,6 +3,7 @@ import type { BookSnapshot, PendingOrder } from "../utils/types.js";
 import { STATE } from "./state.js";
 import { clamp, nowMs, randBetween, roundToTick, tanh } from "../utils/utils.js";
 import { protocolNotional, protocolNotionalBigInt, protocolValueToSafeNumber } from "../utils/protocolMath.js";
+import { PROTOCOL_MIN_PRICE, PROTOCOL_MAX_PRICE } from "../utils/protocolPrice.js";
 
 export function bestBidAsk(book: BookSnapshot | null): { bid: number | null; ask: number | null } {
     if (!book) return { bid: null, ask: null };
@@ -102,6 +103,8 @@ export function buildTargetLadderPrices(
         if (
             bidP >= CFG.HARD_MIN_PRICE &&
             bidP <= CFG.HARD_MAX_PRICE &&
+            bidP >= PROTOCOL_MIN_PRICE &&
+            bidP <= PROTOCOL_MAX_PRICE &&
             (bestAsk == null || bidP < bestAsk)
         ) {
             bidPrices.add(bidP);
@@ -110,6 +113,8 @@ export function buildTargetLadderPrices(
         if (
             askP >= CFG.HARD_MIN_PRICE &&
             askP <= CFG.HARD_MAX_PRICE &&
+            askP >= PROTOCOL_MIN_PRICE &&
+            askP <= PROTOCOL_MAX_PRICE &&
             (bestBid == null || askP > bestBid)
         ) {
             askPrices.add(askP);
