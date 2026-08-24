@@ -198,7 +198,7 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     const bookMid = midPrice(book);
     const refPrice = referencePrice(book);
     console.log("book >> bids:", book.bids.length, "asks:", book.asks.length," total:", book.asks.length + book.bids.length, "mid:", bookMid, "reference:", refPrice, "fairValue:", STATE.fairValue?.protocolPrice, "oracleStale:", STATE.oracle.stale);
-    const { bids: targetBidPrices, asks: targetAskPrices } = buildTargetLadderPrices(refPrice); // This builds the target prices
+    const { bids: targetBidPrices, asks: targetAskPrices } = buildTargetLadderPrices(refPrice, book); // This builds the target prices
     const { bidSizes, askSizes } = buildTargetSizes();
     console.log("targetBids:", targetBidPrices);
     console.log("targetAsks:", targetAskPrices);

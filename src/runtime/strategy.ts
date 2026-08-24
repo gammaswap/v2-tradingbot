@@ -81,25 +81,45 @@ export function nearestOrderAtPrice(pending: Map<string, PendingOrder>, side: Si
     return null;
 }
 
-export function buildTargetLadderPrices(mid: number): { bids: number[]; asks: number[] } {
+export function buildTargetLadderPrices(
+    mid: number,
+    book: BookSnapshot | null = null,
+): { bids: number[]; asks: number[] } {
     console.log("===============buildTargetLadderPrices:start==================");
-    const bids: number[] = [];
-    const asks: number[] = [];
+    const bidPrices = new Set<number>();
+    const askPrices = new Set<number>();
+    const bestAsk = book?.asks[0]?.price ?? null;
+    const bestBid = book?.bids[0]?.price ?? null;
     let spacing = CFG.LEVEL_SPACING_NEAR;
     console.log("mid:", mid);
     console.log("spacing:", spacing);
 
     for (let i = 0; i < CFG.LEVELS_PER_SIDE; i++) {
         console.log("level:i:",i,"spacing:",spacing)
-        const bidP = clamp(roundToTick(mid - spacing, "buy"), CFG.HARD_MIN_PRICE, CFG.HARD_MAX_PRICE);
-        const askP = clamp(roundToTick(mid + spacing, "sell"), CFG.HARD_MIN_PRICE, CFG.HARD_MAX_PRICE);
-        bids.push(bidP);
-        asks.push(askP);
+        const bidP = roundToTick(mid - spacing, "buy");
+        const askP = roundToTick(mid + spacing, "sell");
+
+        if (
+            bidP >= CFG.HARD_MIN_PRICE &&
+            bidP <= CFG.HARD_MAX_PRICE &&
+            (bestAsk == null || bidP < bestAsk)
+        ) {
+            bidPrices.add(bidP);
+        }
+
+        if (
+            askP >= CFG.HARD_MIN_PRICE &&
+            askP <= CFG.HARD_MAX_PRICE &&
+            (bestBid == null || askP > bestBid)
+        ) {
+            askPrices.add(askP);
+        }
+
         spacing *= CFG.LEVEL_SPACING_GROWTH;
     }
 
     console.log("===============buildTargetLadderPrices:end==================");
-    return { bids, asks };
+    return { bids: [...bidPrices], asks: [...askPrices] };
 }
 
 export function buildTargetSizes(): { bidSizes: number[]; askSizes: number[] } {
