@@ -23,6 +23,7 @@ const originalReserve = CFG.BASE_RESERVE_MIN;
 const originalExposurePercent = CFG.MAX_CAPITAL_EXPOSURE_PERCENT;
 const originalOrderMarginPercent = CFG.MAX_ORDER_MARGIN_PERCENT;
 const originalPeriodLength = STATE.periodLength;
+const originalLevelsPerSide = CFG.LEVELS_PER_SIDE;
 const originalInventory = STATE.invBase;
 const originalInventoryTarget = CFG.INV_TARGET;
 const originalInventoryMaxAbs = CFG.INV_MAX_ABS;
@@ -37,6 +38,7 @@ afterEach(() => {
     (CFG as any).MAX_CAPITAL_EXPOSURE_PERCENT = originalExposurePercent;
     (CFG as any).MAX_ORDER_MARGIN_PERCENT = originalOrderMarginPercent;
     STATE.periodLength = originalPeriodLength;
+    (CFG as any).LEVELS_PER_SIDE = originalLevelsPerSide;
     STATE.invBase = originalInventory;
     (CFG as any).INV_TARGET = originalInventoryTarget;
     (CFG as any).INV_MAX_ABS = originalInventoryMaxAbs;
@@ -48,8 +50,8 @@ afterEach(() => {
 
 describe("target quote ladder prices", () => {
     it("builds sorted equidistant slots from calculated prices toward the book/reference bounds", () => {
-        const originalSlots = CFG.QUOTE_SLOTS_COUNT;
-        (CFG as any).QUOTE_SLOTS_COUNT = 3;
+        const originalLevels = CFG.LEVELS_PER_SIDE;
+        (CFG as any).LEVELS_PER_SIDE = 3;
         const targets = buildEquidistantLadderPrices(
             {
                 assetId: 1n,
@@ -67,12 +69,12 @@ describe("target quote ladder prices", () => {
 
         expect(targets.bids).toEqual([500_000, 450_000, 400_000]);
         expect(targets.asks).toEqual([500_000, 550_000, 600_000]);
-        (CFG as any).QUOTE_SLOTS_COUNT = originalSlots;
+        (CFG as any).LEVELS_PER_SIDE = originalLevels;
     });
 
     it("filters calculated slots outside the hard range and marketable ALO prices", () => {
-        const originalSlots = CFG.QUOTE_SLOTS_COUNT;
-        (CFG as any).QUOTE_SLOTS_COUNT = 3;
+        const originalLevels = CFG.LEVELS_PER_SIDE;
+        (CFG as any).LEVELS_PER_SIDE = 3;
         const targets = buildEquidistantLadderPrices(
             {
                 assetId: 1n,
@@ -91,7 +93,7 @@ describe("target quote ladder prices", () => {
         expect(targets.bids.every((price) => price >= CFG.HARD_MIN_PRICE)).toBe(true);
         expect(targets.asks.every((price) => price > 200_000)).toBe(true);
         expect(targets.asks.every((price) => price <= CFG.HARD_MAX_PRICE)).toBe(true);
-        (CFG as any).QUOTE_SLOTS_COUNT = originalSlots;
+        (CFG as any).LEVELS_PER_SIDE = originalLevels;
     });
 
     it("defaults the parent dispatcher to the equidistant model", () => {

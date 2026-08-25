@@ -221,11 +221,11 @@ export function validateRiskConfiguration(config = CFG): string[] {
         errors.push("LOGIT_HALF_SPREAD must be between 0.005 and 1");
     }
     if (
-        !Number.isInteger(config.QUOTE_SLOTS_COUNT) ||
-        config.QUOTE_SLOTS_COUNT < 1 ||
-        config.QUOTE_SLOTS_COUNT > 100
+        !Number.isInteger(config.LEVELS_PER_SIDE) ||
+        config.LEVELS_PER_SIDE < 1 ||
+        config.LEVELS_PER_SIDE > 100
     ) {
-        errors.push("QUOTE_SLOTS_COUNT must be an integer between 1 and 100");
+        errors.push("LEVELS_PER_SIDE must be an integer between 1 and 100");
     }
     if (
         !Number.isFinite(config.INITIAL_TOTAL_QUOTE_SIZE) ||
@@ -318,7 +318,7 @@ export const CFG = {
     LOT_SIZE: envNum("LOT_SIZE", 10000),// 0.01
     MAX_ORDER_SIZE: envNum("MAX_ORDER_SIZE", 100000 * 1000000),
 
-    LEVELS_PER_SIDE: Math.max(1, Math.floor(envNum("LEVELS_PER_SIDE", 5))),
+    LEVELS_PER_SIDE: envNum("LEVELS_PER_SIDE", 5),
     LEVEL_SPACING_NEAR: envNum("LEVEL_SPACING_NEAR", 2000), // 0.002
     LEVEL_SPACING_GROWTH: envNum("LEVEL_SPACING_GROWTH", 1.5),
     VARIABILITY_MIN: envNum("VARIABILITY_MIN", 0.85),
@@ -362,7 +362,6 @@ export const CFG = {
     // Half-spread in logit terms. Approximate decimal-price half-spread near
     // probability p: p * (1 - p) * LOGIT_HALF_SPREAD.
     LOGIT_HALF_SPREAD: envNum("LOGIT_HALF_SPREAD", 0.5),
-    QUOTE_SLOTS_COUNT: envNum("QUOTE_SLOTS_COUNT", 5),
     // Initial total contracts allocated to each side of the quote ladder.
     INITIAL_TOTAL_QUOTE_SIZE: envNum("INITIAL_TOTAL_QUOTE_SIZE", 100 * 1_000_000),
     // Values greater than 1 keep total size near its initial level for longer.

@@ -408,10 +408,10 @@ export function buildEquidistantLadderPrices(
     const bidPrices = new Set<number>();
     const askPrices = new Set<number>();
 
-    for (let i = 0; i < CFG.QUOTE_SLOTS_COUNT; i++) {
-        const fraction = CFG.QUOTE_SLOTS_COUNT === 1
+    for (let i = 0; i < CFG.LEVELS_PER_SIDE; i++) {
+        const fraction = CFG.LEVELS_PER_SIDE === 1
             ? 0
-            : i / (CFG.QUOTE_SLOTS_COUNT - 1);
+            : i / (CFG.LEVELS_PER_SIDE - 1);
         const bidPrice = roundToTick(
             bidStart + (bidEnd - bidStart) * fraction,
             "buy",
