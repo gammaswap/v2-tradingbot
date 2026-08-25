@@ -520,19 +520,37 @@ export function buildTargetLadderPrices(
 
 /**
  * Distributes a total contract quantity across the available ladder prices.
- * Prices farther from the best bid or ask receive larger allocations.
+ * The first/closest level receives the smallest weight, while prices farther
+ * from the best bid or ask receive progressively larger allocations.
  *
  * weight = (1 + normalizedDistance)^QUOTE_SIZE_CONCAVITY
  *
- * The allocation is performed in order-size lots and uses largest-remainder
- * rounding so all available target prices receive a share and the returned
- * quantities sum to totalSize whenever target prices are available.
+ * `normalizedDistance` is zero at the best price and one at the farthest
+ * price. QUOTE_SIZE_CONCAVITY changes the shape of the distribution: 1 is
+ * linear, values above 1 emphasize the outer levels, and values below 1 make
+ * the distribution flatter.
+ *
+ * Example with a buy ladder:
+ *   totalSize = 1,000,000 contracts, lotSize = 10,000, and prices are
+ *   [490,000, 480,000, 460,000]. The best bid is 490,000, so the distances
+ *   are [0, 10,000, 30,000]. With concavity = 1, the weights are approximately
+ *   [1.00, 1.33, 2.00]. This produces approximately [23.08, 30.77, 46.15]
+ *   lots. Largest-remainder rounding converts that to [23, 31, 46] lots,
+ *   or [230,000, 310,000, 460,000] contracts, preserving the 1,000,000 total.
+ *
+ * For asks, the lowest ask is treated as the best price and the same logic is
+ * applied outward toward higher asks. If no target prices are available,
+ * there is nowhere to allocate the quantity and an empty allocation is
+ * returned. The allocation is performed in order-size lots and uses
+ * largest-remainder rounding to preserve the total whenever possible.
  */
 export function distributeTotalSizeAcrossLadder(
     totalSize: number,
     targetPrices: number[],
     side: Side,
 ): number[] {
+    // There is no allocation to make when the side has no valid target prices
+    // or when the requested total is zero/non-positive.
     if (targetPrices.length === 0 || totalSize <= 0) {
         return targetPrices.map(() => 0);
     }
@@ -540,15 +558,23 @@ export function distributeTotalSizeAcrossLadder(
         throw new Error(`totalSize must be finite: ${totalSize}`);
     }
 
+    // Convert the total contract quantity into exchange-compatible lots. The
+    // total-size calculator already returns lot-aligned values; flooring here
+    // keeps this helper safe for direct callers as well.
     const lotSize = CFG.LOT_SIZE;
     const totalLots = Math.floor(totalSize / lotSize);
     if (totalLots <= 0) return targetPrices.map(() => 0);
 
+    // Bids become less competitive as their price decreases; asks become less
+    // competitive as their price increases. In both cases, distance starts
+    // at zero for the best price and grows toward the outside of the ladder.
     const bestPrice = side === "buy"
         ? Math.max(...targetPrices)
         : Math.min(...targetPrices);
     const distances = targetPrices.map((price) => Math.abs(price - bestPrice));
     const farthestDistance = Math.max(...distances);
+
+    // Turn each level's distance into a relative allocation weight.
     const weights = distances.map((distance) => {
         const normalizedDistance = farthestDistance === 0
             ? 0
@@ -558,11 +584,16 @@ export function distributeTotalSizeAcrossLadder(
             CFG.QUOTE_SIZE_CONCAVITY,
         );
     });
+
+    // Calculate fractional lot allocations before rounding. This allows the
+    // largest-remainder step below to recover lots lost to integer rounding.
     const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
     const exactLots = weights.map((weight) => totalLots * weight / totalWeight);
     const allocatedLots = exactLots.map((lots) => Math.floor(lots));
     let remainingLots = totalLots - allocatedLots.reduce((sum, lots) => sum + lots, 0);
 
+    // Give leftover lots to the levels with the largest fractional remainders,
+    // ensuring the final allocation sums back to the requested lot total.
     const remainderOrder = exactLots
         .map((lots, index) => ({
             index,
@@ -575,6 +606,7 @@ export function distributeTotalSizeAcrossLadder(
         remainingLots--;
     }
 
+    // Convert exchange lots back into protocol contract quantities.
     return allocatedLots.map((lots) => lots * lotSize);
 }
 
