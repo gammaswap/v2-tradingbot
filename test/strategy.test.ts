@@ -6,6 +6,7 @@ import type { Asset } from "../src/utils/types.js";
 import {
     availableCollateral,
     buildTargetLadderPrices,
+    buildTargetLadderPrices2,
     capOrderSizeByMargin,
     calculateBidAndAsk,
     calculateCurrentRiskAversion,
@@ -29,6 +30,53 @@ afterEach(() => {
 });
 
 describe("target quote ladder prices", () => {
+    it("builds sorted equidistant slots from calculated prices toward the book/reference bounds", () => {
+        const originalSlots = CFG.QUOTE_SLOTS_COUNT;
+        (CFG as any).QUOTE_SLOTS_COUNT = 3;
+        const targets = buildTargetLadderPrices2(
+            {
+                assetId: 1n,
+                epoch: 1n,
+                seqId: 1n,
+                ts: 1n,
+                bids: [{ price: 400_000, size: 1, orderCount: 1, orders: [] }],
+                asks: [{ price: 600_000, size: 1, orderCount: 1, orders: [] }],
+            },
+            500_000,
+            0,
+            0.4,
+            0.6,
+        );
+
+        expect(targets.bids).toEqual([500_000, 450_000, 400_000]);
+        expect(targets.asks).toEqual([500_000, 550_000, 600_000]);
+        (CFG as any).QUOTE_SLOTS_COUNT = originalSlots;
+    });
+
+    it("filters calculated slots outside the hard range and marketable ALO prices", () => {
+        const originalSlots = CFG.QUOTE_SLOTS_COUNT;
+        (CFG as any).QUOTE_SLOTS_COUNT = 3;
+        const targets = buildTargetLadderPrices2(
+            {
+                assetId: 1n,
+                epoch: 1n,
+                seqId: 1n,
+                ts: 1n,
+                bids: [{ price: 200_000, size: 1, orderCount: 1, orders: [] }],
+                asks: [{ price: 800_000, size: 1, orderCount: 1, orders: [] }],
+            },
+            500_000,
+            0,
+            0.05,
+            0.95,
+        );
+
+        expect(targets.bids.every((price) => price >= CFG.HARD_MIN_PRICE)).toBe(true);
+        expect(targets.asks.every((price) => price > 200_000)).toBe(true);
+        expect(targets.asks.every((price) => price <= CFG.HARD_MAX_PRICE)).toBe(true);
+        (CFG as any).QUOTE_SLOTS_COUNT = originalSlots;
+    });
+
     it("does not clamp out-of-range levels to duplicate hard boundaries", () => {
         const belowRange = buildTargetLadderPrices(0);
         const aboveRange = buildTargetLadderPrices(1_000_000);

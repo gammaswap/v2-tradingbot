@@ -140,4 +140,23 @@ describe("price configuration validation", () => {
             "LOGIT_HALF_SPREAD must be between 0.005 and 1",
         );
     });
+
+    it("requires quote slots to be an integer between 1 and 100", () => {
+        const base = {
+            MAX_CAPITAL_EXPOSURE_PERCENT: 100,
+            MAX_ORDER_MARGIN_PERCENT: 100,
+            RISK_AVERSION_GAMMA_0: 1e-9,
+            RISK_AVERSION_GAMMA_MAX: 1e-8,
+            RISK_AVERSION_B: 5,
+            LOGIT_HALF_SPREAD: 0.5,
+            BASE_RESERVE_MIN: 1_500_000,
+        };
+
+        expect(validateRiskConfiguration({ ...base, QUOTE_SLOTS_COUNT: 0 } as never))
+            .toContain("QUOTE_SLOTS_COUNT must be an integer between 1 and 100");
+        expect(validateRiskConfiguration({ ...base, QUOTE_SLOTS_COUNT: 2.5 } as never))
+            .toContain("QUOTE_SLOTS_COUNT must be an integer between 1 and 100");
+        expect(validateRiskConfiguration({ ...base, QUOTE_SLOTS_COUNT: 101 } as never))
+            .toContain("QUOTE_SLOTS_COUNT must be an integer between 1 and 100");
+    });
 });

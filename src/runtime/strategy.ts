@@ -288,6 +288,80 @@ export function buildTargetLadderPrices(
     return { bids: [...bidPrices], asks: [...askPrices] };
 }
 
+/**
+ * Builds equidistant quote slots between the calculated bid/ask and the
+ * nearer/farther side of the reference price and current book midpoint.
+ * The calculated bid/ask are normalized probabilities, so they are converted
+ * to protocol price units before interpolation with the book and reference.
+ * inventorySkew is already included in calculateBidAndAsk and is validated
+ * here only because it is part of this function's quote-calculation inputs.
+ */
+export function buildTargetLadderPrices2(
+    book: BookSnapshot,
+    refPrice: number,
+    inventorySkew: number,
+    bid: number,
+    ask: number,
+): { bids: number[]; asks: number[] } {
+    if (!Number.isFinite(refPrice)) {
+        throw new Error(`refPrice must be finite: ${refPrice}`);
+    }
+    if (!Number.isFinite(inventorySkew)) {
+        throw new Error(`inventorySkew must be finite: ${inventorySkew}`);
+    }
+    if (!Number.isFinite(bid) || !Number.isFinite(ask) || bid <= 0 || ask >= 1 || bid >= ask) {
+        throw new Error(`bid and ask must be ordered normalized prices: bid=${bid}, ask=${ask}`);
+    }
+
+    const bookMid = midPrice(book);
+    const bidEnd = Math.min(refPrice, bookMid);
+    const askEnd = Math.max(refPrice, bookMid);
+    const bidStart = bid * PROTOCOL_PRICE_SCALE;
+    const askStart = ask * PROTOCOL_PRICE_SCALE;
+    const bestAsk = book.asks[0]?.price ?? null;
+    const bestBid = book.bids[0]?.price ?? null;
+    const bidPrices = new Set<number>();
+    const askPrices = new Set<number>();
+
+    for (let i = 0; i < CFG.QUOTE_SLOTS_COUNT; i++) {
+        const fraction = CFG.QUOTE_SLOTS_COUNT === 1
+            ? 0
+            : i / (CFG.QUOTE_SLOTS_COUNT - 1);
+        const bidPrice = roundToTick(
+            bidStart + (bidEnd - bidStart) * fraction,
+            "buy",
+        );
+        const askPrice = roundToTick(
+            askStart + (askEnd - askStart) * fraction,
+            "sell",
+        );
+
+        if (
+            bidPrice >= CFG.HARD_MIN_PRICE &&
+            bidPrice <= CFG.HARD_MAX_PRICE &&
+            bidPrice >= PROTOCOL_MIN_PRICE &&
+            bidPrice <= PROTOCOL_MAX_PRICE &&
+            (bestAsk == null || bidPrice < bestAsk)
+        ) {
+            bidPrices.add(bidPrice);
+        }
+        if (
+            askPrice >= CFG.HARD_MIN_PRICE &&
+            askPrice <= CFG.HARD_MAX_PRICE &&
+            askPrice >= PROTOCOL_MIN_PRICE &&
+            askPrice <= PROTOCOL_MAX_PRICE &&
+            (bestBid == null || askPrice > bestBid)
+        ) {
+            askPrices.add(askPrice);
+        }
+    }
+
+    return {
+        bids: [...bidPrices].sort((a, b) => b - a),
+        asks: [...askPrices].sort((a, b) => a - b),
+    };
+}
+
 export function buildTargetSizes(): { bidSizes: number[]; askSizes: number[] } {
     const base0 = randBetween(CFG.QUOTE_BASE_SIZE_MIN, CFG.QUOTE_BASE_SIZE_MAX);
     const sizes: number[] = [];

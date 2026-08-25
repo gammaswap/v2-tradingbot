@@ -220,6 +220,13 @@ export function validateRiskConfiguration(config = CFG): string[] {
     ) {
         errors.push("LOGIT_HALF_SPREAD must be between 0.005 and 1");
     }
+    if (
+        !Number.isInteger(config.QUOTE_SLOTS_COUNT) ||
+        config.QUOTE_SLOTS_COUNT < 1 ||
+        config.QUOTE_SLOTS_COUNT > 100
+    ) {
+        errors.push("QUOTE_SLOTS_COUNT must be an integer between 1 and 100");
+    }
 
     return errors;
 }
@@ -323,6 +330,7 @@ export const CFG = {
     // Half-spread in logit terms. Approximate decimal-price half-spread near
     // probability p: p * (1 - p) * LOGIT_HALF_SPREAD.
     LOGIT_HALF_SPREAD: envNum("LOGIT_HALF_SPREAD", 0.5),
+    QUOTE_SLOTS_COUNT: envNum("QUOTE_SLOTS_COUNT", 5),
 
     INV_TARGET: envNum("INV_TARGET", 0),
     INV_MAX_ABS: envNum("INV_MAX_ABS", 5000 * 1000000),
