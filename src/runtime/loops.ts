@@ -22,6 +22,8 @@ import {
     canAggressBuy,
     canAggressSell,
     capOrderSizeByMargin,
+    calculateCurrentRiskAversion,
+    calculateInventorySkew,
 } from "./strategy.js";
 import { Wallet, ZeroHash } from "ethers";
 import { markFairValueStale, updateFairValueFromOracle } from "./fairValue.js";
@@ -198,8 +200,19 @@ export async function runQuoteMaintenance(wallet: Wallet) {
 
     const bookMid = midPrice(book);
     const refPrice = referencePrice(book);
-    console.log("book >> bids:", book.bids.length, "asks:", book.asks.length," total:", book.asks.length + book.bids.length, "mid:", bookMid, "reference:", refPrice, "fairValue:", STATE.fairValue?.protocolPrice, "oracleStale:", STATE.oracle.stale);
-    const { bids: targetBidPrices, asks: targetAskPrices } = buildTargetLadderPrices(refPrice, book); // This builds the target prices
+    const gamma = calculateCurrentRiskAversion(STATE.asset!);
+    const inventorySkew = calculateInventorySkew(
+        gamma,
+        STATE.invBase,
+        refPrice,
+    );
+    const quoteCenter = clamp(
+        refPrice - inventorySkew,
+        CFG.HARD_MIN_PRICE,
+        CFG.HARD_MAX_PRICE,
+    );
+    console.log("book >> bids:", book.bids.length, "asks:", book.asks.length," total:", book.asks.length + book.bids.length, "mid:", bookMid, "reference:", refPrice, "quoteCenter:", quoteCenter, "gamma:", gamma, "inventorySkew:", inventorySkew, "fairValue:", STATE.fairValue?.protocolPrice, "oracleStale:", STATE.oracle.stale);
+    const { bids: targetBidPrices, asks: targetAskPrices } = buildTargetLadderPrices(quoteCenter, book); // This builds the target prices
     const { bidSizes, askSizes } = buildTargetSizes();
     console.log("targetBids:", targetBidPrices);
     console.log("targetAsks:", targetAskPrices);

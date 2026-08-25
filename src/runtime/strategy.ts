@@ -1,8 +1,9 @@
 import { CFG, type Side } from "../config/config.js";
-import type { BookSnapshot, PendingOrder } from "../utils/types.js";
+import type { Asset, BookSnapshot, PendingOrder } from "../utils/types.js";
 import { STATE } from "./state.js";
 import { clamp, nowMs, randBetween, roundDownToOrderLot, roundToTick, tanh } from "../utils/utils.js";
 import { protocolNotional, protocolNotionalBigInt, protocolValueToSafeNumber } from "../utils/protocolMath.js";
+import { decodeAssetId } from "../utils/assetIdUtils.js";
 import {
     maxSizeForMargin,
     PROTOCOL_MIN_PRICE,
@@ -96,6 +97,48 @@ export function calculateRiskAversionFactor(
     }
 
     return gamma_0 + (gamma_max - gamma_0) * Math.pow(1 - t / T, B);
+}
+
+export function calculateRemainingEpochSeconds(
+    asset: Asset,
+    timestampMs = Date.now(),
+): { periodLength: number; remainingSeconds: number } {
+    const { periodLength } = decodeAssetId(asset.assetId);
+    if (!Number.isSafeInteger(periodLength) || periodLength <= 0) {
+        throw new Error(
+            `asset ${asset.assetId} has invalid periodLength: ${periodLength}`,
+        );
+    }
+
+    const nowSeconds = BigInt(Math.floor(timestampMs / 1000));
+    const periodLengthBigInt = BigInt(periodLength);
+    const rawRemaining = asset.expiration > nowSeconds
+        ? asset.expiration - nowSeconds
+        : 0n;
+    const boundedRemaining = rawRemaining > periodLengthBigInt
+        ? periodLengthBigInt
+        : rawRemaining;
+
+    return {
+        periodLength,
+        remainingSeconds: Number(boundedRemaining),
+    };
+}
+
+export function calculateCurrentRiskAversion(
+    asset: Asset,
+    timestampMs = Date.now(),
+): number {
+    const { periodLength, remainingSeconds } =
+        calculateRemainingEpochSeconds(asset, timestampMs);
+
+    return calculateRiskAversionFactor(
+        CFG.RISK_AVERSION_GAMMA_0,
+        CFG.RISK_AVERSION_GAMMA_MAX,
+        remainingSeconds,
+        periodLength,
+        CFG.RISK_AVERSION_B,
+    );
 }
 
 /**

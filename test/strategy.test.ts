@@ -1,11 +1,15 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { CFG } from "../src/config/config.js";
 import { STATE } from "../src/runtime/state.js";
+import { encodeAssetId } from "../src/utils/assetIdUtils.js";
+import type { Asset } from "../src/utils/types.js";
 import {
     availableCollateral,
     buildTargetLadderPrices,
     capOrderSizeByMargin,
+    calculateCurrentRiskAversion,
     calculateInventorySkew,
+    calculateRemainingEpochSeconds,
     calculateRiskAversionFactor,
 } from "../src/runtime/strategy.js";
 
@@ -123,5 +127,33 @@ describe("risk aversion factor", () => {
         expect(() => calculateRiskAversionFactor(5, 5, 50, 100, 2)).toThrow();
         expect(() => calculateRiskAversionFactor(1, 5, 50, 100, 0.9)).toThrow();
         expect(() => calculateRiskAversionFactor(1, 5, 101, 100, 2)).toThrow();
+    });
+});
+
+describe("asset-aware risk aversion", () => {
+    const asset: Asset = {
+        assetId: encodeAssetId(1, 2, 1_000, 900, "500000", 0),
+        epoch: 1n,
+        registered: true,
+        expiration: 1_900n,
+        assetType: 2n,
+        strikePrice: 500_000n,
+        resolutionPrice: 0n,
+        isResolved: false,
+        ledger: "0xledger",
+    };
+
+    it("derives period length and remaining time from the asset", () => {
+        expect(calculateRemainingEpochSeconds(asset, 1_500_000)).toEqual({
+            periodLength: 900,
+            remainingSeconds: 400,
+        });
+    });
+
+    it("uses the current asset timing to calculate risk aversion", () => {
+        const gamma = calculateCurrentRiskAversion(asset, 1_500_000);
+
+        expect(gamma).toBeGreaterThan(CFG.RISK_AVERSION_GAMMA_0);
+        expect(gamma).toBeLessThan(CFG.RISK_AVERSION_GAMMA_MAX);
     });
 });
