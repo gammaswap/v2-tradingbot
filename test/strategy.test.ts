@@ -5,8 +5,10 @@ import { encodeAssetId } from "../src/utils/assetIdUtils.js";
 import type { Asset } from "../src/utils/types.js";
 import {
     availableCollateral,
+    buildEquidistantLadderPrices,
+    buildGrowthSpaceLadderPrices,
     buildTargetLadderPrices,
-    buildTargetLadderPrices2,
+    LADDER_PRICE_MODEL,
     capOrderSizeByMargin,
     calculateBidAndAsk,
     calculateCurrentRiskAversion,
@@ -48,7 +50,7 @@ describe("target quote ladder prices", () => {
     it("builds sorted equidistant slots from calculated prices toward the book/reference bounds", () => {
         const originalSlots = CFG.QUOTE_SLOTS_COUNT;
         (CFG as any).QUOTE_SLOTS_COUNT = 3;
-        const targets = buildTargetLadderPrices2(
+        const targets = buildEquidistantLadderPrices(
             {
                 assetId: 1n,
                 epoch: 1n,
@@ -71,7 +73,7 @@ describe("target quote ladder prices", () => {
     it("filters calculated slots outside the hard range and marketable ALO prices", () => {
         const originalSlots = CFG.QUOTE_SLOTS_COUNT;
         (CFG as any).QUOTE_SLOTS_COUNT = 3;
-        const targets = buildTargetLadderPrices2(
+        const targets = buildEquidistantLadderPrices(
             {
                 assetId: 1n,
                 epoch: 1n,
@@ -92,9 +94,44 @@ describe("target quote ladder prices", () => {
         (CFG as any).QUOTE_SLOTS_COUNT = originalSlots;
     });
 
+    it("defaults the parent dispatcher to the equidistant model", () => {
+        const book = {
+            assetId: 1n,
+            epoch: 1n,
+            seqId: 1n,
+            ts: 1n,
+            bids: [{ price: 400_000, size: 1, orderCount: 1, orders: [] }],
+            asks: [{ price: 600_000, size: 1, orderCount: 1, orders: [] }],
+        };
+
+        expect(buildTargetLadderPrices(book, 500_000, 0, 0.4, 0.6))
+            .toEqual(buildEquidistantLadderPrices(book, 500_000, 0, 0.4, 0.6));
+    });
+
+    it("uses the calculated bid/ask midpoint for the growth-space model", () => {
+        const book = {
+            assetId: 1n,
+            epoch: 1n,
+            seqId: 1n,
+            ts: 1n,
+            bids: [{ price: 400_000, size: 1, orderCount: 1, orders: [] }],
+            asks: [{ price: 600_000, size: 1, orderCount: 1, orders: [] }],
+        };
+        const expected = buildGrowthSpaceLadderPrices(500_000, book);
+
+        expect(buildTargetLadderPrices(
+            book,
+            700_000,
+            123,
+            0.4,
+            0.6,
+            LADDER_PRICE_MODEL.GROWTH_SPACE,
+        )).toEqual(expected);
+    });
+
     it("does not clamp out-of-range levels to duplicate hard boundaries", () => {
-        const belowRange = buildTargetLadderPrices(0);
-        const aboveRange = buildTargetLadderPrices(1_000_000);
+        const belowRange = buildGrowthSpaceLadderPrices(0);
+        const aboveRange = buildGrowthSpaceLadderPrices(1_000_000);
 
         expect(belowRange.bids).toEqual([]);
         expect(new Set(belowRange.asks).size).toBe(belowRange.asks.length);
@@ -104,7 +141,7 @@ describe("target quote ladder prices", () => {
     });
 
     it("keeps only unique levels inside the hard range", () => {
-        const targets = buildTargetLadderPrices(105_000);
+        const targets = buildGrowthSpaceLadderPrices(105_000);
 
         expect(targets.bids.every((price) => price >= CFG.HARD_MIN_PRICE && price <= CFG.HARD_MAX_PRICE)).toBe(true);
         expect(targets.asks.every((price) => price >= CFG.HARD_MIN_PRICE && price <= CFG.HARD_MAX_PRICE)).toBe(true);
@@ -113,7 +150,7 @@ describe("target quote ladder prices", () => {
     });
 
     it("filters levels that would be marketable for ALO orders", () => {
-        const targets = buildTargetLadderPrices(115_000, {
+        const targets = buildGrowthSpaceLadderPrices(115_000, {
             assetId: 1n,
             epoch: 1n,
             seqId: 1n,

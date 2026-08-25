@@ -328,7 +328,7 @@ export function nearestOrderAtPrice(pending: Map<string, PendingOrder>, side: Si
     return null;
 }
 
-export function buildTargetLadderPrices(
+export function buildGrowthSpaceLadderPrices(
     mid: number,
     book: BookSnapshot | null = null,
 ): { bids: number[]; asks: number[] } {
@@ -381,7 +381,7 @@ export function buildTargetLadderPrices(
  * inventorySkew is already included in calculateBidAndAsk and is validated
  * here only because it is part of this function's quote-calculation inputs.
  */
-export function buildTargetLadderPrices2(
+export function buildEquidistantLadderPrices(
     book: BookSnapshot,
     refPrice: number,
     inventorySkew: number,
@@ -445,6 +445,45 @@ export function buildTargetLadderPrices2(
         bids: [...bidPrices].sort((a, b) => b - a),
         asks: [...askPrices].sort((a, b) => a - b),
     };
+}
+
+export const LADDER_PRICE_MODEL = {
+    EQUIDISTANT: 1,
+    GROWTH_SPACE: 2,
+} as const;
+
+export type LadderPriceModel =
+    typeof LADDER_PRICE_MODEL[keyof typeof LADDER_PRICE_MODEL];
+
+/**
+ * Selects the ladder-price model used to build the target bid and ask levels.
+ * The equidistant model is the default. The growth-space model uses the
+ * midpoint of the calculated bid and ask as its center.
+ */
+export function buildTargetLadderPrices(
+    book: BookSnapshot,
+    refPrice: number,
+    inventorySkew: number,
+    bid: number,
+    ask: number,
+    model: LadderPriceModel = LADDER_PRICE_MODEL.EQUIDISTANT,
+): { bids: number[]; asks: number[] } {
+    if (model === LADDER_PRICE_MODEL.EQUIDISTANT) {
+        return buildEquidistantLadderPrices(
+            book,
+            refPrice,
+            inventorySkew,
+            bid,
+            ask,
+        );
+    }
+
+    if (model === LADDER_PRICE_MODEL.GROWTH_SPACE) {
+        const calculatedMid = ((bid + ask) / 2) * PROTOCOL_PRICE_SCALE;
+        return buildGrowthSpaceLadderPrices(calculatedMid, book);
+    }
+
+    throw new Error(`unsupported ladder price model: ${model}`);
 }
 
 export function buildTargetSizes(): { bidSizes: number[]; askSizes: number[] } {

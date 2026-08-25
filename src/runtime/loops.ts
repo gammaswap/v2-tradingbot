@@ -16,7 +16,6 @@ import {
     referencePrice,
     shouldPauseForFairValue,
     buildTargetLadderPrices,
-    buildTargetLadderPrices2,
     buildTargetSizes,
     chooseFairValueAggressionSide,
     depthToWipe,
@@ -219,7 +218,7 @@ export async function runQuoteMaintenance(wallet: Wallet) {
         CFG.HARD_MAX_PRICE,
     );
     console.log("book >> bids:", book.bids.length, "asks:", book.asks.length," total:", book.asks.length + book.bids.length, "mid:", bookMid, "reference:", refPrice, "calculatedBidAsk:", calculatedBidAsk, "quoteCenter:", quoteCenter, "gamma:", gamma, "inventorySkew:", inventorySkew, "fairValue:", STATE.fairValue?.protocolPrice, "oracleStale:", STATE.oracle.stale);
-    const calculatedTargets = buildTargetLadderPrices2(
+    const calculatedTargets = buildTargetLadderPrices(
         book,
         refPrice,
         inventorySkew,
@@ -227,7 +226,7 @@ export async function runQuoteMaintenance(wallet: Wallet) {
         calculatedBidAsk.ask,
     );
     console.log("calculated target ladder:", calculatedTargets);
-    const { bids: targetBidPrices, asks: targetAskPrices } = buildTargetLadderPrices(quoteCenter, book); // This builds the target prices
+    const { bids: targetBidPrices, asks: targetAskPrices } = calculatedTargets;
     const { bidSizes, askSizes } = buildTargetSizes();
     console.log("targetBids:", targetBidPrices);
     console.log("targetAsks:", targetAskPrices);
