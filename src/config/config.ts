@@ -227,6 +227,38 @@ export function validateRiskConfiguration(config = CFG): string[] {
     ) {
         errors.push("QUOTE_SLOTS_COUNT must be an integer between 1 and 100");
     }
+    if (
+        !Number.isFinite(config.INITIAL_TOTAL_QUOTE_SIZE) ||
+        config.INITIAL_TOTAL_QUOTE_SIZE < PROTOCOL_MIN_SIZE ||
+        config.INITIAL_TOTAL_QUOTE_SIZE > PROTOCOL_MAX_SIZE ||
+        config.INITIAL_TOTAL_QUOTE_SIZE % SDK_SIZE_STEP !== 0
+    ) {
+        errors.push(
+            `INITIAL_TOTAL_QUOTE_SIZE must be a valid protocol size multiple of ${SDK_SIZE_STEP}`,
+        );
+    }
+    if (
+        !Number.isFinite(config.TOTAL_SIZE_DECAY_K) ||
+        config.TOTAL_SIZE_DECAY_K <= 1
+    ) {
+        errors.push("TOTAL_SIZE_DECAY_K must be greater than 1");
+    }
+    if (
+        !Number.isFinite(config.TOTAL_SIZE_DECAY_A) ||
+        config.TOTAL_SIZE_DECAY_A <= 0 ||
+        config.TOTAL_SIZE_DECAY_A >= 1
+    ) {
+        errors.push("TOTAL_SIZE_DECAY_A must be greater than 0 and less than 1");
+    }
+    if (
+        !Number.isInteger(config.TOTAL_SIZE_TIME_BUCKET_SECONDS) ||
+        config.TOTAL_SIZE_TIME_BUCKET_SECONDS < 1 ||
+        config.TOTAL_SIZE_TIME_BUCKET_SECONDS > 30
+    ) {
+        errors.push(
+            "TOTAL_SIZE_TIME_BUCKET_SECONDS must be an integer between 1 and 30",
+        );
+    }
 
     return errors;
 }
@@ -331,6 +363,14 @@ export const CFG = {
     // probability p: p * (1 - p) * LOGIT_HALF_SPREAD.
     LOGIT_HALF_SPREAD: envNum("LOGIT_HALF_SPREAD", 0.5),
     QUOTE_SLOTS_COUNT: envNum("QUOTE_SLOTS_COUNT", 5),
+    // Initial total contracts allocated to each side of the quote ladder.
+    INITIAL_TOTAL_QUOTE_SIZE: envNum("INITIAL_TOTAL_QUOTE_SIZE", 100 * 1_000_000),
+    // Values greater than 1 keep total size near its initial level for longer.
+    TOTAL_SIZE_DECAY_K: envNum("TOTAL_SIZE_DECAY_K", 2),
+    // Values between 0 and 1 control how violently size collapses near expiration.
+    TOTAL_SIZE_DECAY_A: envNum("TOTAL_SIZE_DECAY_A", 0.5),
+    // Recalculate bucketed remaining time only at these intervals.
+    TOTAL_SIZE_TIME_BUCKET_SECONDS: envNum("TOTAL_SIZE_TIME_BUCKET_SECONDS", 5),
 
     INV_TARGET: envNum("INV_TARGET", 0),
     INV_MAX_ABS: envNum("INV_MAX_ABS", 5000 * 1000000),

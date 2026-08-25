@@ -11,6 +11,7 @@ import {
     calculateBidAndAsk,
     calculateCurrentRiskAversion,
     calculateInventorySkew,
+    calculateTotalSizes,
     calculateRemainingEpochSeconds,
     calculateRiskAversionFactor,
 } from "../src/runtime/strategy.js";
@@ -20,6 +21,13 @@ const originalReserve = CFG.BASE_RESERVE_MIN;
 const originalExposurePercent = CFG.MAX_CAPITAL_EXPOSURE_PERCENT;
 const originalOrderMarginPercent = CFG.MAX_ORDER_MARGIN_PERCENT;
 const originalPeriodLength = STATE.periodLength;
+const originalInventory = STATE.invBase;
+const originalInventoryTarget = CFG.INV_TARGET;
+const originalInventoryMaxAbs = CFG.INV_MAX_ABS;
+const originalInitialTotalSize = CFG.INITIAL_TOTAL_QUOTE_SIZE;
+const originalDecayK = CFG.TOTAL_SIZE_DECAY_K;
+const originalDecayA = CFG.TOTAL_SIZE_DECAY_A;
+const originalTimeBucket = CFG.TOTAL_SIZE_TIME_BUCKET_SECONDS;
 
 afterEach(() => {
     STATE.baseBal = originalBaseBal;
@@ -27,6 +35,13 @@ afterEach(() => {
     (CFG as any).MAX_CAPITAL_EXPOSURE_PERCENT = originalExposurePercent;
     (CFG as any).MAX_ORDER_MARGIN_PERCENT = originalOrderMarginPercent;
     STATE.periodLength = originalPeriodLength;
+    STATE.invBase = originalInventory;
+    (CFG as any).INV_TARGET = originalInventoryTarget;
+    (CFG as any).INV_MAX_ABS = originalInventoryMaxAbs;
+    (CFG as any).INITIAL_TOTAL_QUOTE_SIZE = originalInitialTotalSize;
+    (CFG as any).TOTAL_SIZE_DECAY_K = originalDecayK;
+    (CFG as any).TOTAL_SIZE_DECAY_A = originalDecayA;
+    (CFG as any).TOTAL_SIZE_TIME_BUCKET_SECONDS = originalTimeBucket;
 });
 
 describe("target quote ladder prices", () => {
@@ -109,6 +124,74 @@ describe("target quote ladder prices", () => {
 
         expect(targets.bids).toEqual([]);
         expect(targets.asks.every((price) => price > 108_000)).toBe(true);
+    });
+});
+
+describe("total quote sizes", () => {
+    const asset = {
+        assetId: 1n,
+        epoch: 1n,
+        registered: true,
+        expiration: 1_100n,
+        assetType: 2n,
+        strikePrice: 500_000n,
+        resolutionPrice: 0n,
+        isResolved: false,
+        ledger: "0xledger",
+    } as Asset;
+
+    it("starts at the configured total size and collapses at expiration", () => {
+        STATE.periodLength = 100;
+        STATE.invBase = 0;
+        (CFG as any).INV_TARGET = 0;
+        (CFG as any).INV_MAX_ABS = 10_000_000;
+        (CFG as any).INITIAL_TOTAL_QUOTE_SIZE = 1_000_000;
+        (CFG as any).TOTAL_SIZE_DECAY_K = 2;
+        (CFG as any).TOTAL_SIZE_DECAY_A = 0.5;
+        (CFG as any).TOTAL_SIZE_TIME_BUCKET_SECONDS = 5;
+
+        expect(calculateTotalSizes(asset, 1_000_000)).toEqual({
+            bidSize: 1_000_000,
+            askSize: 1_000_000,
+        });
+        expect(calculateTotalSizes(asset, 1_100_000)).toEqual({
+            bidSize: 0,
+            askSize: 0,
+        });
+    });
+
+    it("uses signed inventory to bias total size toward the reducing side", () => {
+        STATE.periodLength = 100;
+        STATE.invBase = 200_000;
+        (CFG as any).INV_TARGET = 0;
+        (CFG as any).INV_MAX_ABS = 10_000_000;
+        (CFG as any).INITIAL_TOTAL_QUOTE_SIZE = 1_000_000;
+        (CFG as any).TOTAL_SIZE_DECAY_K = 2;
+        (CFG as any).TOTAL_SIZE_DECAY_A = 0.5;
+        (CFG as any).TOTAL_SIZE_TIME_BUCKET_SECONDS = 5;
+
+        expect(calculateTotalSizes(asset, 1_000_000)).toEqual({
+            bidSize: 800_000,
+            askSize: 1_200_000,
+        });
+    });
+
+    it("changes only at the configured time buckets", () => {
+        STATE.periodLength = 100;
+        STATE.invBase = 0;
+        (CFG as any).INV_TARGET = 0;
+        (CFG as any).INV_MAX_ABS = 10_000_000;
+        (CFG as any).INITIAL_TOTAL_QUOTE_SIZE = 1_000_000;
+        (CFG as any).TOTAL_SIZE_DECAY_K = 2;
+        (CFG as any).TOTAL_SIZE_DECAY_A = 0.5;
+        (CFG as any).TOTAL_SIZE_TIME_BUCKET_SECONDS = 5;
+
+        expect(calculateTotalSizes(asset, 1_001_000))
+            .toEqual(calculateTotalSizes(asset, 1_004_000));
+        expect(calculateTotalSizes(asset, 1_005_000))
+            .toEqual(calculateTotalSizes(asset, 1_009_000));
+        expect(calculateTotalSizes(asset, 1_004_000))
+            .not.toEqual(calculateTotalSizes(asset, 1_005_000));
     });
 });
 

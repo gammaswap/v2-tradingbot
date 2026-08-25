@@ -122,6 +122,81 @@ export function calculateRemainingEpochSeconds(
     };
 }
 
+function bucketRemainingEpochSeconds(
+    remainingSeconds: number,
+    periodLength: number,
+): number {
+    const bucket = CFG.TOTAL_SIZE_TIME_BUCKET_SECONDS;
+    if (remainingSeconds <= 0) return 0;
+
+    // Round upward so the beginning of an epoch retains its full-size value,
+    // while the result changes only at the configured time buckets.
+    return Math.min(
+        periodLength,
+        Math.ceil(remainingSeconds / bucket) * bucket,
+    );
+}
+
+/**
+ * Calculates the total number of contracts allocated across all bid and ask
+ * quote slots.
+ *
+ * H(t) = H_0 * [1 - (1 - t / T)^k]^A
+ *
+ * H_0 is INITIAL_TOTAL_QUOTE_SIZE. t is the bucketed number of seconds
+ * remaining in the epoch, and T is the epoch period length. k is
+ * TOTAL_SIZE_DECAY_K; values greater than 1 determine how long the strategy
+ * stays near its initial full size. A is TOTAL_SIZE_DECAY_A; values between
+ * 0 and 1 determine how violently total size collapses near expiration.
+ *
+ * Inventory and inventory target are signed contract quantities: positive
+ * means long and negative means short. The returned quantities are always
+ * non-negative contract sizes, not margin or dollar exposure.
+ */
+export function calculateTotalSizes(
+    asset: Asset,
+    timestampMs = Date.now(),
+): { bidSize: number; askSize: number } {
+    const { periodLength, remainingSeconds } =
+        calculateRemainingEpochSeconds(asset, timestampMs);
+    const bucketedRemainingSeconds = bucketRemainingEpochSeconds(
+        remainingSeconds,
+        periodLength,
+    );
+    const tOverT = bucketedRemainingSeconds / periodLength;
+    const H_t =
+        CFG.INITIAL_TOTAL_QUOTE_SIZE *
+        Math.pow(
+            1 - Math.pow(1 - tOverT, CFG.TOTAL_SIZE_DECAY_K),
+            CFG.TOTAL_SIZE_DECAY_A,
+        );
+
+    const currentInventory = STATE.invBase;
+    const inventoryTarget = CFG.INV_TARGET;
+    const requestedBidSize = Math.max(
+        0,
+        inventoryTarget + H_t - currentInventory,
+    );
+    const requestedAskSize = Math.max(
+        0,
+        currentInventory - inventoryTarget + H_t,
+    );
+
+    // Keep the resulting buy/sell quantities inside the absolute inventory
+    // limit before per-order margin checks are applied later.
+    const maximumBidSize = Math.max(0, CFG.INV_MAX_ABS - currentInventory);
+    const maximumAskSize = Math.max(0, currentInventory + CFG.INV_MAX_ABS);
+
+    return {
+        bidSize: roundDownToOrderLot(
+            Math.min(requestedBidSize, maximumBidSize),
+        ),
+        askSize: roundDownToOrderLot(
+            Math.min(requestedAskSize, maximumAskSize),
+        ),
+    };
+}
+
 export function calculateCurrentRiskAversion(
     asset: Asset,
     timestampMs = Date.now(),

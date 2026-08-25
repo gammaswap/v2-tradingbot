@@ -159,4 +159,34 @@ describe("price configuration validation", () => {
         expect(validateRiskConfiguration({ ...base, QUOTE_SLOTS_COUNT: 101 } as never))
             .toContain("QUOTE_SLOTS_COUNT must be an integer between 1 and 100");
     });
+
+    it("validates total quote size and decay parameters", () => {
+        const base = {
+            MAX_CAPITAL_EXPOSURE_PERCENT: 100,
+            MAX_ORDER_MARGIN_PERCENT: 100,
+            RISK_AVERSION_GAMMA_0: 1e-9,
+            RISK_AVERSION_GAMMA_MAX: 1e-8,
+            RISK_AVERSION_B: 5,
+            LOGIT_HALF_SPREAD: 0.5,
+            QUOTE_SLOTS_COUNT: 5,
+            INITIAL_TOTAL_QUOTE_SIZE: 10_000,
+            TOTAL_SIZE_DECAY_K: 2,
+            TOTAL_SIZE_DECAY_A: 0.5,
+            TOTAL_SIZE_TIME_BUCKET_SECONDS: 5,
+            BASE_RESERVE_MIN: 1_500_000,
+        };
+
+        expect(validateRiskConfiguration({
+            ...base,
+            INITIAL_TOTAL_QUOTE_SIZE: 10_001,
+            TOTAL_SIZE_DECAY_K: 1,
+            TOTAL_SIZE_DECAY_A: 1,
+            TOTAL_SIZE_TIME_BUCKET_SECONDS: 31,
+        } as never)).toEqual(expect.arrayContaining([
+            expect.stringContaining("INITIAL_TOTAL_QUOTE_SIZE"),
+            "TOTAL_SIZE_DECAY_K must be greater than 1",
+            "TOTAL_SIZE_DECAY_A must be greater than 0 and less than 1",
+            "TOTAL_SIZE_TIME_BUCKET_SECONDS must be an integer between 1 and 30",
+        ]));
+    });
 });
