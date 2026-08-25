@@ -1,4 +1,5 @@
 import { CFG } from "../config/config.js";
+import { decodeAssetId } from "../utils/assetIdUtils.js";
 import type { Asset, BookSnapshot, PendingOrder, OrderKey } from "../utils/types.js";
 import { TreeMap } from "data-structure-typed";
 
@@ -31,6 +32,7 @@ function compareBuyOrderKeys(a: OrderKey, b: OrderKey): number {
 
 export type RuntimeState = {
     asset: Asset | null;
+    periodLength: number | null;
     book: BookSnapshot | null;
     pending: Map<string, PendingOrder>;
     pendingBuys: TreeMap<OrderKey, PendingOrder>;
@@ -63,6 +65,7 @@ export type RuntimeState = {
 export function createInitialState(): RuntimeState {
     return {
         asset: null,
+        periodLength: null,
         book: null,
         pending: new Map(),
         pendingBuys: new TreeMap([], { comparator: compareBuyOrderKeys }),
@@ -84,6 +87,25 @@ export function createInitialState(): RuntimeState {
         account: CFG.USER_ADDRESS,
         lastTradeTime: 0,
     };
+}
+
+export function initializePeriodLength(
+    state: RuntimeState,
+    assetId: bigint,
+): void {
+    const { periodLength } = decodeAssetId(assetId);
+
+    if (!Number.isSafeInteger(periodLength) || periodLength <= 0) {
+        throw new Error(`asset ${assetId} has invalid periodLength: ${periodLength}`);
+    }
+
+    if (state.periodLength !== null && state.periodLength !== periodLength) {
+        throw new Error(
+            `asset periodLength changed from ${state.periodLength} to ${periodLength}`,
+        );
+    }
+
+    state.periodLength = periodLength;
 }
 
 export const STATE = createInitialState();

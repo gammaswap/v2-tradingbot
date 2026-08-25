@@ -1,6 +1,6 @@
 import type { Wallet } from "ethers";
 import type { ApiAssetResponse, ApiPositionResponse, AssetEpochCheckResult } from "../utils/types.js";
-import type { RuntimeState } from "./state.js";
+import { initializePeriodLength, type RuntimeState } from "./state.js";
 
 export type AssetLifecycleDependencies = {
     getPosition(epoch: bigint): Promise<ApiPositionResponse>;
@@ -17,6 +17,12 @@ export async function reconcileAssetEpoch(
     wallet: Wallet,
     deps: AssetLifecycleDependencies,
 ): Promise<AssetEpochCheckResult> {
+    // Production startup initializes this cache. When present, verify that
+    // later epoch responses still belong to the same market configuration.
+    if (state.periodLength !== null) {
+        initializePeriodLength(state, currentAsset.assetId);
+    }
+
     if (currentAsset.epoch === state.epoch) {
         state.asset = currentAsset;
         if (currentAsset.isResolved) deps.markResolved();

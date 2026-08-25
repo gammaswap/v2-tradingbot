@@ -5,7 +5,7 @@ import {
 } from "./runtime/loops.js";
 import { deriveAccountsFromMnemonic } from "@gammaswap/v2-exchange-sdk";
 import { Wallet, isAddress } from "ethers";
-import { STATE } from "./runtime/state.js";
+import { STATE, initializePeriodLength } from "./runtime/state.js";
 import { apiGetAsset, apiGetBalance, apiGetPosition } from "./api/api.js";
 import { startOracleFeed, type OracleFeed } from "./runtime/oracle.js";
 import { startOrderBookFeed, type OrderBookFeed } from "./runtime/orderbook.js";
@@ -63,7 +63,9 @@ async function main() {
 
     STATE.asset = asset;
     STATE.epoch = asset.epoch;
+    initializePeriodLength(STATE, asset.assetId);
     log("asset:", asset);
+    log("periodLength:", STATE.periodLength);
 
     await cleanUpAllOrders(wallet);
 

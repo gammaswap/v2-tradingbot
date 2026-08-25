@@ -3,7 +3,6 @@ import type { Asset, BookSnapshot, PendingOrder } from "../utils/types.js";
 import { STATE } from "./state.js";
 import { clamp, nowMs, randBetween, roundDownToOrderLot, roundToTick, tanh } from "../utils/utils.js";
 import { protocolNotional, protocolNotionalBigInt, protocolValueToSafeNumber } from "../utils/protocolMath.js";
-import { decodeAssetId } from "../utils/assetIdUtils.js";
 import {
     maxSizeForMargin,
     PROTOCOL_MIN_PRICE,
@@ -103,11 +102,9 @@ export function calculateRemainingEpochSeconds(
     asset: Asset,
     timestampMs = Date.now(),
 ): { periodLength: number; remainingSeconds: number } {
-    const { periodLength } = decodeAssetId(asset.assetId);
-    if (!Number.isSafeInteger(periodLength) || periodLength <= 0) {
-        throw new Error(
-            `asset ${asset.assetId} has invalid periodLength: ${periodLength}`,
-        );
+    const periodLength = STATE.periodLength;
+    if (periodLength === null) {
+        throw new Error("epoch periodLength has not been initialized");
     }
 
     const nowSeconds = BigInt(Math.floor(timestampMs / 1000));

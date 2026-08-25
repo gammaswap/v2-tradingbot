@@ -17,12 +17,14 @@ const originalBaseBal = STATE.baseBal;
 const originalReserve = CFG.BASE_RESERVE_MIN;
 const originalExposurePercent = CFG.MAX_CAPITAL_EXPOSURE_PERCENT;
 const originalOrderMarginPercent = CFG.MAX_ORDER_MARGIN_PERCENT;
+const originalPeriodLength = STATE.periodLength;
 
 afterEach(() => {
     STATE.baseBal = originalBaseBal;
     (CFG as any).BASE_RESERVE_MIN = originalReserve;
     (CFG as any).MAX_CAPITAL_EXPOSURE_PERCENT = originalExposurePercent;
     (CFG as any).MAX_ORDER_MARGIN_PERCENT = originalOrderMarginPercent;
+    STATE.periodLength = originalPeriodLength;
 });
 
 describe("target quote ladder prices", () => {
@@ -144,6 +146,7 @@ describe("asset-aware risk aversion", () => {
     };
 
     it("derives period length and remaining time from the asset", () => {
+        STATE.periodLength = 900;
         expect(calculateRemainingEpochSeconds(asset, 1_500_000)).toEqual({
             periodLength: 900,
             remainingSeconds: 400,
@@ -151,6 +154,7 @@ describe("asset-aware risk aversion", () => {
     });
 
     it("uses the current asset timing to calculate risk aversion", () => {
+        STATE.periodLength = 900;
         const gamma = calculateCurrentRiskAversion(asset, 1_500_000);
 
         expect(gamma).toBeGreaterThan(CFG.RISK_AVERSION_GAMMA_0);
