@@ -189,4 +189,31 @@ describe("price configuration validation", () => {
             "TOTAL_SIZE_TIME_BUCKET_SECONDS must be an integer between 1 and 30",
         ]));
     });
+
+    it("validates quote-size concavity", () => {
+        const base = {
+            MAX_CAPITAL_EXPOSURE_PERCENT: 100,
+            MAX_ORDER_MARGIN_PERCENT: 100,
+            RISK_AVERSION_GAMMA_0: 1e-9,
+            RISK_AVERSION_GAMMA_MAX: 1e-8,
+            RISK_AVERSION_B: 5,
+            LOGIT_HALF_SPREAD: 0.5,
+            LEVELS_PER_SIDE: 5,
+            QUOTE_SIZE_CONCAVITY: 1,
+            BASE_RESERVE_MIN: 1_500_000,
+        };
+
+        expect(validateRiskConfiguration({
+            ...base,
+            QUOTE_SIZE_CONCAVITY: 0,
+        } as never)).toContain(
+            "QUOTE_SIZE_CONCAVITY must be greater than 0 and at most 10",
+        );
+        expect(validateRiskConfiguration({
+            ...base,
+            QUOTE_SIZE_CONCAVITY: 10.1,
+        } as never)).toContain(
+            "QUOTE_SIZE_CONCAVITY must be greater than 0 and at most 10",
+        );
+    });
 });

@@ -1,7 +1,7 @@
 import { CFG, type Side } from "../config/config.js";
 import type { Asset, BookSnapshot, PendingOrder } from "../utils/types.js";
 import { STATE } from "./state.js";
-import { clamp, nowMs, randBetween, roundDownToOrderLot, roundToTick, tanh } from "../utils/utils.js";
+import { clamp, nowMs, roundDownToOrderLot, roundToTick, tanh } from "../utils/utils.js";
 import { protocolNotional, protocolNotionalBigInt, protocolValueToSafeNumber } from "../utils/protocolMath.js";
 import {
     maxSizeForMargin,
@@ -518,16 +518,64 @@ export function buildTargetLadderPrices(
     throw new Error(`unsupported ladder price model: ${model}`);
 }
 
-export function buildTargetSizes(): { bidSizes: number[]; askSizes: number[] } {
-    const base0 = randBetween(CFG.QUOTE_BASE_SIZE_MIN, CFG.QUOTE_BASE_SIZE_MAX);
-    const sizes: number[] = [];
-    let s = base0;
-    for (let i = 0; i < CFG.LEVELS_PER_SIDE; i++) {
-        const varMul = randBetween(CFG.VARIABILITY_MIN, CFG.VARIABILITY_MAX);
-        sizes.push(Math.floor(Math.max(0, s * varMul)));
-        s *= CFG.DEPTH_GROWTH;
+/**
+ * Distributes a total contract quantity across the available ladder prices.
+ * Prices farther from the best bid or ask receive larger allocations.
+ *
+ * weight = (1 + normalizedDistance)^QUOTE_SIZE_CONCAVITY
+ *
+ * The allocation is performed in order-size lots and uses largest-remainder
+ * rounding so all available target prices receive a share and the returned
+ * quantities sum to totalSize whenever target prices are available.
+ */
+export function distributeTotalSizeAcrossLadder(
+    totalSize: number,
+    targetPrices: number[],
+    side: Side,
+): number[] {
+    if (targetPrices.length === 0 || totalSize <= 0) {
+        return targetPrices.map(() => 0);
     }
-    return { bidSizes: sizes.slice(), askSizes: sizes.slice() };
+    if (!Number.isFinite(totalSize)) {
+        throw new Error(`totalSize must be finite: ${totalSize}`);
+    }
+
+    const lotSize = CFG.LOT_SIZE;
+    const totalLots = Math.floor(totalSize / lotSize);
+    if (totalLots <= 0) return targetPrices.map(() => 0);
+
+    const bestPrice = side === "buy"
+        ? Math.max(...targetPrices)
+        : Math.min(...targetPrices);
+    const distances = targetPrices.map((price) => Math.abs(price - bestPrice));
+    const farthestDistance = Math.max(...distances);
+    const weights = distances.map((distance) => {
+        const normalizedDistance = farthestDistance === 0
+            ? 0
+            : distance / farthestDistance;
+        return Math.pow(
+            1 + normalizedDistance,
+            CFG.QUOTE_SIZE_CONCAVITY,
+        );
+    });
+    const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+    const exactLots = weights.map((weight) => totalLots * weight / totalWeight);
+    const allocatedLots = exactLots.map((lots) => Math.floor(lots));
+    let remainingLots = totalLots - allocatedLots.reduce((sum, lots) => sum + lots, 0);
+
+    const remainderOrder = exactLots
+        .map((lots, index) => ({
+            index,
+            remainder: lots - Math.floor(lots),
+        }))
+        .sort((a, b) => b.remainder - a.remainder);
+
+    for (let i = 0; i < remainderOrder.length && remainingLots > 0; i++) {
+        allocatedLots[remainderOrder[i].index]++;
+        remainingLots--;
+    }
+
+    return allocatedLots.map((lots) => lots * lotSize);
 }
 
 // ---- solvency/inventory checks ----

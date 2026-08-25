@@ -145,8 +145,6 @@ export function validateOrderSizeConfiguration(config = CFG): string[] {
     const errors: string[] = [];
     const sizes = [
         ["LOT_SIZE", config.LOT_SIZE],
-        ["QUOTE_BASE_SIZE_MIN", config.QUOTE_BASE_SIZE_MIN],
-        ["QUOTE_BASE_SIZE_MAX", config.QUOTE_BASE_SIZE_MAX],
         ["MAX_AGGRESS_QTY", config.MAX_AGGRESS_QTY],
         ["MAX_ORDER_SIZE", config.MAX_ORDER_SIZE],
     ] as const;
@@ -164,12 +162,6 @@ export function validateOrderSizeConfiguration(config = CFG): string[] {
         }
     }
 
-    if (config.QUOTE_BASE_SIZE_MIN > config.QUOTE_BASE_SIZE_MAX) {
-        errors.push("QUOTE_BASE_SIZE_MIN must not exceed QUOTE_BASE_SIZE_MAX");
-    }
-    if (config.QUOTE_BASE_SIZE_MAX > config.MAX_ORDER_SIZE) {
-        errors.push("QUOTE_BASE_SIZE_MAX must not exceed MAX_ORDER_SIZE");
-    }
     if (config.MAX_AGGRESS_QTY > config.MAX_ORDER_SIZE) {
         errors.push("MAX_AGGRESS_QTY must not exceed MAX_ORDER_SIZE");
     }
@@ -226,6 +218,13 @@ export function validateRiskConfiguration(config = CFG): string[] {
         config.LEVELS_PER_SIDE > 100
     ) {
         errors.push("LEVELS_PER_SIDE must be an integer between 1 and 100");
+    }
+    if (
+        !Number.isFinite(config.QUOTE_SIZE_CONCAVITY) ||
+        config.QUOTE_SIZE_CONCAVITY <= 0 ||
+        config.QUOTE_SIZE_CONCAVITY > 10
+    ) {
+        errors.push("QUOTE_SIZE_CONCAVITY must be greater than 0 and at most 10");
     }
     if (
         !Number.isFinite(config.INITIAL_TOTAL_QUOTE_SIZE) ||
@@ -322,13 +321,6 @@ export const CFG = {
     LEVELS_PER_SIDE: envNum("LEVELS_PER_SIDE", 5),
     LEVEL_SPACING_NEAR: envNum("LEVEL_SPACING_NEAR", 2000), // 0.002
     LEVEL_SPACING_GROWTH: envNum("LEVEL_SPACING_GROWTH", 1.5),
-    VARIABILITY_MIN: envNum("VARIABILITY_MIN", 0.85),
-    VARIABILITY_MAX: envNum("VARIABILITY_MAX", 1.20),
-
-    QUOTE_BASE_SIZE_MIN: envNum("QUOTE_BASE_SIZE_MIN", 10*1000000), // 10
-    QUOTE_BASE_SIZE_MAX: envNum("QUOTE_BASE_SIZE_MAX", 50*1000000), // 50
-    DEPTH_GROWTH: envNum("DEPTH_GROWTH", 1.35),
-
     MAX_PENDING_ORDERS: Math.max(2, Math.floor(envNum("MAX_PENDING_ORDERS", 40))),
     STALE_SECONDS: envNum("STALE_SECONDS", 180),
     CANCEL_BATCH_MAX: Math.max(1, Math.floor(envNum("CANCEL_BATCH_MAX", 10))),
@@ -363,6 +355,9 @@ export const CFG = {
     // Half-spread in logit terms. Approximate decimal-price half-spread near
     // probability p: p * (1 - p) * LOGIT_HALF_SPREAD.
     LOGIT_HALF_SPREAD: envNum("LOGIT_HALF_SPREAD", 0.5),
+    // Controls how strongly size is concentrated at prices farthest from the
+    // best bid or ask. 1 is linear; values above 1 emphasize outer levels.
+    QUOTE_SIZE_CONCAVITY: envNum("QUOTE_SIZE_CONCAVITY", 1),
     // Initial total contracts allocated to each side of the quote ladder.
     INITIAL_TOTAL_QUOTE_SIZE: envNum("INITIAL_TOTAL_QUOTE_SIZE", 100 * 1_000_000),
     // Values greater than 1 keep total size near its initial level for longer.

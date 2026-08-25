@@ -14,6 +14,7 @@ import {
     calculateCurrentRiskAversion,
     calculateInventorySkew,
     calculateTotalSizes,
+    distributeTotalSizeAcrossLadder,
     hasFreshBook,
     hasUsableBookPrice,
     calculateRemainingEpochSeconds,
@@ -34,6 +35,7 @@ const originalInitialTotalSize = CFG.INITIAL_TOTAL_QUOTE_SIZE;
 const originalDecayK = CFG.TOTAL_SIZE_DECAY_K;
 const originalDecayA = CFG.TOTAL_SIZE_DECAY_A;
 const originalTimeBucket = CFG.TOTAL_SIZE_TIME_BUCKET_SECONDS;
+const originalQuoteSizeConcavity = CFG.QUOTE_SIZE_CONCAVITY;
 
 afterEach(() => {
     STATE.baseBal = originalBaseBal;
@@ -50,6 +52,7 @@ afterEach(() => {
     (CFG as any).TOTAL_SIZE_DECAY_K = originalDecayK;
     (CFG as any).TOTAL_SIZE_DECAY_A = originalDecayA;
     (CFG as any).TOTAL_SIZE_TIME_BUCKET_SECONDS = originalTimeBucket;
+    (CFG as any).QUOTE_SIZE_CONCAVITY = originalQuoteSizeConcavity;
 });
 
 describe("target quote ladder prices", () => {
@@ -218,6 +221,71 @@ describe("reference source freshness", () => {
 
         STATE.bookUpdatedAtMs = Date.now() - CFG.BOOK_STALE_MS - 1;
         expect(hasFreshBook(quotedBook)).toBe(false);
+    });
+});
+
+describe("total size ladder distribution", () => {
+    it("allocates more contracts to prices farther from the best bid", () => {
+        (CFG as any).QUOTE_SIZE_CONCAVITY = 1;
+        const sizes = distributeTotalSizeAcrossLadder(
+            1_000_000,
+            [490_000, 480_000, 460_000],
+            "buy",
+        );
+
+        expect(sizes.reduce((sum, size) => sum + size, 0)).toBe(1_000_000);
+        expect(sizes[2]).toBeGreaterThan(sizes[1]);
+        expect(sizes[1]).toBeGreaterThan(sizes[0]);
+    });
+
+    it("allocates more contracts to prices farther from the best ask", () => {
+        const sizes = distributeTotalSizeAcrossLadder(
+            1_000_000,
+            [510_000, 520_000, 540_000],
+            "sell",
+        );
+
+        expect(sizes.reduce((sum, size) => sum + size, 0)).toBe(1_000_000);
+        expect(sizes[2]).toBeGreaterThan(sizes[1]);
+        expect(sizes[1]).toBeGreaterThan(sizes[0]);
+    });
+
+    it("allocates independently when the sides have different level counts", () => {
+        const bidSizes = distributeTotalSizeAcrossLadder(
+            500_000,
+            [490_000, 480_000, 460_000],
+            "buy",
+        );
+        const askSizes = distributeTotalSizeAcrossLadder(
+            500_000,
+            [510_000, 540_000],
+            "sell",
+        );
+
+        expect(bidSizes.reduce((sum, size) => sum + size, 0)).toBe(500_000);
+        expect(askSizes.reduce((sum, size) => sum + size, 0)).toBe(500_000);
+    });
+
+    it("returns no allocations when there are no target prices", () => {
+        expect(distributeTotalSizeAcrossLadder(1_000_000, [], "buy"))
+            .toEqual([]);
+    });
+
+    it("changes the concentration using the concavity parameter", () => {
+        (CFG as any).QUOTE_SIZE_CONCAVITY = 1;
+        const linear = distributeTotalSizeAcrossLadder(
+            1_000_000,
+            [490_000, 480_000, 460_000],
+            "buy",
+        );
+        (CFG as any).QUOTE_SIZE_CONCAVITY = 3;
+        const concentrated = distributeTotalSizeAcrossLadder(
+            1_000_000,
+            [490_000, 480_000, 460_000],
+            "buy",
+        );
+
+        expect(concentrated[2]).toBeGreaterThan(linear[2]);
     });
 });
 

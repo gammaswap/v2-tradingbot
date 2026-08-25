@@ -16,7 +16,7 @@ import {
     referencePrice,
     shouldPauseForFairValue,
     buildTargetLadderPrices,
-    buildTargetSizes,
+    distributeTotalSizeAcrossLadder,
     chooseFairValueAggressionSide,
     depthToWipe,
     canAggressBuy,
@@ -25,6 +25,7 @@ import {
     calculateCurrentRiskAversion,
     calculateBidAndAsk,
     calculateInventorySkew,
+    calculateTotalSizes,
 } from "./strategy.js";
 import { Wallet, ZeroHash } from "ethers";
 import { markFairValueStale, updateFairValueFromOracle } from "./fairValue.js";
@@ -227,7 +228,17 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     );
     console.log("calculated target ladder:", calculatedTargets);
     const { bids: targetBidPrices, asks: targetAskPrices } = calculatedTargets;
-    const { bidSizes, askSizes } = buildTargetSizes();
+    const { bidSize, askSize } = calculateTotalSizes(STATE.asset!);
+    const bidSizes = distributeTotalSizeAcrossLadder(
+        bidSize,
+        targetBidPrices,
+        "buy",
+    );
+    const askSizes = distributeTotalSizeAcrossLadder(
+        askSize,
+        targetAskPrices,
+        "sell",
+    );
     console.log("targetBids:", targetBidPrices);
     console.log("targetAsks:", targetAskPrices);
     console.log("bidSizes:", bidSizes);
