@@ -138,6 +138,39 @@ export function calculateCurrentRiskAversion(
     );
 }
 
+export function calculateBidAndAsk(
+    referencePrice: number,
+    inventorySkew: number,
+    halfSpread: number,
+): { bid: number; ask: number } {
+    if (
+        !Number.isFinite(referencePrice) ||
+        referencePrice <= 0 ||
+        referencePrice >= PROTOCOL_PRICE_SCALE
+    ) {
+        throw new Error(
+            `referencePrice must be between 0 and ${PROTOCOL_PRICE_SCALE}: ${referencePrice}`,
+        );
+    }
+    if (!Number.isFinite(inventorySkew)) {
+        throw new Error(`inventorySkew must be finite: ${inventorySkew}`);
+    }
+    if (!Number.isFinite(halfSpread) || halfSpread < 0.005 || halfSpread > 1) {
+        throw new Error(`halfSpread must be between 0.005 and 1: ${halfSpread}`);
+    }
+
+    const p = referencePrice / PROTOCOL_PRICE_SCALE;
+    const logitP = Math.log(p / (1 - p));
+    const skewedLogitP = logitP - inventorySkew;
+    const logitBid = skewedLogitP - halfSpread;
+    const logitAsk = skewedLogitP + halfSpread;
+
+    return {
+        bid: 1 / (1 + Math.exp(-logitBid)),
+        ask: 1 / (1 + Math.exp(-logitAsk)),
+    };
+}
+
 /**
  * Calculates the inventory skew using:
  *

@@ -23,6 +23,7 @@ import {
     canAggressSell,
     capOrderSizeByMargin,
     calculateCurrentRiskAversion,
+    calculateBidAndAsk,
     calculateInventorySkew,
 } from "./strategy.js";
 import { Wallet, ZeroHash } from "ethers";
@@ -206,12 +207,17 @@ export async function runQuoteMaintenance(wallet: Wallet) {
         STATE.invBase,
         refPrice,
     );
+    const calculatedBidAsk = calculateBidAndAsk(
+        refPrice,
+        inventorySkew,
+        CFG.LOGIT_HALF_SPREAD,
+    );
     const quoteCenter = clamp(
         refPrice - inventorySkew,
         CFG.HARD_MIN_PRICE,
         CFG.HARD_MAX_PRICE,
     );
-    console.log("book >> bids:", book.bids.length, "asks:", book.asks.length," total:", book.asks.length + book.bids.length, "mid:", bookMid, "reference:", refPrice, "quoteCenter:", quoteCenter, "gamma:", gamma, "inventorySkew:", inventorySkew, "fairValue:", STATE.fairValue?.protocolPrice, "oracleStale:", STATE.oracle.stale);
+    console.log("book >> bids:", book.bids.length, "asks:", book.asks.length," total:", book.asks.length + book.bids.length, "mid:", bookMid, "reference:", refPrice, "calculatedBidAsk:", calculatedBidAsk, "quoteCenter:", quoteCenter, "gamma:", gamma, "inventorySkew:", inventorySkew, "fairValue:", STATE.fairValue?.protocolPrice, "oracleStale:", STATE.oracle.stale);
     const { bids: targetBidPrices, asks: targetAskPrices } = buildTargetLadderPrices(quoteCenter, book); // This builds the target prices
     const { bidSizes, askSizes } = buildTargetSizes();
     console.log("targetBids:", targetBidPrices);

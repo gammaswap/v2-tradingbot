@@ -213,6 +213,13 @@ export function validateRiskConfiguration(config = CFG): string[] {
     if (!Number.isFinite(config.RISK_AVERSION_B) || config.RISK_AVERSION_B < 1) {
         errors.push("RISK_AVERSION_B must be at least 1");
     }
+    if (
+        !Number.isFinite(config.LOGIT_HALF_SPREAD) ||
+        config.LOGIT_HALF_SPREAD < 0.005 ||
+        config.LOGIT_HALF_SPREAD > 1
+    ) {
+        errors.push("LOGIT_HALF_SPREAD must be between 0.005 and 1");
+    }
 
     return errors;
 }
@@ -313,6 +320,9 @@ export const CFG = {
     RISK_AVERSION_GAMMA_0: envNum("RISK_AVERSION_GAMMA_0", 1e-9),
     RISK_AVERSION_GAMMA_MAX: envNum("RISK_AVERSION_GAMMA_MAX", 1e-8),
     RISK_AVERSION_B: envNum("RISK_AVERSION_B", 5),
+    // Half-spread in logit terms. Approximate decimal-price half-spread near
+    // probability p: p * (1 - p) * LOGIT_HALF_SPREAD.
+    LOGIT_HALF_SPREAD: envNum("LOGIT_HALF_SPREAD", 0.5),
 
     INV_TARGET: envNum("INV_TARGET", 0),
     INV_MAX_ABS: envNum("INV_MAX_ABS", 5000 * 1000000),

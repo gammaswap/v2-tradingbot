@@ -126,4 +126,18 @@ describe("price configuration validation", () => {
             "MAX_ORDER_MARGIN_PERCENT must be between 0 and 100",
         );
     });
+
+    it("rejects an invalid logit half-spread", () => {
+        expect(validateRiskConfiguration({
+            MAX_CAPITAL_EXPOSURE_PERCENT: 100,
+            MAX_ORDER_MARGIN_PERCENT: 100,
+            RISK_AVERSION_GAMMA_0: 1e-9,
+            RISK_AVERSION_GAMMA_MAX: 1e-8,
+            RISK_AVERSION_B: 5,
+            LOGIT_HALF_SPREAD: 1.001,
+            BASE_RESERVE_MIN: 1_500_000,
+        } as never)).toContain(
+            "LOGIT_HALF_SPREAD must be between 0.005 and 1",
+        );
+    });
 });

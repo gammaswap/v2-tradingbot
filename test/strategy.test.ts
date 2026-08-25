@@ -7,6 +7,7 @@ import {
     availableCollateral,
     buildTargetLadderPrices,
     capOrderSizeByMargin,
+    calculateBidAndAsk,
     calculateCurrentRiskAversion,
     calculateInventorySkew,
     calculateRemainingEpochSeconds,
@@ -159,5 +160,29 @@ describe("asset-aware risk aversion", () => {
 
         expect(gamma).toBeGreaterThan(CFG.RISK_AVERSION_GAMMA_0);
         expect(gamma).toBeLessThan(CFG.RISK_AVERSION_GAMMA_MAX);
+    });
+});
+
+describe("logit bid and ask calculation", () => {
+    it("returns a symmetric bid and ask without inventory skew", () => {
+        const result = calculateBidAndAsk(500_000, 0, 0.5);
+
+        expect(result.bid).toBeLessThan(0.5);
+        expect(result.ask).toBeGreaterThan(0.5);
+        expect(result.bid + result.ask).toBeCloseTo(1);
+    });
+
+    it("shifts both quotes lower for positive inventory skew", () => {
+        const neutral = calculateBidAndAsk(500_000, 0, 0.5);
+        const skewed = calculateBidAndAsk(500_000, 1, 0.5);
+
+        expect(skewed.bid).toBeLessThan(neutral.bid);
+        expect(skewed.ask).toBeLessThan(neutral.ask);
+    });
+
+    it("rejects invalid half-spreads and reference prices", () => {
+        expect(() => calculateBidAndAsk(500_000, 0, 0.004)).toThrow();
+        expect(() => calculateBidAndAsk(500_000, 0, 1.001)).toThrow();
+        expect(() => calculateBidAndAsk(0, 0, 0.5)).toThrow();
     });
 });
