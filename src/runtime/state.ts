@@ -34,6 +34,7 @@ export type RuntimeState = {
     asset: Asset | null;
     periodLength: number | null;
     book: BookSnapshot | null;
+    bookUpdatedAtMs: number;
     pending: Map<string, PendingOrder>;
     pendingBuys: TreeMap<OrderKey, PendingOrder>;
     pendingSells: TreeMap<OrderKey, PendingOrder>;
@@ -67,6 +68,7 @@ export function createInitialState(): RuntimeState {
         asset: null,
         periodLength: null,
         book: null,
+        bookUpdatedAtMs: 0,
         pending: new Map(),
         pendingBuys: new TreeMap([], { comparator: compareBuyOrderKeys }),
         pendingSells: new TreeMap([], { comparator: compareSellOrderKeys }),

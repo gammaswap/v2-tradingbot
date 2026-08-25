@@ -33,8 +33,37 @@ export function hasFreshFairValue(): boolean {
     return nowMs() - STATE.fairValue.updatedAtMs <= CFG.FAIR_VALUE_STALE_MS;
 }
 
-export function shouldPauseForFairValue(): boolean {
-    return CFG.USE_ORACLE_FAIR_VALUE && CFG.REQUIRE_FRESH_FAIR_VALUE && !hasFreshFairValue();
+export function hasUsableBookPrice(book: BookSnapshot | null): boolean {
+    return Boolean(book && (book.bids.length > 0 || book.asks.length > 0));
+}
+
+export function hasFreshBook(book: BookSnapshot | null = STATE.book): boolean {
+    if (!hasUsableBookPrice(book)) return false;
+
+    return (
+        STATE.bookUpdatedAtMs > 0 &&
+        nowMs() - STATE.bookUpdatedAtMs <= CFG.BOOK_STALE_MS
+    );
+}
+
+export function shouldPauseForFairValue(
+    book: BookSnapshot | null = STATE.book,
+): boolean {
+    const freshOracleAvailable = hasFreshFairValue();
+
+    if (
+        CFG.USE_ORACLE_FAIR_VALUE &&
+        CFG.REQUIRE_FRESH_FAIR_VALUE &&
+        !freshOracleAvailable
+    ) {
+        return true;
+    }
+
+    // A fresh oracle can provide a reference even when the book is empty.
+    if (freshOracleAvailable) return false;
+
+    // Without a fresh oracle, require a recent book with at least one quote.
+    return !hasFreshBook(book);
 }
 
 export function shouldCancelReplace(o: PendingOrder, newPrice: number, newSize: number, tolTicks: number = 1) : boolean {
@@ -398,7 +427,10 @@ export function buildEquidistantLadderPrices(
         throw new Error(`bid and ask must be ordered normalized prices: bid=${bid}, ask=${ask}`);
     }
 
-    const bookMid = midPrice(book);
+    // With no current quotes, do not fall back to a stale last price. A new
+    // epoch should build both ladders toward the current reference price.
+    const hasBookQuotes = book.bids.length > 0 || book.asks.length > 0;
+    const bookMid = hasBookQuotes ? midPrice(book) : refPrice;
     const bidEnd = Math.min(refPrice, bookMid);
     const askEnd = Math.max(refPrice, bookMid);
     const bidStart = bid * PROTOCOL_PRICE_SCALE;

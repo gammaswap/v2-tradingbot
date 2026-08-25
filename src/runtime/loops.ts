@@ -191,8 +191,8 @@ export async function runQuoteMaintenance(wallet: Wallet) {
         log("quote maintenance skipped: current asset is unavailable or resolved");
         return;
     }
-    if (shouldPauseForFairValue()) {
-        warn("quote maintenance skipped (oracle fair value stale)");
+    if (shouldPauseForFairValue(book)) {
+        warn("quote maintenance skipped: reference price is stale or unavailable");
         return;
     }
 
@@ -527,8 +527,8 @@ export async function runAggression(wallet: Wallet) {
         log("aggression skipped: current asset is unavailable or resolved");
         return;
     }
-    if (shouldPauseForFairValue()) {
-        console.log("aggression skipped (oracle fair value stale)");
+    if (shouldPauseForFairValue(book)) {
+        console.log("aggression skipped: reference price is stale or unavailable");
         return;
     }
 

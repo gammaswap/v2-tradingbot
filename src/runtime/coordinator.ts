@@ -135,6 +135,7 @@ async function resyncBook(state: LocalOrderBookState): Promise<boolean> {
 function publishLocalBook(state: LocalOrderBookState): void {
     STATE.book = buildBookSnapshot(state);
     STATE.lastMid = midPrice(STATE.book);
+    STATE.bookUpdatedAtMs = nowMs();
 }
 
 function processEvents(

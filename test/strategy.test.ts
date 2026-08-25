@@ -14,6 +14,8 @@ import {
     calculateCurrentRiskAversion,
     calculateInventorySkew,
     calculateTotalSizes,
+    hasFreshBook,
+    hasUsableBookPrice,
     calculateRemainingEpochSeconds,
     calculateRiskAversionFactor,
 } from "../src/runtime/strategy.js";
@@ -23,6 +25,7 @@ const originalReserve = CFG.BASE_RESERVE_MIN;
 const originalExposurePercent = CFG.MAX_CAPITAL_EXPOSURE_PERCENT;
 const originalOrderMarginPercent = CFG.MAX_ORDER_MARGIN_PERCENT;
 const originalPeriodLength = STATE.periodLength;
+const originalBookUpdatedAtMs = STATE.bookUpdatedAtMs;
 const originalLevelsPerSide = CFG.LEVELS_PER_SIDE;
 const originalInventory = STATE.invBase;
 const originalInventoryTarget = CFG.INV_TARGET;
@@ -38,6 +41,7 @@ afterEach(() => {
     (CFG as any).MAX_CAPITAL_EXPOSURE_PERCENT = originalExposurePercent;
     (CFG as any).MAX_ORDER_MARGIN_PERCENT = originalOrderMarginPercent;
     STATE.periodLength = originalPeriodLength;
+    STATE.bookUpdatedAtMs = originalBookUpdatedAtMs;
     (CFG as any).LEVELS_PER_SIDE = originalLevelsPerSide;
     STATE.invBase = originalInventory;
     (CFG as any).INV_TARGET = originalInventoryTarget;
@@ -60,6 +64,29 @@ describe("target quote ladder prices", () => {
                 ts: 1n,
                 bids: [{ price: 400_000, size: 1, orderCount: 1, orders: [] }],
                 asks: [{ price: 600_000, size: 1, orderCount: 1, orders: [] }],
+            },
+            500_000,
+            0,
+            0.4,
+            0.6,
+        );
+
+        expect(targets.bids).toEqual([500_000, 450_000, 400_000]);
+        expect(targets.asks).toEqual([500_000, 550_000, 600_000]);
+        (CFG as any).LEVELS_PER_SIDE = originalLevels;
+    });
+
+    it("uses the reference price for both ladder endpoints when the book is empty", () => {
+        const originalLevels = CFG.LEVELS_PER_SIDE;
+        (CFG as any).LEVELS_PER_SIDE = 3;
+        const targets = buildEquidistantLadderPrices(
+            {
+                assetId: 1n,
+                epoch: 1n,
+                seqId: 1n,
+                ts: 1n,
+                bids: [],
+                asks: [],
             },
             500_000,
             0,
@@ -163,6 +190,34 @@ describe("target quote ladder prices", () => {
 
         expect(targets.bids).toEqual([]);
         expect(targets.asks.every((price) => price > 108_000)).toBe(true);
+    });
+});
+
+describe("reference source freshness", () => {
+    const quotedBook = {
+        assetId: 1n,
+        epoch: 1n,
+        seqId: 1n,
+        ts: 1n,
+        bids: [{ price: 400_000, size: 1, orderCount: 1, orders: [] }],
+        asks: [],
+    };
+
+    it("does not treat an empty book as a usable reference source", () => {
+        expect(hasUsableBookPrice({
+            ...quotedBook,
+            bids: [],
+            asks: [],
+        })).toBe(false);
+        expect(hasUsableBookPrice(quotedBook)).toBe(true);
+    });
+
+    it("requires the usable book to have been updated recently", () => {
+        STATE.bookUpdatedAtMs = Date.now();
+        expect(hasFreshBook(quotedBook)).toBe(true);
+
+        STATE.bookUpdatedAtMs = Date.now() - CFG.BOOK_STALE_MS - 1;
+        expect(hasFreshBook(quotedBook)).toBe(false);
     });
 });
 
