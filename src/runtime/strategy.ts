@@ -213,6 +213,16 @@ export function calculateCurrentRiskAversion(
     );
 }
 
+/**
+ * Calculates inventory-skewed bid and ask probabilities in logit space.
+ *
+ * The reference price is normalized to p in (0, 1), then transformed with
+ * logitP = ln(p / (1 - p)). Inventory skew shifts that logit value, and the
+ * configured half-spread is subtracted from it for the bid and added to it
+ * for the ask. The resulting logits are converted back to probabilities with
+ * the logistic function. The returned bid and ask are normalized decimals;
+ * callers must convert them to protocol price units before submitting orders.
+ */
 export function calculateBidAndAsk(
     referencePrice: number,
     inventorySkew: number,
