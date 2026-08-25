@@ -5,6 +5,7 @@ import {
     availableCollateral,
     buildTargetLadderPrices,
     capOrderSizeByMargin,
+    calculateInventorySkew,
 } from "../src/runtime/strategy.js";
 
 const originalBaseBal = STATE.baseBal;
@@ -80,5 +81,25 @@ describe("capital exposure limits", () => {
 
         // A 10% margin budget is 1,000,000; at 50 cents that supports 2,000,000 size.
         expect(capOrderSizeByMargin(true, 100_000_000, 500_000, 10_000_000)).toBe(2_000_000);
+    });
+});
+
+describe("inventory skew", () => {
+    it("calculates positive skew for positive inventory", () => {
+        expect(calculateInventorySkew(2, 100, 500_000)).toBe(50);
+    });
+
+    it("changes sign with inventory", () => {
+        expect(calculateInventorySkew(2, -100, 500_000)).toBe(-50);
+    });
+
+    it("is zero at the price boundaries", () => {
+        expect(calculateInventorySkew(2, 100, 0)).toBe(0);
+        expect(calculateInventorySkew(2, 100, 1_000_000)).toBe(0);
+    });
+
+    it("rejects an invalid reference price", () => {
+        expect(() => calculateInventorySkew(1, 100, -1)).toThrow();
+        expect(() => calculateInventorySkew(1, 100, 1_000_001)).toThrow();
     });
 });

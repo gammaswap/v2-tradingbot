@@ -10,6 +10,8 @@ import {
     PROTOCOL_MIN_SIZE,
 } from "../utils/protocolPrice.js";
 
+const PROTOCOL_PRICE_SCALE = 1_000_000;
+
 export function bestBidAsk(book: BookSnapshot | null): { bid: number | null; ask: number | null } {
     if (!book) return { bid: null, ask: null };
     return {
@@ -56,6 +58,39 @@ export function referencePrice(book: BookSnapshot | null): number {
     const fairValue = STATE.fairValue?.protocolPrice ?? bookMid;
     const blended = weight * fairValue + (1 - weight) * bookMid;
     return roundToNearestTick(clamp(blended, 0, 1000000));
+}
+
+export function calculateInventorySkew(
+    gamma: number,
+    inventory: number,
+    referencePrice: number,
+): number {
+    if (!Number.isFinite(gamma)) {
+        throw new Error(`gamma must be finite: ${gamma}`);
+    }
+
+    if (!Number.isFinite(inventory)) {
+        throw new Error(`inventory must be finite: ${inventory}`);
+    }
+
+    if (
+        !Number.isFinite(referencePrice) ||
+        referencePrice < 0 ||
+        referencePrice > PROTOCOL_PRICE_SCALE
+    ) {
+        throw new Error(
+            `referencePrice must be between 0 and ${PROTOCOL_PRICE_SCALE}: ${referencePrice}`,
+        );
+    }
+
+    const normalizedReferencePrice = referencePrice / PROTOCOL_PRICE_SCALE;
+
+    return (
+        gamma *
+        inventory *
+        normalizedReferencePrice *
+        (1 - normalizedReferencePrice)
+    );
 }
 
 export function depthToWipe(book: BookSnapshot, side: Side, levels: number): { qty: number; notional: number } {
