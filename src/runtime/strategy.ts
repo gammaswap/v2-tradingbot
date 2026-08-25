@@ -60,6 +60,16 @@ export function referencePrice(book: BookSnapshot | null): number {
     return roundToNearestTick(clamp(blended, 0, 1000000));
 }
 
+/**
+ * Calculates the inventory skew using:
+ *
+ *   skew = gamma * q * V = gamma * q * p * (1 - p)
+ *
+ * gamma is the risk-aversion factor, q is inventory (positive for long,
+ * negative for short), p is the normalized reference price, and V is the
+ * inventory variance. Because this is a binary prediction market, the
+ * settlement follows a Bernoulli distribution, whose variance is p * (1 - p).
+ */
 export function calculateInventorySkew(
     gamma: number,
     inventory: number,
