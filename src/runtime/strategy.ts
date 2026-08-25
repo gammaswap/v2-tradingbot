@@ -61,6 +61,44 @@ export function referencePrice(book: BookSnapshot | null): number {
 }
 
 /**
+ * Calculates the time-dependent risk-aversion factor using:
+ *
+ *   gamma = gamma_0 + (gamma_max - gamma_0) * (1 - t / T)^B
+ *
+ * gamma_0 is the starting risk-aversion level and the lowest level in the
+ * model. gamma_max is the maximum risk-aversion level. T is the total number
+ * of seconds in the prediction-market epoch, t is the number of seconds
+ * remaining until expiration, and B controls the curve shape. B must be at
+ * least 1. At the start of the epoch, t equals T and gamma equals gamma_0;
+ * at expiration, t equals 0 and gamma reaches gamma_max.
+ */
+export function calculateRiskAversionFactor(
+    gamma_0: number,
+    gamma_max: number,
+    t: number,
+    T: number,
+    B: number,
+): number {
+    if (!Number.isFinite(gamma_0) || gamma_0 <= 0) {
+        throw new Error(`gamma_0 must be positive: ${gamma_0}`);
+    }
+    if (!Number.isFinite(gamma_max) || gamma_max <= gamma_0) {
+        throw new Error(`gamma_max must be greater than gamma_0: ${gamma_max}`);
+    }
+    if (!Number.isFinite(T) || T <= 0) {
+        throw new Error(`T must be positive: ${T}`);
+    }
+    if (!Number.isFinite(t) || t < 0 || t > T) {
+        throw new Error(`t must be between 0 and T: ${t}`);
+    }
+    if (!Number.isFinite(B) || B < 1) {
+        throw new Error(`B must be at least 1: ${B}`);
+    }
+
+    return gamma_0 + (gamma_max - gamma_0) * Math.pow(1 - t / T, B);
+}
+
+/**
  * Calculates the inventory skew using:
  *
  *   skew = gamma * q * V = gamma * q * p * (1 - p)

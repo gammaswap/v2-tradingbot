@@ -6,6 +6,7 @@ import {
     buildTargetLadderPrices,
     capOrderSizeByMargin,
     calculateInventorySkew,
+    calculateRiskAversionFactor,
 } from "../src/runtime/strategy.js";
 
 const originalBaseBal = STATE.baseBal;
@@ -101,5 +102,26 @@ describe("inventory skew", () => {
     it("rejects an invalid reference price", () => {
         expect(() => calculateInventorySkew(1, 100, -1)).toThrow();
         expect(() => calculateInventorySkew(1, 100, 1_000_001)).toThrow();
+    });
+});
+
+describe("risk aversion factor", () => {
+    it("starts at gamma_0 and reaches gamma_max at expiration", () => {
+        expect(calculateRiskAversionFactor(1, 5, 100, 100, 2)).toBe(1);
+        expect(calculateRiskAversionFactor(1, 5, 0, 100, 2)).toBe(5);
+    });
+
+    it("increases as the epoch gets closer to expiration", () => {
+        const early = calculateRiskAversionFactor(1, 5, 75, 100, 2);
+        const late = calculateRiskAversionFactor(1, 5, 25, 100, 2);
+
+        expect(late).toBeGreaterThan(early);
+    });
+
+    it("requires valid risk-aversion parameters", () => {
+        expect(() => calculateRiskAversionFactor(0, 5, 50, 100, 2)).toThrow();
+        expect(() => calculateRiskAversionFactor(5, 5, 50, 100, 2)).toThrow();
+        expect(() => calculateRiskAversionFactor(1, 5, 50, 100, 0.9)).toThrow();
+        expect(() => calculateRiskAversionFactor(1, 5, 101, 100, 2)).toThrow();
     });
 });
