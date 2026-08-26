@@ -287,7 +287,6 @@ export const CFG = {
     HARD_MAX_PRICE: envNum("HARD_MAX_PRICE", 999000), // 99.9 cents ($0.999)
     SOFT_MIN_PRICE: envNum("SOFT_MIN_PRICE", 300000), // 30.0 cents ($0.30)
     SOFT_MAX_PRICE: envNum("SOFT_MAX_PRICE", 700000), // 70.0 cents ($0.70)
-    CENTER_PRICE: envNum("CENTER_PRICE", 500000), // 50.0 cents ($0.50)
     DUST_BALANCE: envBigInt("DUST_BALANCE", 1000000), // 1
 
     USE_ORACLE_FAIR_VALUE: envBool("USE_ORACLE_FAIR_VALUE", true),
@@ -306,29 +305,31 @@ export const CFG = {
     // Protocol price-unit increment. The default 1,000 equals 0.1 cents.
     TICK_SIZE: envNum("TICK_SIZE", 1000),
     LOT_SIZE: envNum("LOT_SIZE", 10000),// 0.01
-    MAX_ORDER_SIZE: envNum("MAX_ORDER_SIZE", 100000 * 1000000),
+    MAX_ORDER_SIZE: envNum("MAX_ORDER_SIZE", 100000 * 1000000), // Protocol level limit
 
+    // Quotes per side
     LEVELS_PER_SIDE: envNum("LEVELS_PER_SIDE", 5),
+    QUOTE_LOOP_MS: envNum("QUOTE_LOOP_MS", 10000),
+    QUOTE_JITTER_MS: envNum("QUOTE_JITTER_MS", 5000),
+
+    // ========Quote Size Growth Space Ladder Parameters==============
     // Initial ladder distance in protocol price units. The default 2,000
     // equals 0.2 cents ($0.002).
     LEVEL_SPACING_NEAR: envNum("LEVEL_SPACING_NEAR", 2000),
     LEVEL_SPACING_GROWTH: envNum("LEVEL_SPACING_GROWTH", 1.5),
 
-    BOOK_REFRESH_MS: envNum("BOOK_REFRESH_MS", 1500),
-
-    QUOTE_LOOP_MS: envNum("QUOTE_LOOP_MS", 10000),
-    QUOTE_JITTER_MS: envNum("QUOTE_JITTER_MS", 5000),
-
+    // ===============Aggression logic=================
     AGGRESS_MS: envNum("AGGRESS_MS", 300000),
     AGGRESS_JITTER_MS: envNum("AGGRESS_JITTER_MS", 12000),
-
     WIPE_LEVELS: Math.max(1, Math.floor(envNum("WIPE_LEVELS", 2))),
     SLIP_BUFFER: envNum("SLIP_BUFFER", 0.15),
     MAX_AGGRESS_QTY: envNum("MAX_AGGRESS_QTY", 500*1000000),
     EXTREME_PUSH_PROB: envNum("EXTREME_PUSH_PROB", 0.10),
     MEANREV_K: envNum("MEANREV_K", 2.0),
+    INV_SKEW_STRENGTH: envNum("INV_SKEW_STRENGTH", 0.35),
+    CENTER_PRICE: envNum("CENTER_PRICE", 500000), // 50.0 cents ($0.50)
 
-    BASE_RESERVE_MIN: envNum("BASE_RESERVE_MIN", 1500 * 1000000),
+    // ============Quote Pricing Logic===============
     MAX_CAPITAL_EXPOSURE_PERCENT: envNum("MAX_CAPITAL_EXPOSURE_PERCENT", 70),
     MAX_ORDER_MARGIN_PERCENT: envNum("MAX_ORDER_MARGIN_PERCENT", 100),
     RISK_AVERSION_GAMMA_0: envNum("RISK_AVERSION_GAMMA_0", 1e-9),
@@ -337,6 +338,8 @@ export const CFG = {
     // Half-spread in logit terms. Approximate decimal-price half-spread near
     // probability p: p * (1 - p) * LOGIT_HALF_SPREAD.
     LOGIT_HALF_SPREAD: envNum("LOGIT_HALF_SPREAD", 0.5),
+
+    // ============Quote Size Concave Ladder Parameters============
     // Controls how strongly size is concentrated at prices farthest from the
     // best bid or ask. 1 is linear; values above 1 emphasize outer levels.
     QUOTE_SIZE_CONCAVITY: envNum("QUOTE_SIZE_CONCAVITY", 1),
@@ -352,7 +355,7 @@ export const CFG = {
 
     INV_TARGET: envNum("INV_TARGET", 0),
     INV_MAX_ABS: envNum("INV_MAX_ABS", 5000 * 1000000),
-    INV_SKEW_STRENGTH: envNum("INV_SKEW_STRENGTH", 0.35),
+    BASE_RESERVE_MIN: envNum("BASE_RESERVE_MIN", 1500 * 1000000),
 
     LOG_VERBOSE: envBool("LOG_VERBOSE", true),
     LOG_DEBUG: envBool("LOG_DEBUG", false),
