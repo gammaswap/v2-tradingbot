@@ -292,11 +292,13 @@ export const CFG = {
     EXCHANGE_ADDRESS: envStr("EXCHANGE_ADDRESS", ""),
     VERIFYING_ADDRESS: envStr("VERIFYING_ADDRESS", ""),
 
-    HARD_MIN_PRICE: envNum("HARD_MIN_PRICE", 1000), // 0.001
-    HARD_MAX_PRICE: envNum("HARD_MAX_PRICE", 999000), // 0.999
-    SOFT_MIN_PRICE: envNum("SOFT_MIN_PRICE", 300000), // 0.3
-    SOFT_MAX_PRICE: envNum("SOFT_MAX_PRICE", 700000), // 0.7
-    CENTER_PRICE: envNum("CENTER_PRICE", 500000), // 0.5
+    // Prices use protocol units: 1,000 = 0.1 cents ($0.001), and
+    // 1,000,000 = 100 cents ($1.00). These values are not SDK decimals.
+    HARD_MIN_PRICE: envNum("HARD_MIN_PRICE", 1000), // 0.1 cents ($0.001)
+    HARD_MAX_PRICE: envNum("HARD_MAX_PRICE", 999000), // 99.9 cents ($0.999)
+    SOFT_MIN_PRICE: envNum("SOFT_MIN_PRICE", 300000), // 30.0 cents ($0.30)
+    SOFT_MAX_PRICE: envNum("SOFT_MAX_PRICE", 700000), // 70.0 cents ($0.70)
+    CENTER_PRICE: envNum("CENTER_PRICE", 500000), // 50.0 cents ($0.50)
     DUST_BALANCE: envBigInt("DUST_BALANCE", 1000000), // 1
 
     USE_ORACLE_FAIR_VALUE: envBool("USE_ORACLE_FAIR_VALUE", true),
@@ -308,15 +310,19 @@ export const CFG = {
     BOOK_STALE_MS: envNum("BOOK_STALE_MS", 45000),
     FAIR_VALUE_VOL: envNum("FAIR_VALUE_VOL", 0.80),
     FAIR_VALUE_WEIGHT: envNum("FAIR_VALUE_WEIGHT", 1.0),
+    // Number of protocol price ticks required for a fair-value trade edge.
     FAIR_VALUE_MIN_EDGE_TICKS: envNum("FAIR_VALUE_MIN_EDGE_TICKS", 2),
     FAIR_VALUE_PAYS_ABOVE_STRIKE: envBool("FAIR_VALUE_PAYS_ABOVE_STRIKE", true),
 
-    TICK_SIZE: envNum("TICK_SIZE", 1000),// 0.001
+    // Protocol price-unit increment. The default 1,000 equals 0.1 cents.
+    TICK_SIZE: envNum("TICK_SIZE", 1000),
     LOT_SIZE: envNum("LOT_SIZE", 10000),// 0.01
     MAX_ORDER_SIZE: envNum("MAX_ORDER_SIZE", 100000 * 1000000),
 
     LEVELS_PER_SIDE: envNum("LEVELS_PER_SIDE", 5),
-    LEVEL_SPACING_NEAR: envNum("LEVEL_SPACING_NEAR", 2000), // 0.002
+    // Initial ladder distance in protocol price units. The default 2,000
+    // equals 0.2 cents ($0.002).
+    LEVEL_SPACING_NEAR: envNum("LEVEL_SPACING_NEAR", 2000),
     LEVEL_SPACING_GROWTH: envNum("LEVEL_SPACING_GROWTH", 1.5),
     MAX_PENDING_ORDERS: Math.max(2, Math.floor(envNum("MAX_PENDING_ORDERS", 40))),
     STALE_SECONDS: envNum("STALE_SECONDS", 180),
