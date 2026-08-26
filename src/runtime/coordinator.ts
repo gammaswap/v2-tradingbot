@@ -33,6 +33,7 @@ export type CoordinatorStepContext = {
 export async function runRuntimeCoordinator(
     wallet: Wallet,
     queue: RuntimeEventQueue,
+    signal?: AbortSignal,
 ): Promise<void> {
     const localBook = createLocalOrderBookState(BigInt(CFG.ASSET_ID));
     const initialBookReady = await resyncBook(localBook);
@@ -52,7 +53,7 @@ export async function runRuntimeCoordinator(
         assetReady: true,
     };
 
-    while (true) {
+    while (!signal?.aborted) {
         await runCoordinatorStep(context);
     }
 }

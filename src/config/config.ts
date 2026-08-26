@@ -220,6 +220,13 @@ export function validateRiskConfiguration(config = CFG): string[] {
         errors.push("LEVELS_PER_SIDE must be an integer between 1 and 100");
     }
     if (
+        !Number.isInteger(config.LADDER_PRICE_MODEL) ||
+        config.LADDER_PRICE_MODEL < 1 ||
+        config.LADDER_PRICE_MODEL > 2
+    ) {
+        errors.push("LADDER_PRICE_MODEL must be either 1 or 2");
+    }
+    if (
         !Number.isFinite(config.QUOTE_SIZE_CONCAVITY) ||
         config.QUOTE_SIZE_CONCAVITY <= 0 ||
         config.QUOTE_SIZE_CONCAVITY > 10
@@ -309,6 +316,7 @@ export const CFG = {
 
     // Quotes per side
     LEVELS_PER_SIDE: envNum("LEVELS_PER_SIDE", 5),
+    LADDER_PRICE_MODEL: envNum("LADDER_PRICE_MODEL", 1),
     QUOTE_LOOP_MS: envNum("QUOTE_LOOP_MS", 10000),
     QUOTE_JITTER_MS: envNum("QUOTE_JITTER_MS", 5000),
 

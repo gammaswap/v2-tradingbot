@@ -1,5 +1,5 @@
 {
-  "name": "v2-tradingbot",
+  "name": "@gammaswap/v2-tradingbot",
   "version": "1.0.0",
   "description": "Trading bot for GammaSwap V2",
   "engines": {
@@ -16,7 +16,19 @@
   },
   "homepage": "https://github.com/0xDanr/v2-tradingbot#readme",
   "type": "module",
-  "private": true,
+  "private": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "dev": "node --env-file=./.env --loader ts-node/esm ./src/main.ts",
     "build": "tsc",

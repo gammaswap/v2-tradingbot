@@ -16,6 +16,7 @@ import {
     referencePrice,
     shouldPauseForFairValue,
     buildTargetLadderPrices,
+    LADDER_PRICE_MODEL,
     distributeTotalSizeAcrossLadder,
     chooseFairValueAggressionSide,
     depthToWipe,
@@ -229,6 +230,9 @@ export async function runQuoteMaintenance(wallet: Wallet) {
         inventorySkew,
         calculatedBidAsk.bid,
         calculatedBidAsk.ask,
+        CFG.LADDER_PRICE_MODEL === LADDER_PRICE_MODEL.GROWTH_SPACE
+            ? LADDER_PRICE_MODEL.GROWTH_SPACE
+            : LADDER_PRICE_MODEL.EQUIDISTANT,
     );
     console.log("calculated target ladder:", calculatedTargets);
     const { bids: targetBidPrices, asks: targetAskPrices } = calculatedTargets;
