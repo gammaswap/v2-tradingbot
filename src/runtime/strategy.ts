@@ -1,6 +1,5 @@
-import { CFG, type Side } from "../config/config.js";
+import { RUNTIME_CFG as CFG, RUNTIME_STATE as STATE, type Side } from "./context.js";
 import type { Asset, BookSnapshot, PendingOrder } from "../utils/types.js";
-import { STATE } from "./state.js";
 import { clamp, nowMs, roundDownToOrderLot, roundToTick, tanh } from "../utils/utils.js";
 import { protocolNotional, protocolNotionalBigInt, protocolValueToSafeNumber } from "../utils/protocolMath.js";
 import {

@@ -40,5 +40,7 @@ process.on("SIGINT", async () => {
 });
 ```
 
-The package API currently supports one bot instance per process because the
-existing runtime maintains shared configuration and state internally.
+Each `TradingBot` instance owns its configuration, runtime state, order
+intents, cooldowns, and websocket feeds, so multiple independent bots can run
+in the same process. The current implementation creates private websocket
+connections per bot; websocket multiplexing can be added separately later.

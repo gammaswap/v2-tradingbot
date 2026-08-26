@@ -1,9 +1,8 @@
 import {
-    ORDER_INTENTS,
     type TrackedOrderIntent,
     type IntentOutcome,
 } from "./orderIntent.js";
-import { QUOTE_COOLDOWNS } from "./quoteCooldown.js";
+import { RUNTIME_ORDER_INTENTS as ORDER_INTENTS, RUNTIME_QUOTE_COOLDOWNS as QUOTE_COOLDOWNS } from "./context.js";
 
 type ApiResponse = {
     request?: { orderHash?: string };

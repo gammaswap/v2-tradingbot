@@ -1,5 +1,3 @@
-import { CFG } from "../config/config.js";
-
 export type QuoteCooldownKey = {
     assetId: string;
     epoch: bigint;
@@ -30,7 +28,7 @@ export class InMemoryQuoteCooldownStore {
 export class QuoteCooldownManager {
     constructor(
         private readonly store = new InMemoryQuoteCooldownStore(),
-        private readonly durationMs = CFG.ORDER_FAILURE_COOLDOWN_MS,
+        private readonly durationMs = 5_000,
     ) {}
 
     start(key: QuoteCooldownKey, reason: string, now = Date.now()): void {

@@ -1,11 +1,10 @@
 import type { WebSocketTradeUpdate } from "@gammaswap/v2-exchange-sdk";
 import type { Wallet } from "ethers";
-import { CFG } from "../config/config.js";
+import { RUNTIME_CFG as CFG, RUNTIME_STATE as STATE, runWithBotContext, type BotContext } from "./context.js";
 import { apiGetBook } from "../api/api.js";
 import { markFairValueStale, updateFairValueFromOracle } from "./fairValue.js";
 import { refreshPrivateState, runAggression, runAssetEpochCheck, runQuoteMaintenance } from "./loops.js";
 import type { RuntimeEvent, RuntimeEventQueue } from "./events.js";
-import { STATE } from "./state.js";
 import { midPrice } from "./strategy.js";
 import {
     applyMarketUpdate,
@@ -31,6 +30,18 @@ export type CoordinatorStepContext = {
 };
 
 export async function runRuntimeCoordinator(
+    wallet: Wallet,
+    queue: RuntimeEventQueue,
+    signal?: AbortSignal,
+    botContext: BotContext = undefined as unknown as BotContext,
+): Promise<void> {
+    if (!botContext) {
+        return runCoordinatorLoop(wallet, queue, signal);
+    }
+    return runWithBotContext(botContext, () => runCoordinatorLoop(wallet, queue, signal));
+}
+
+async function runCoordinatorLoop(
     wallet: Wallet,
     queue: RuntimeEventQueue,
     signal?: AbortSignal,

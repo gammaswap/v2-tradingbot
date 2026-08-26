@@ -1,4 +1,4 @@
-import { CFG } from "../config/config.js";
+import { RUNTIME_CFG as CFG, RUNTIME_STATE as STATE } from "./context.js";
 import {
     apiCancelOrder,
     apiCancelReplaceOrder,
@@ -9,7 +9,6 @@ import {
     apiGetPosition,
     apiSendOrder
 } from "../api/api.js";
-import { STATE } from "./state.js";
 import { jitter, log, nowMs, sleep, warn, clamp, roundToTick, roundToOrderLot, getOrderKey } from "../utils/utils.js";
 import {
     midPrice,
@@ -35,13 +34,13 @@ import { TimeInForce } from "@gammaswap/v2-exchange-sdk";
 import { makeQuoteSlot, planOrders } from "./orderPlanner.js";
 import { canTradeCurrentAsset } from "./tradingGuards.js";
 import { reconcileAssetEpoch } from "./assetLifecycle.js";
-import { ORDER_INTENTS } from "./orderIntent.js";
+import { RUNTIME_ORDER_INTENTS as ORDER_INTENTS } from "./context.js";
 import {
     handleCancelReplaceResponse,
     handleCancelResponse,
     handlePlaceOrderResponse,
 } from "./intentResponses.js";
-import { QUOTE_COOLDOWNS } from "./quoteCooldown.js";
+import { RUNTIME_QUOTE_COOLDOWNS as QUOTE_COOLDOWNS } from "./context.js";
 import { protocolValueToSafeNumber } from "../utils/protocolMath.js";
 
 export async function hasPendingOrders() {

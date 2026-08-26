@@ -1,14 +1,26 @@
 import { Wallet, isAddress } from "ethers";
-import { CFG, validateProductionConfig } from "../config/config.js";
+import {
+    validateOrderSizeConfiguration,
+    validatePriceConfiguration,
+    validateProductionConfig,
+    validateRiskConfiguration,
+} from "../config/config.js";
 import { apiGetAsset, apiGetBalance, apiGetPosition } from "../api/api.js";
 import { cleanUpAllOrders } from "./loops.js";
-import { STATE, initializePeriodLength } from "./state.js";
+import { initializePeriodLength } from "./state.js";
 import { RuntimeEventQueue } from "./events.js";
 import { startOracleFeed, type OracleFeed } from "./oracle.js";
 import { startOrderBookFeed, type OrderBookFeed } from "./orderbook.js";
 import { runRuntimeCoordinator } from "./coordinator.js";
 import { protocolValueToSafeNumber } from "../utils/protocolMath.js";
 import { isBigIntString, log, sleep, warn } from "../utils/utils.js";
+import {
+    createBotContext,
+    runWithBotContext,
+    RUNTIME_CFG as CFG,
+    RUNTIME_STATE as STATE,
+    type BotContext,
+} from "./context.js";
 
 export type ContractAddresses = {
     exchange: string;
@@ -67,7 +79,7 @@ export type TradingBotStatus = {
     bookConnected: boolean;
 };
 
-function applyOptions(options: TradingBotOptions): void {
+function getOptionOverrides(options: TradingBotOptions): Record<string, unknown> {
     const overrides: Record<string, unknown> = {
         API_URL: options.apiUrl,
         ASSET_ID: options.assetId,
@@ -104,13 +116,12 @@ function applyOptions(options: TradingBotOptions): void {
         ORACLE_FIRST_PRICE_TIMEOUT_MS: options.oracle?.firstPriceTimeoutMs,
     };
 
-    for (const [key, value] of Object.entries(overrides)) {
-        if (value !== undefined) (CFG as any)[key] = value;
-    }
+    return Object.fromEntries(Object.entries(overrides).filter(([, value]) => value !== undefined));
 }
 
 export class TradingBot {
     private readonly wallet: Wallet;
+    private readonly context: BotContext;
     private readonly abortController = new AbortController();
     private coordinatorPromise: Promise<void> | null = null;
     private oracleFeed: OracleFeed | null = null;
@@ -118,8 +129,8 @@ export class TradingBot {
     private running = false;
 
     /**
-     * Creates a bot instance. The current runtime uses singleton CFG/STATE
-     * objects, so only one TradingBot should run in a process at a time.
+     * Creates a bot instance with isolated configuration, state, intents, and
+     * cooldowns. Websocket feeds remain owned by this instance.
      */
     constructor(options: TradingBotOptions) {
         if (!options.apiUrl.trim()) throw new Error("apiUrl is required");
@@ -134,9 +145,12 @@ export class TradingBot {
         }
 
         this.wallet = options.wallet;
-        applyOptions(options);
+        this.context = createBotContext(getOptionOverrides(options) as any);
 
         const errors = [
+            ...validatePriceConfiguration(this.context.config),
+            ...validateOrderSizeConfiguration(this.context.config),
+            ...validateRiskConfiguration(this.context.config),
             ...validateProductionConfig({}),
         ];
         if (errors.length > 0) {
@@ -145,6 +159,10 @@ export class TradingBot {
     }
 
     async start(): Promise<void> {
+        return runWithBotContext(this.context, () => this.startInContext());
+    }
+
+    private async startInContext(): Promise<void> {
         if (this.running) throw new Error("trading bot is already running");
 
         const asset = await apiGetAsset();
@@ -189,6 +207,7 @@ export class TradingBot {
             this.wallet,
             queue,
             this.abortController.signal,
+            this.context,
         ).finally(() => {
             this.running = false;
         });
@@ -196,6 +215,10 @@ export class TradingBot {
     }
 
     async stop(): Promise<void> {
+        return runWithBotContext(this.context, () => this.stopInContext());
+    }
+
+    private async stopInContext(): Promise<void> {
         if (!this.running && !this.coordinatorPromise) return;
 
         this.abortController.abort();
@@ -206,14 +229,15 @@ export class TradingBot {
     }
 
     getStatus(): TradingBotStatus {
+        const { config, state } = this.context;
         return {
             running: this.running,
-            assetId: CFG.ASSET_ID,
-            epoch: STATE.epoch,
-            accountBalance: STATE.accountBalance,
-            inventory: STATE.invBase,
-            oracleConnected: STATE.oracle.connected,
-            bookConnected: STATE.bookUpdatedAtMs > 0,
+            assetId: config.ASSET_ID,
+            epoch: state.epoch,
+            accountBalance: state.accountBalance,
+            inventory: state.invBase,
+            oracleConnected: state.oracle.connected,
+            bookConnected: state.bookUpdatedAtMs > 0,
         };
     }
 

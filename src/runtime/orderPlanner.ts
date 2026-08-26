@@ -1,4 +1,4 @@
-import { CFG, type Side } from "../config/config.js";
+import { RUNTIME_CFG as CFG, type Side } from "./context.js";
 import type { CancelReplaceInstruction, NewOrderInstruction, PendingOrder } from "../utils/types.js";
 import { availableCollateral, canPlaceOrder, capOrderSizeByMargin, shouldCancelReplace } from "./strategy.js";
 import { roundToOrderLot } from "../utils/utils.js";

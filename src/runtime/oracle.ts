@@ -2,7 +2,7 @@ import {
     createOracleWebSocketClient,
     type Unsubscribe,
 } from "@gammaswap/v2-exchange-sdk";
-import { CFG } from "../config/config.js";
+import { RUNTIME_CFG as CFG } from "./context.js";
 import { debug, log, warn } from "../utils/utils.js";
 import { RuntimeEventQueue } from "./events.js";
 

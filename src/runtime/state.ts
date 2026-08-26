@@ -64,7 +64,7 @@ export type RuntimeState = {
     lastTradeTime: number;
 };
 
-export function createInitialState(): RuntimeState {
+export function createInitialState(config = CFG): RuntimeState {
     return {
         asset: null,
         periodLength: null,
@@ -78,17 +78,17 @@ export function createInitialState(): RuntimeState {
         baseBal: 0,
         invBase: 0,
         epoch: 0n,
-        lastMid: CFG.CENTER_PRICE,
+        lastMid: config.CENTER_PRICE,
         fairValue: null,
         oracle: {
-            symbolId: CFG.SYMBOL_ID,
+            symbolId: config.SYMBOL_ID,
             price: null,
             ts: null,
             receivedAtMs: 0,
             stale: true,
             connected: false,
         },
-        account: CFG.USER_ADDRESS,
+        account: config.USER_ADDRESS,
         lastTradeTime: 0,
     };
 }

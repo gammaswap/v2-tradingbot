@@ -1,7 +1,6 @@
-import { CFG } from "../config/config.js";
+import { RUNTIME_CFG as CFG, RUNTIME_STATE as STATE } from "./context.js";
 import type { Asset } from "../utils/types.js";
 import { clamp, nowMs } from "../utils/utils.js";
-import { STATE } from "./state.js";
 import { PROTOCOL_MIN_PRICE, PROTOCOL_MAX_PRICE } from "../utils/protocolPrice.js";
 
 const PROTOCOL_PRICE_SCALE = 1_000_000;

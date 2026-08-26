@@ -9,7 +9,7 @@ import {
     type FetchLike,
     type HttpResult,
 } from "@gammaswap/v2-exchange-sdk";
-import { CFG, type Side } from "../config/config.js";
+import { RUNTIME_CFG as CFG, type Side } from "../runtime/context.js";
 import type {
     ApiBalancesResponse,
     ApiAssetResponse,
@@ -46,12 +46,29 @@ export function getInfoClientOptions() {
     };
 }
 
-const infoClient = createInfoClient(getInfoClientOptions());
+const infoClients = new Map<string, ReturnType<typeof createInfoClient>>();
+
+function getInfoClient() {
+    const key = `${CFG.API_URL}:${CFG.API_TIMEOUT_MS}:${CFG.API_KEY}:${CFG.API_SECRET}`;
+    const cached = infoClients.get(key);
+    if (cached) return cached;
+    const client = createInfoClient(getInfoClientOptions());
+    infoClients.set(key, client);
+    return client;
+}
 
 const exchangeClients = new Map<string, ExchangeClient>();
 
 function getExchangeClient(wallet: Wallet): ExchangeClient {
-    const key = wallet.address.toLowerCase();
+    const key = [
+        wallet.address.toLowerCase(),
+        CFG.API_URL,
+        CFG.CHAIN_ID,
+        CFG.EXCHANGE_ADDRESS,
+        CFG.LEDGER_ADDRESS,
+        CFG.SETTLEMENT_TOKEN,
+        CFG.PERMIT2_ADDRESS,
+    ].join(":");
     const cached = exchangeClients.get(key);
     if (cached) return cached;
 
@@ -61,7 +78,7 @@ function getExchangeClient(wallet: Wallet): ExchangeClient {
         chainId: CFG.CHAIN_ID.toString(),
         fetch: sdkFetch,
         contracts: getConfiguredContracts(),
-        infoClient,
+        infoClient: getInfoClient(),
     });
 
     exchangeClients.set(key, client);
@@ -239,17 +256,17 @@ function unwrapData<T>(result: HttpResult<T>): T {
 }
 
 export async function apiGetBook(epoch: bigint | number): Promise<ApiBookResponse> {
-    const data = unwrapData(await infoClient.getOrderBook({ assetId: CFG.ASSET_ID, epoch: epoch.toString() }));
+    const data = unwrapData(await getInfoClient().getOrderBook({ assetId: CFG.ASSET_ID, epoch: epoch.toString() }));
     return normalizeBook(data);
 }
 
 export async function apiGetAsset(): Promise<ApiAssetResponse> {
-    const data = unwrapData(await infoClient.getAsset(CFG.ASSET_ID));
+    const data = unwrapData(await getInfoClient().getAsset(CFG.ASSET_ID));
     return normalizeAsset(data);
 }
 
 export async function apiGetAssetAtEpoch(epoch: bigint | number): Promise<ApiAssetResponse> {
-    const data = unwrapData(await infoClient.getAssetAtEpoch({
+    const data = unwrapData(await getInfoClient().getAssetAtEpoch({
         assetId: CFG.ASSET_ID,
         epoch: epoch.toString(),
     }));
@@ -257,12 +274,12 @@ export async function apiGetAssetAtEpoch(epoch: bigint | number): Promise<ApiAss
 }
 
 export async function apiGetBalance(): Promise<ApiBalancesResponse> {
-    const data = unwrapData(await infoClient.getBalance(CFG.USER_ADDRESS));
+    const data = unwrapData(await getInfoClient().getBalance(CFG.USER_ADDRESS));
     return normalizeBalance(data);
 }
 
 export async function apiGetPosition(epoch: bigint | number): Promise<ApiPositionResponse> {
-    const data = unwrapData(await infoClient.getPosition({
+    const data = unwrapData(await getInfoClient().getPosition({
         account: CFG.USER_ADDRESS,
         assetId: CFG.ASSET_ID,
         epoch: epoch.toString(),
@@ -271,7 +288,7 @@ export async function apiGetPosition(epoch: bigint | number): Promise<ApiPositio
 }
 
 export async function apiGetPending(address: string, epoch: bigint | number): Promise<ApiPendingResponse> {
-    const data = unwrapData(await infoClient.getBookOrders({
+    const data = unwrapData(await getInfoClient().getBookOrders({
         assetId: CFG.ASSET_ID,
         epoch: epoch.toString(),
         account: address,
@@ -280,7 +297,7 @@ export async function apiGetPending(address: string, epoch: bigint | number): Pr
 }
 
 export async function apiLastResolutionPrice(): Promise<ApiResolutionPriceResponse> {
-    const data = unwrapData(await infoClient.getLastResolutionPrice(CFG.ASSET_ID));
+    const data = unwrapData(await getInfoClient().getLastResolutionPrice(CFG.ASSET_ID));
     return normalizeResolutionPrice(data);
 }
 

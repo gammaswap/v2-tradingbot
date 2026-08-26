@@ -2,7 +2,7 @@ import {
     createExchangeWebSocketClient,
     type Unsubscribe,
 } from "@gammaswap/v2-exchange-sdk";
-import { CFG } from "../config/config.js";
+import { RUNTIME_CFG as CFG } from "./context.js";
 import { RuntimeEventQueue } from "./events.js";
 import { log, warn } from "../utils/utils.js";
 
