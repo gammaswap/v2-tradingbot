@@ -264,18 +264,8 @@ export const CFG = {
     API_URL: envApiUrl(),
     API_TIMEOUT_MS: envNum("API_TIMEOUT_MS", 30_000),
     ORDER_FAILURE_COOLDOWN_MS: envNum("ORDER_FAILURE_COOLDOWN_MS", 5_000),
-    PRODUCTION_MODE: envBool("PRODUCTION_MODE", false),
     ORDERBOOK_WS_URL: envStr("ORDERBOOK_WS_URL", "wss://exchange-api.gammaswap.com/ws/"),
     ORACLE_FEED_WS_URL: envStr("ORACLE_FEED_WS_URL", "wss://exchange-api.gammaswap.com/oracle-ws/"),
-    ORDERS_URL: envStr("ORDERS_URL", "https://exchange-api.gammaswap.com/api/orders"),
-    CANCELS_URL: envStr("CANCELS_URL", "https://exchange-api.gammaswap.com/api/cancels"),
-    CLAIM_URL: envStr("CLAIM_URL", "https://exchange-api.gammaswap.com/api/claim"),
-    DEPOSITS_URL: envStr("DEPOSITS_URL", "https://exchange-api.gammaswap.com/api/deposits"),
-    BOOK_URL: envStr("BOOK_URL", "https://exchange-api.gammaswap.com/api/book"),
-    PENDING_URL: envStr("PENDING_URL", "https://exchange-api.gammaswap.com/api/book"),
-    RESOLUTION_URL: envStr("RESOLUTION_URL", "https://exchange-api.gammaswap.com/api/resolve"),
-    BALANCE_URL: envStr("BALANCE_URL", "https://exchange-api.gammaswap.com/api/balance"),
-    POSITION_URL: envStr("POSITION_URL", "https://exchange-api.gammaswap.com/api/position"),
     ASSET_ID,
     EPOCH: envStr("EPOCH", "0"),
     USER_ADDRESS: envStr("USER_ADDRESS", "0xa829c1D4542F70714B35fFe95a247373329131df"),
@@ -290,7 +280,6 @@ export const CFG = {
     LEDGER_ADDRESS: envStr("LEDGER_ADDRESS", "0xF801fc13AA08876F343fEBf50dFfA52A78180811"),
     DEPOSIT_LEDGER_ADDRESS: envStr("DEPOSIT_LEDGER_ADDRESS", "0x06E54Aa21496Ed0099219ea79a2c72247F36091A"),
     EXCHANGE_ADDRESS: envStr("EXCHANGE_ADDRESS", ""),
-    VERIFYING_ADDRESS: envStr("VERIFYING_ADDRESS", ""),
 
     // Prices use protocol units: 1,000 = 0.1 cents ($0.001), and
     // 1,000,000 = 100 cents ($1.00). These values are not SDK decimals.
@@ -324,18 +313,11 @@ export const CFG = {
     // equals 0.2 cents ($0.002).
     LEVEL_SPACING_NEAR: envNum("LEVEL_SPACING_NEAR", 2000),
     LEVEL_SPACING_GROWTH: envNum("LEVEL_SPACING_GROWTH", 1.5),
-    MAX_PENDING_ORDERS: Math.max(2, Math.floor(envNum("MAX_PENDING_ORDERS", 40))),
-    STALE_SECONDS: envNum("STALE_SECONDS", 180),
-    CANCEL_BATCH_MAX: Math.max(1, Math.floor(envNum("CANCEL_BATCH_MAX", 10))),
 
     BOOK_REFRESH_MS: envNum("BOOK_REFRESH_MS", 1500),
-    PENDING_REFRESH_MS: envNum("PENDING_REFRESH_MS", 4000),
 
     QUOTE_LOOP_MS: envNum("QUOTE_LOOP_MS", 10000),
     QUOTE_JITTER_MS: envNum("QUOTE_JITTER_MS", 5000),
-
-    CANCEL_LOOP_MS: envNum("CANCEL_LOOP_MS", 30000),
-    CANCEL_JITTER_MS: envNum("CANCEL_JITTER_MS", 5000),
 
     AGGRESS_MS: envNum("AGGRESS_MS", 300000),
     AGGRESS_JITTER_MS: envNum("AGGRESS_JITTER_MS", 12000),
@@ -346,9 +328,6 @@ export const CFG = {
     EXTREME_PUSH_PROB: envNum("EXTREME_PUSH_PROB", 0.10),
     MEANREV_K: envNum("MEANREV_K", 2.0),
 
-    USE_LOCAL_LEDGER: envBool("USE_LOCAL_LEDGER", true),
-    START_BASE_BAL: envNum("START_BASE_BAL", 10000 * 1000000),
-    START_QUOTE_BAL: envNum("START_QUOTE_BAL", 10000 * 1000000),
     BASE_RESERVE_MIN: envNum("BASE_RESERVE_MIN", 1500 * 1000000),
     MAX_CAPITAL_EXPOSURE_PERCENT: envNum("MAX_CAPITAL_EXPOSURE_PERCENT", 70),
     MAX_ORDER_MARGIN_PERCENT: envNum("MAX_ORDER_MARGIN_PERCENT", 100),
