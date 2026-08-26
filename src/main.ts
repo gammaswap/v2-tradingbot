@@ -80,7 +80,15 @@ async function main() {
     const position = await apiGetPosition(STATE.epoch);
     STATE.invBase = protocolValueToSafeNumber(position.balance, "position balance") * (position.bSide ? -1 : 1)
     console.log("invBase:", STATE.invBase);
-    STATE.baseBal = protocolValueToSafeNumber(resp.balance, "base balance");
+    STATE.accountBalance = protocolValueToSafeNumber(
+        resp.balance,
+        "account balance",
+    );
+    STATE.baseBal = protocolValueToSafeNumber(
+        resp.balance - resp.pending,
+        "available base balance",
+    );
+    console.log("accountBalance:", STATE.accountBalance);
     console.log("userBalance:", STATE.baseBal);
 
     if (STATE.baseBal < CFG.BASE_RESERVE_MIN) warn("START_BASE_BAL < BASE_RESERVE_MIN; bot may refuse quotes.");
