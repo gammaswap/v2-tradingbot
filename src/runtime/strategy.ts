@@ -172,8 +172,11 @@ function bucketRemainingEpochSeconds(
  *
  * H(t) = H_0 * [1 - (1 - t / T)^k]^A
  *
- * H_0 is INITIAL_TOTAL_QUOTE_SIZE. t is the bucketed number of seconds
- * remaining in the epoch, and T is the epoch period length. k is
+ * H_0 is derived from account balance:
+ * H_0 = accountBalance * MAX_CONTRACT_EXPOSURE_PCT / 100.
+ * Both bid and ask totals are capped independently at H_0. t is the
+ * bucketed number of seconds remaining in the epoch, and T is the epoch
+ * period length. k is
  * TOTAL_SIZE_DECAY_K; values greater than 1 determine how long the strategy
  * stays near its initial full size. A is TOTAL_SIZE_DECAY_A; values between
  * 0 and 1 determine how violently total size collapses near expiration.
@@ -193,8 +196,10 @@ export function calculateTotalSizes(
         periodLength,
     );
     const tOverT = bucketedRemainingSeconds / periodLength;
+    const H_0 =
+        STATE.accountBalance * CFG.MAX_CONTRACT_EXPOSURE_PCT / 100;
     const H_t =
-        CFG.INITIAL_TOTAL_QUOTE_SIZE *
+        H_0 *
         Math.pow(
             1 - Math.pow(1 - tOverT, CFG.TOTAL_SIZE_DECAY_K),
             CFG.TOTAL_SIZE_DECAY_A,
@@ -213,15 +218,16 @@ export function calculateTotalSizes(
 
     // Keep the resulting buy/sell quantities inside the absolute inventory
     // limit before per-order margin checks are applied later.
-    const maximumBidSize = Math.max(0, CFG.INV_MAX_ABS - currentInventory);
-    const maximumAskSize = Math.max(0, currentInventory + CFG.INV_MAX_ABS);
+    const effectiveInventoryLimit = Math.min(CFG.INV_MAX_ABS, H_0);
+    const maximumBidSize = Math.max(0, effectiveInventoryLimit - currentInventory);
+    const maximumAskSize = Math.max(0, currentInventory + effectiveInventoryLimit);
 
     return {
         bidSize: roundDownToOrderLot(
-            Math.min(requestedBidSize, maximumBidSize),
+            Math.min(requestedBidSize, H_0, maximumBidSize),
         ),
         askSize: roundDownToOrderLot(
-            Math.min(requestedAskSize, maximumAskSize),
+            Math.min(requestedAskSize, H_0, maximumAskSize),
         ),
     };
 }

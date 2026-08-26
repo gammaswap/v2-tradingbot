@@ -22,6 +22,7 @@ import {
 } from "../src/runtime/strategy.js";
 
 const originalBaseBal = STATE.baseBal;
+const originalAccountBalance = STATE.accountBalance;
 const originalReserve = CFG.BASE_RESERVE_MIN;
 const originalExposurePercent = CFG.MAX_CAPITAL_EXPOSURE_PERCENT;
 const originalOrderMarginPercent = CFG.MAX_ORDER_MARGIN_PERCENT;
@@ -31,7 +32,7 @@ const originalLevelsPerSide = CFG.LEVELS_PER_SIDE;
 const originalInventory = STATE.invBase;
 const originalInventoryTarget = CFG.INV_TARGET;
 const originalInventoryMaxAbs = CFG.INV_MAX_ABS;
-const originalInitialTotalSize = CFG.INITIAL_TOTAL_QUOTE_SIZE;
+const originalContractExposurePct = CFG.MAX_CONTRACT_EXPOSURE_PCT;
 const originalDecayK = CFG.TOTAL_SIZE_DECAY_K;
 const originalDecayA = CFG.TOTAL_SIZE_DECAY_A;
 const originalTimeBucket = CFG.TOTAL_SIZE_TIME_BUCKET_SECONDS;
@@ -39,6 +40,7 @@ const originalQuoteSizeConcavity = CFG.QUOTE_SIZE_CONCAVITY;
 
 afterEach(() => {
     STATE.baseBal = originalBaseBal;
+    STATE.accountBalance = originalAccountBalance;
     (CFG as any).BASE_RESERVE_MIN = originalReserve;
     (CFG as any).MAX_CAPITAL_EXPOSURE_PERCENT = originalExposurePercent;
     (CFG as any).MAX_ORDER_MARGIN_PERCENT = originalOrderMarginPercent;
@@ -48,7 +50,7 @@ afterEach(() => {
     STATE.invBase = originalInventory;
     (CFG as any).INV_TARGET = originalInventoryTarget;
     (CFG as any).INV_MAX_ABS = originalInventoryMaxAbs;
-    (CFG as any).INITIAL_TOTAL_QUOTE_SIZE = originalInitialTotalSize;
+    (CFG as any).MAX_CONTRACT_EXPOSURE_PCT = originalContractExposurePct;
     (CFG as any).TOTAL_SIZE_DECAY_K = originalDecayK;
     (CFG as any).TOTAL_SIZE_DECAY_A = originalDecayA;
     (CFG as any).TOTAL_SIZE_TIME_BUCKET_SECONDS = originalTimeBucket;
@@ -307,7 +309,8 @@ describe("total quote sizes", () => {
         STATE.invBase = 0;
         (CFG as any).INV_TARGET = 0;
         (CFG as any).INV_MAX_ABS = 10_000_000;
-        (CFG as any).INITIAL_TOTAL_QUOTE_SIZE = 1_000_000;
+        STATE.accountBalance = 1_000_000;
+        (CFG as any).MAX_CONTRACT_EXPOSURE_PCT = 100;
         (CFG as any).TOTAL_SIZE_DECAY_K = 2;
         (CFG as any).TOTAL_SIZE_DECAY_A = 0.5;
         (CFG as any).TOTAL_SIZE_TIME_BUCKET_SECONDS = 5;
@@ -327,14 +330,15 @@ describe("total quote sizes", () => {
         STATE.invBase = 200_000;
         (CFG as any).INV_TARGET = 0;
         (CFG as any).INV_MAX_ABS = 10_000_000;
-        (CFG as any).INITIAL_TOTAL_QUOTE_SIZE = 1_000_000;
+        STATE.accountBalance = 1_000_000;
+        (CFG as any).MAX_CONTRACT_EXPOSURE_PCT = 100;
         (CFG as any).TOTAL_SIZE_DECAY_K = 2;
         (CFG as any).TOTAL_SIZE_DECAY_A = 0.5;
         (CFG as any).TOTAL_SIZE_TIME_BUCKET_SECONDS = 5;
 
         expect(calculateTotalSizes(asset, 1_000_000)).toEqual({
             bidSize: 800_000,
-            askSize: 1_200_000,
+            askSize: 1_000_000,
         });
     });
 
@@ -343,7 +347,8 @@ describe("total quote sizes", () => {
         STATE.invBase = 0;
         (CFG as any).INV_TARGET = 0;
         (CFG as any).INV_MAX_ABS = 10_000_000;
-        (CFG as any).INITIAL_TOTAL_QUOTE_SIZE = 1_000_000;
+        STATE.accountBalance = 1_000_000;
+        (CFG as any).MAX_CONTRACT_EXPOSURE_PCT = 100;
         (CFG as any).TOTAL_SIZE_DECAY_K = 2;
         (CFG as any).TOTAL_SIZE_DECAY_A = 0.5;
         (CFG as any).TOTAL_SIZE_TIME_BUCKET_SECONDS = 5;

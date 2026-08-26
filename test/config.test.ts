@@ -169,7 +169,6 @@ describe("price configuration validation", () => {
             RISK_AVERSION_B: 5,
             LOGIT_HALF_SPREAD: 0.5,
             LEVELS_PER_SIDE: 5,
-            INITIAL_TOTAL_QUOTE_SIZE: 10_000,
             TOTAL_SIZE_DECAY_K: 2,
             TOTAL_SIZE_DECAY_A: 0.5,
             TOTAL_SIZE_TIME_BUCKET_SECONDS: 5,
@@ -178,12 +177,10 @@ describe("price configuration validation", () => {
 
         expect(validateRiskConfiguration({
             ...base,
-            INITIAL_TOTAL_QUOTE_SIZE: 10_001,
             TOTAL_SIZE_DECAY_K: 1,
             TOTAL_SIZE_DECAY_A: 1,
             TOTAL_SIZE_TIME_BUCKET_SECONDS: 31,
         } as never)).toEqual(expect.arrayContaining([
-            expect.stringContaining("INITIAL_TOTAL_QUOTE_SIZE"),
             "TOTAL_SIZE_DECAY_K must be greater than 1",
             "TOTAL_SIZE_DECAY_A must be greater than 0 and less than 1",
             "TOTAL_SIZE_TIME_BUCKET_SECONDS must be an integer between 1 and 30",
@@ -214,6 +211,33 @@ describe("price configuration validation", () => {
             QUOTE_SIZE_CONCAVITY: 10.1,
         } as never)).toContain(
             "QUOTE_SIZE_CONCAVITY must be greater than 0 and at most 10",
+        );
+    });
+
+    it("requires contract exposure percentage to be between 1 and 100", () => {
+        const base = {
+            MAX_CAPITAL_EXPOSURE_PERCENT: 100,
+            MAX_ORDER_MARGIN_PERCENT: 100,
+            RISK_AVERSION_GAMMA_0: 1e-9,
+            RISK_AVERSION_GAMMA_MAX: 1e-8,
+            RISK_AVERSION_B: 5,
+            LOGIT_HALF_SPREAD: 0.5,
+            LEVELS_PER_SIDE: 5,
+            QUOTE_SIZE_CONCAVITY: 1,
+            BASE_RESERVE_MIN: 1_500_000,
+        };
+
+        expect(validateRiskConfiguration({
+            ...base,
+            MAX_CONTRACT_EXPOSURE_PCT: 0.9,
+        } as never)).toContain(
+            "MAX_CONTRACT_EXPOSURE_PCT must be between 1 and 100",
+        );
+        expect(validateRiskConfiguration({
+            ...base,
+            MAX_CONTRACT_EXPOSURE_PCT: 100.1,
+        } as never)).toContain(
+            "MAX_CONTRACT_EXPOSURE_PCT must be between 1 and 100",
         );
     });
 });

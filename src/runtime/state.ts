@@ -39,6 +39,7 @@ export type RuntimeState = {
     pendingBuys: TreeMap<OrderKey, PendingOrder>;
     pendingSells: TreeMap<OrderKey, PendingOrder>;
     localOrderTs: Map<string, number>;
+    accountBalance: number;
     baseBal: number;
     invBase: number;
     epoch: bigint;
@@ -73,6 +74,7 @@ export function createInitialState(): RuntimeState {
         pendingBuys: new TreeMap([], { comparator: compareBuyOrderKeys }),
         pendingSells: new TreeMap([], { comparator: compareSellOrderKeys }),
         localOrderTs: new Map(),
+        accountBalance: 0,
         baseBal: 0,
         invBase: 0,
         epoch: 0n,

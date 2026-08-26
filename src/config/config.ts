@@ -227,14 +227,11 @@ export function validateRiskConfiguration(config = CFG): string[] {
         errors.push("QUOTE_SIZE_CONCAVITY must be greater than 0 and at most 10");
     }
     if (
-        !Number.isFinite(config.INITIAL_TOTAL_QUOTE_SIZE) ||
-        config.INITIAL_TOTAL_QUOTE_SIZE < PROTOCOL_MIN_SIZE ||
-        config.INITIAL_TOTAL_QUOTE_SIZE > PROTOCOL_MAX_SIZE ||
-        config.INITIAL_TOTAL_QUOTE_SIZE % SDK_SIZE_STEP !== 0
+        !Number.isFinite(config.MAX_CONTRACT_EXPOSURE_PCT) ||
+        config.MAX_CONTRACT_EXPOSURE_PCT < 1 ||
+        config.MAX_CONTRACT_EXPOSURE_PCT > 100
     ) {
-        errors.push(
-            `INITIAL_TOTAL_QUOTE_SIZE must be a valid protocol size multiple of ${SDK_SIZE_STEP}`,
-        );
+        errors.push("MAX_CONTRACT_EXPOSURE_PCT must be between 1 and 100");
     }
     if (
         !Number.isFinite(config.TOTAL_SIZE_DECAY_K) ||
@@ -358,8 +355,9 @@ export const CFG = {
     // Controls how strongly size is concentrated at prices farthest from the
     // best bid or ask. 1 is linear; values above 1 emphasize outer levels.
     QUOTE_SIZE_CONCAVITY: envNum("QUOTE_SIZE_CONCAVITY", 1),
-    // Initial total contracts allocated to each side of the quote ladder.
-    INITIAL_TOTAL_QUOTE_SIZE: envNum("INITIAL_TOTAL_QUOTE_SIZE", 100 * 1_000_000),
+    // Maximum contract allocation as a percentage of account balance. Both
+    // bid and ask totals are capped independently at this allocation.
+    MAX_CONTRACT_EXPOSURE_PCT: envNum("MAX_CONTRACT_EXPOSURE_PCT", 5),
     // Values greater than 1 keep total size near its initial level for longer.
     TOTAL_SIZE_DECAY_K: envNum("TOTAL_SIZE_DECAY_K", 2),
     // Values between 0 and 1 control how violently size collapses near expiration.

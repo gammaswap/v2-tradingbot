@@ -134,6 +134,10 @@ export async function refreshPrivateState(wallet: Wallet): Promise<void> {
         if (STATE.epoch !== epoch) return;
 
         applyPendingResponse(pendingResp);
+        STATE.accountBalance = protocolValueToSafeNumber(
+            balance.balance,
+            "account balance",
+        );
         STATE.baseBal = protocolValueToSafeNumber(
             balance.balance - balance.pending,
             "available base balance",
