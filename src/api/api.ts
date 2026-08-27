@@ -9,7 +9,11 @@ import {
     type FetchLike,
     type HttpResult,
 } from "@gammaswap/v2-exchange-sdk";
-import { RUNTIME_CFG as CFG, type Side } from "../runtime/context.js";
+import {
+    RUNTIME_CFG as CFG,
+    RUNTIME_STATE as STATE,
+    type Side,
+} from "../runtime/context.js";
 import type {
     ApiBalancesResponse,
     ApiAssetResponse,
@@ -202,7 +206,7 @@ function normalizePending(data: any, address: string, epoch: number): ApiPending
 
 function normalizeBalance(data: any): ApiBalancesResponse {
     return {
-        account: String(data.account ?? CFG.USER_ADDRESS),
+        account: String(data.account ?? STATE.account),
         ts: parseNumberField(data.ts ?? Date.now(), "balance.ts"),
         balance: parseBigIntField(data.balance, "balance.balance"),
         pending: parseBigIntField(data.pending, "balance.pending"),
@@ -211,7 +215,7 @@ function normalizeBalance(data: any): ApiBalancesResponse {
 
 function normalizePosition(data: any, epoch: number): ApiPositionResponse {
     return {
-        account: String(data.account ?? CFG.USER_ADDRESS),
+        account: String(data.account ?? STATE.account),
         assetId: parseBigIntField(data.assetId ?? CFG.ASSET_ID, "position.assetId"),
         epoch: parseBigIntField(data.epoch ?? epoch, "position.epoch"),
         ts: parseNumberField(data.ts ?? Date.now(), "position.ts"),
@@ -274,13 +278,13 @@ export async function apiGetAssetAtEpoch(epoch: bigint | number): Promise<ApiAss
 }
 
 export async function apiGetBalance(): Promise<ApiBalancesResponse> {
-    const data = unwrapData(await getInfoClient().getBalance(CFG.USER_ADDRESS));
+    const data = unwrapData(await getInfoClient().getBalance(STATE.account));
     return normalizeBalance(data);
 }
 
 export async function apiGetPosition(epoch: bigint | number): Promise<ApiPositionResponse> {
     const data = unwrapData(await getInfoClient().getPosition({
-        account: CFG.USER_ADDRESS,
+        account: STATE.account,
         assetId: CFG.ASSET_ID,
         epoch: epoch.toString(),
     }));

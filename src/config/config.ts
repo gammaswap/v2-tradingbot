@@ -254,9 +254,6 @@ export function validateRiskConfiguration(config = CFG): string[] {
 export const CFG = {
     ASSET_ID,
     EPOCH: envStr("EPOCH", "0"),
-    // Populated from the derived wallet by the CLI or from wallet.address by
-    // the package API. It is intentionally not configurable through env.
-    USER_ADDRESS: "",
 
     // ===============SDK Parameters===============
     RPC_URL: envStr("RPC_URL", "http://localhost:8545"),

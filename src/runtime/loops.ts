@@ -77,7 +77,7 @@ export async function cancelAllOrders(wallet: Wallet, startingEpoch: bigint = ST
     while(!done && epoch >= 0n) {
         console.log("cancelAllOrders:epoch:", epoch);
         // look for pending orders
-        const pending = await apiGetPending(CFG.USER_ADDRESS, epoch);
+        const pending = await apiGetPending(STATE.account, epoch);
         if(pending.buys.length > 0 || pending.sells.length > 0) {
             // has pending orders, send cancel all
             console.log("cancelAllOrders:cancel all orders >> pending.buys:", pending.buys.length, "pending.sells:", pending.sells.length, "epoch:", epoch);

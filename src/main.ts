@@ -52,7 +52,6 @@ async function main() {
     const wallet = new Wallet(account.privateKey);
     // All account-scoped API calls must use the address belonging to this
     // derived wallet, never an independently configured address.
-    (CFG as any).USER_ADDRESS = wallet.address;
     STATE.account = wallet.address;
     console.log("Using address :", wallet.address);
 

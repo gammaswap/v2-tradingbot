@@ -83,7 +83,6 @@ function getOptionOverrides(options: TradingBotOptions): Record<string, unknown>
         API_URL: options.apiUrl,
         ASSET_ID: options.assetId,
         CHAIN_ID: options.chainId,
-        USER_ADDRESS: options.wallet.address,
         EXCHANGE_ADDRESS: options.contracts.exchange,
         LEDGER_ADDRESS: options.contracts.ledger,
         SETTLEMENT_TOKEN: options.contracts.settlementToken,
@@ -144,6 +143,7 @@ export class TradingBot {
 
         this.wallet = options.wallet;
         this.context = createBotContext(getOptionOverrides(options) as any);
+        this.context.state.account = this.wallet.address;
 
         const errors = [
             ...validatePriceConfiguration(this.context.config),

@@ -88,7 +88,7 @@ export function createInitialState(config = CFG): RuntimeState {
             stale: true,
             connected: false,
         },
-        account: config.USER_ADDRESS,
+        account: "",
         lastTradeTime: 0,
     };
 }
