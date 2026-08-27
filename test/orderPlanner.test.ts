@@ -16,7 +16,7 @@ function order(id: string, side: "buy" | "sell", price = 400_000): PendingOrder 
 
 describe("order planning", () => {
     it("creates new orders when no orders exist", () => {
-        const result = planOrders([], [400_000, 450_000], [1_000_000, 1_000_000], 1, "buy", 10_000_000);
+        const result = planOrders([], [400_000, 450_000], [1_000_000, 1_000_000], "buy", 10_000_000);
 
         expect(result.newOrders).toHaveLength(2);
         expect(result.newOrders.every((item) => item.side === "buy")).toBe(true);
@@ -27,7 +27,6 @@ describe("order planning", () => {
             [order("one", "buy"), order("two", "buy")],
             [400_000],
             [1_000_000],
-            1,
             "buy",
             10_000_000,
         );
@@ -40,7 +39,6 @@ describe("order planning", () => {
             [order("one", "buy", 400_000)],
             [500_000],
             [1_000_000],
-            1,
             "buy",
             10_000_000,
         );
@@ -55,7 +53,7 @@ describe("order planning", () => {
     });
 
     it("uses sell-side margin when adding sell orders", () => {
-        const result = planOrders([], [800_000], [1_000_000], 1, "sell", 300_000);
+        const result = planOrders([], [800_000], [1_000_000], "sell", 300_000);
 
         expect(result.newOrders).toEqual([{
             price: 800_000,
@@ -66,7 +64,7 @@ describe("order planning", () => {
     });
 
     it("rounds planned sizes to lot size", () => {
-        const result = planOrders([], [400_000], [1_234_567], 1, "buy", 10_000_000);
+        const result = planOrders([], [400_000], [1_234_567], "buy", 10_000_000);
 
         expect(result.newOrders[0]?.size).toBe(1_240_000);
     });

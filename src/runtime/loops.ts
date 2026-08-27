@@ -250,20 +250,10 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     console.log("targetAsks:", targetAskPrices);
     console.log("bidSizes:", bidSizes);
     console.log("askSizes:", askSizes);
-    // inventory skew: long => bias asks; short => bias bids
-    // so if we are very long, we post bigger asks, if we are very short we post bigger bids. All depending how far away we are from target inventory
-    // consider that inventory target can be a long or short quantity of inventory (can be negative or positive)
-    const invNorm = clamp((STATE.invBase - CFG.INV_TARGET) / Math.max(1e-9, CFG.INV_MAX_ABS), -1, 1);
-    console.log("invNorm:", invNorm);
-    const askSkewMul = 1 + 0.30 * Math.max(0, invNorm);
-    const bidSkewMul = 1 + 0.30 * Math.max(0, -invNorm);
-    console.log("askSkewMul:", askSkewMul);
-    console.log("bidSkewMul:", bidSkewMul);
-
     const pendingBids = Array.from(STATE.pendingBuys.values()) as PendingOrder[];
     const pendingSells = Array.from(STATE.pendingSells.values()) as PendingOrder[];
-    const { cancelReplaces: buyCancelReplaces, cancels: buyCancels, newOrders: buyNewOrders } = planOrders(pendingBids, targetBidPrices, bidSizes, bidSkewMul, "buy");
-    const { cancelReplaces: sellCancelReplaces, cancels: sellCancels, newOrders: sellNewOrders } = planOrders(pendingSells, targetAskPrices, askSizes, askSkewMul, "sell");
+    const { cancelReplaces: buyCancelReplaces, cancels: buyCancels, newOrders: buyNewOrders } = planOrders(pendingBids, targetBidPrices, bidSizes, "buy");
+    const { cancelReplaces: sellCancelReplaces, cancels: sellCancels, newOrders: sellNewOrders } = planOrders(pendingSells, targetAskPrices, askSizes, "sell");
 
     const cancelReplaces = buyCancelReplaces.concat(sellCancelReplaces);
     for(let i = 0; i < cancelReplaces.length; i++) {

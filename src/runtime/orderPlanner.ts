@@ -19,7 +19,6 @@ export function planOrders(
     oldOrders: PendingOrder[],
     newPrices: number[],
     newSizes: number[],
-    skewMul: number,
     side: Side,
     initialCollateral = availableCollateral(),
 ): OrderPlan {
@@ -33,7 +32,7 @@ export function planOrders(
     for (let i = 0; i < minLength; i++) {
         const oldOrder = oldOrders[i];
         const price = newPrices[i];
-        const requestedSize = roundToOrderLot(newSizes[i] * skewMul);
+        const requestedSize = roundToOrderLot(newSizes[i]);
         const oldMarginPrice = isBuy ? oldOrder.price : 1_000_000 - oldOrder.price;
         const newMarginPrice = isBuy ? price : 1_000_000 - price;
         const oldMargin = protocolNotional(oldOrder.size, oldMarginPrice);
@@ -100,7 +99,7 @@ export function planOrders(
     if (oldOrders.length < newPrices.length) {
         for (let i = minLength; i < newPrices.length; i++) {
             const price = newPrices[i];
-            const requestedSize = roundToOrderLot(newSizes[i] * skewMul);
+            const requestedSize = roundToOrderLot(newSizes[i]);
             const size = capOrderSizeByMargin(isBuy, requestedSize, price, collateral);
             if (size < CFG.LOT_SIZE) continue;
             const newMargin = protocolNotional(size, isBuy ? price : 1_000_000 - price);
