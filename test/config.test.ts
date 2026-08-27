@@ -50,7 +50,6 @@ describe("production configuration validation", () => {
 
         expect(errors).toEqual(expect.arrayContaining([
             expect.stringContaining("MNEMONIC"),
-            expect.stringContaining("RPC_URL"),
             expect.stringContaining("API_URL"),
         ]));
     });

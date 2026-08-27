@@ -12,8 +12,8 @@ importers:
         specifier: ^0.12.0
         version: 0.12.0
       '@gammaswap/v2-exchange-sdk':
-        specifier: ^0.2.0
-        version: 0.2.0
+        specifier: ^0.2.1
+        version: 0.2.1
       axios:
         specifier: 1.13.2
         version: 1.13.2
@@ -214,8 +214,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@gammaswap/v2-exchange-sdk@0.2.0':
-    resolution: {integrity: sha512-lhxyLFWAddDn+xGAz3EYUXi+hCWv1gfdBIXoj3zzhDXuGweNbbqU1sNl82fBEwRpxcsBhjp5lcX+7DDNq1FN1g==, tarball: https://npm.pkg.github.com/download/@gammaswap/v2-exchange-sdk/0.2.0/9bcbd19fa1a8f6d029aef7be8840f5742bd71701}
+  '@gammaswap/v2-exchange-sdk@0.2.1':
+    resolution: {integrity: sha512-y3WMCXflOzVUP/QmeHcf2GZR5lWURZ257sFN1K/7FUvVpVVlSzJKeSSLEWT9tflEeTvrv4m+khkWleZofDRD+A==, tarball: https://npm.pkg.github.com/download/@gammaswap/v2-exchange-sdk/0.2.1/5ae38533e12e7cfc3b49865893d5fdd192777e5e}
     engines: {node: '>=20', pnpm: '>=10'}
 
   '@gammaswap/v2-exchange@0.12.0':
@@ -933,7 +933,7 @@ snapshots:
   '@esbuild/win32-x64@0.28.2':
     optional: true
 
-  '@gammaswap/v2-exchange-sdk@0.2.0':
+  '@gammaswap/v2-exchange-sdk@0.2.1':
     dependencies:
       ethers: 6.17.0
       ws: 8.21.3

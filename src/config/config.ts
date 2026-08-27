@@ -76,9 +76,6 @@ export function validateProductionConfig(env: NodeJS.ProcessEnv = process.env): 
     if (!env.MNEMONIC || env.MNEMONIC === DEFAULT_TEST_MNEMONIC) {
         errors.push("MNEMONIC must be explicitly configured and cannot use the test mnemonic");
     }
-    if (!env.RPC_URL || env.RPC_URL === "http://localhost:8545") {
-        errors.push("RPC_URL must be explicitly configured for production");
-    }
     if (!env.API_URL) {
         errors.push("API_URL must be explicitly configured for production");
     }
@@ -255,7 +252,6 @@ export const CFG = {
     ASSET_ID,
 
     // ===============SDK Parameters===============
-    RPC_URL: envStr("RPC_URL", "http://localhost:8545"),
     API_URL: envApiUrl(),
     ORDERBOOK_WS_URL: envStr("ORDERBOOK_WS_URL", "wss://exchange-api.gammaswap.com/ws/"),
     ORACLE_FEED_WS_URL: envStr("ORACLE_FEED_WS_URL", "wss://exchange-api.gammaswap.com/oracle-ws/"),
