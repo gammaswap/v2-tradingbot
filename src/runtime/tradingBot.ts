@@ -49,6 +49,9 @@ export type TradingBotOptions = {
     quote?: {
         quoteLoopMs?: number;
         quoteJitterMs?: number;
+        riskAversionGamma0?: number;
+        riskAversionGammaMax?: number;
+        riskAversionB?: number;
         totalSizeDecayK?: number;
         totalSizeDecayA?: number;
         totalSizeTimeBucketSeconds?: number;
@@ -117,6 +120,9 @@ function getOptionOverrides(options: TradingBotOptions): Record<string, unknown>
         LOT_SIZE: options.lotSize,
         QUOTE_LOOP_MS: options.quote?.quoteLoopMs,
         QUOTE_JITTER_MS: options.quote?.quoteJitterMs,
+        RISK_AVERSION_GAMMA_0: options.quote?.riskAversionGamma0,
+        RISK_AVERSION_GAMMA_MAX: options.quote?.riskAversionGammaMax,
+        RISK_AVERSION_B: options.quote?.riskAversionB,
         TOTAL_SIZE_DECAY_K: options.quote?.totalSizeDecayK,
         TOTAL_SIZE_DECAY_A: options.quote?.totalSizeDecayA,
         TOTAL_SIZE_TIME_BUCKET_SECONDS: options.quote?.totalSizeTimeBucketSeconds,

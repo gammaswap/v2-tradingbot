@@ -347,8 +347,26 @@ export const CFG = {
     BASE_RESERVE_MIN: envNum("BASE_RESERVE_MIN", 1500 * 1000000),
 
     // ============Quote Price Parameters===============
+    // The quote model increases risk aversion as an epoch approaches
+    // expiration. It uses the time-dependent factor:
+    //   gamma(t) = gamma_0 + (gamma_max - gamma_0) * (1 - t / T)^B
+    // where t is the seconds remaining in the epoch and T is the epoch
+    // length. Thus gamma starts at gamma_0 when the epoch begins and rises
+    // toward gamma_max as expiration approaches. The resulting inventory
+    // skew is then calculated as:
+    //   skew = gamma(t) * inventory * referencePrice * (1 - referencePrice)
+    // The skew is applied in logit space to move quotes away from inventory
+    // risk: a positive inventory produces a positive skew and shifts the
+    // quote center lower, while a negative inventory shifts it higher.
+    // gamma_0 is the positive starting risk-aversion level and should be the
+    // lowest level in the model.
     RISK_AVERSION_GAMMA_0: envNum("RISK_AVERSION_GAMMA_0", 1e-9),
+    // Maximum risk-aversion level reached as the epoch nears expiration.
+    // Must be greater than RISK_AVERSION_GAMMA_0.
     RISK_AVERSION_GAMMA_MAX: envNum("RISK_AVERSION_GAMMA_MAX", 1e-8),
+    // Controls the shape of the increase from gamma_0 to gamma_max. Must be
+    // at least 1; larger values keep gamma closer to gamma_0 for longer and
+    // make the increase more concentrated near expiration.
     RISK_AVERSION_B: envNum("RISK_AVERSION_B", 5),
     // Half-spread in logit terms. Approximate decimal-price half-spread near
     // probability p: p * (1 - p) * LOGIT_HALF_SPREAD.
