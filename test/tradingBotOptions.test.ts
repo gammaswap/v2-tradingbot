@@ -21,6 +21,8 @@ describe("TradingBot options", () => {
             },
             orderbookWsUrl: "wss://example.com/orderbook",
             bookStaleMs: 11_111,
+            tickSize: 1_000,
+            lotSize: 10_000,
             fairValue: {
                 oracleFeedWsUrl: "wss://example.com/oracle",
                 enabled: true,
@@ -49,6 +51,8 @@ describe("TradingBot options", () => {
         expect((bot as any).context.config.API_TIMEOUT_MS).toBe(12_345);
         expect((bot as any).context.config.ORDERBOOK_WS_URL).toBe("wss://example.com/orderbook");
         expect((bot as any).context.config.BOOK_STALE_MS).toBe(11_111);
+        expect((bot as any).context.config.TICK_SIZE).toBe(1_000);
+        expect((bot as any).context.config.LOT_SIZE).toBe(10_000);
         expect((bot as any).context.config.ORACLE_STALE_PRICE_TIMEOUT_MS).toBe(23_456);
         expect((bot as any).context.config.FAIR_VALUE_STALE_MS).toBe(45_678);
         expect((bot as any).context.config.ORACLE_FEED_WS_URL).toBe("wss://example.com/oracle");

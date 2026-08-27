@@ -44,6 +44,8 @@ export type TradingBotOptions = {
     contracts: ContractAddresses;
     orderbookWsUrl?: string;
     bookStaleMs?: number;
+    tickSize?: number;
+    lotSize?: number;
     quote?: {
         quoteLoopMs?: number;
         quoteJitterMs?: number;
@@ -51,8 +53,6 @@ export type TradingBotOptions = {
         ladderModel?: "equidistant" | "growth-space";
         logitHalfSpread?: number;
         quoteSizeConcavity?: number;
-        tickSize?: number;
-        lotSize?: number;
     };
     risk?: {
         maxContractExposurePct?: number;
@@ -109,6 +109,8 @@ function getOptionOverrides(options: TradingBotOptions): Record<string, unknown>
         DEPOSIT_LEDGER_ADDRESS: options.contracts.depositLedger,
         ORDERBOOK_WS_URL: options.orderbookWsUrl,
         BOOK_STALE_MS: options.bookStaleMs,
+        TICK_SIZE: options.tickSize,
+        LOT_SIZE: options.lotSize,
         QUOTE_LOOP_MS: options.quote?.quoteLoopMs,
         QUOTE_JITTER_MS: options.quote?.quoteJitterMs,
         LEVELS_PER_SIDE: options.quote?.levelsPerSide,
@@ -116,8 +118,6 @@ function getOptionOverrides(options: TradingBotOptions): Record<string, unknown>
             options.quote?.ladderModel === "equidistant" ? 1 : undefined,
         LOGIT_HALF_SPREAD: options.quote?.logitHalfSpread,
         QUOTE_SIZE_CONCAVITY: options.quote?.quoteSizeConcavity,
-        TICK_SIZE: options.quote?.tickSize,
-        LOT_SIZE: options.quote?.lotSize,
         MAX_CONTRACT_EXPOSURE_PCT: options.risk?.maxContractExposurePct,
         MAX_CAPITAL_EXPOSURE_PERCENT: options.risk?.maxCapitalExposurePct,
         INV_TARGET: options.risk?.inventoryTarget,

@@ -26,6 +26,8 @@ async function main(): Promise<void> {
         },
         orderbookWsUrl: CFG.ORDERBOOK_WS_URL,
         bookStaleMs: CFG.BOOK_STALE_MS,
+        tickSize: CFG.TICK_SIZE,
+        lotSize: CFG.LOT_SIZE,
         fairValue: {
             oracleFeedWsUrl: CFG.ORACLE_FEED_WS_URL,
             enabled: CFG.USE_ORACLE_FAIR_VALUE,
@@ -49,8 +51,6 @@ async function main(): Promise<void> {
             ladderModel: CFG.LADDER_PRICE_MODEL === 2 ? "growth-space" : "equidistant",
             logitHalfSpread: CFG.LOGIT_HALF_SPREAD,
             quoteSizeConcavity: CFG.QUOTE_SIZE_CONCAVITY,
-            tickSize: CFG.TICK_SIZE,
-            lotSize: CFG.LOT_SIZE,
         },
         risk: {
             maxContractExposurePct: CFG.MAX_CONTRACT_EXPOSURE_PCT,
