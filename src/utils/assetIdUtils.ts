@@ -32,6 +32,11 @@ const STRIKE_MAX = (1n << BigInt(STRIKE_BITS)) - 1n;
 const RANGE_MAX = (1n << BigInt(RANGE_BITS)) - 1n;
 const RESERVED_MAX = (1n << BigInt(RESERVED_BITS)) - 1n;
 
+/** Returns the oracle symbol identifier encoded in the asset ID's low bits. */
+export function getSymbolIdFromAssetId(assetId: bigint): string {
+    return (assetId & ID_MASK).toString();
+}
+
 /**
  * Encode assetId from components (matches PackedAssetId.pack).
  */

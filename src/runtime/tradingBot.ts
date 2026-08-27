@@ -38,7 +38,6 @@ export type TradingBotOptions = {
     contracts: ContractAddresses;
     orderbookWsUrl?: string;
     oracleFeedWsUrl?: string;
-    oracleSymbolId?: string;
     quote?: {
         levelsPerSide?: number;
         ladderModel?: "equidistant" | "growth-space";
@@ -92,7 +91,6 @@ function getOptionOverrides(options: TradingBotOptions): Record<string, unknown>
         DEPOSIT_LEDGER_ADDRESS: options.contracts.depositLedger,
         ORDERBOOK_WS_URL: options.orderbookWsUrl,
         ORACLE_FEED_WS_URL: options.oracleFeedWsUrl,
-        SYMBOL_ID: options.oracleSymbolId,
         LEVELS_PER_SIDE: options.quote?.levelsPerSide,
         LADDER_PRICE_MODEL: options.quote?.ladderModel === "growth-space" ? 2 :
             options.quote?.ladderModel === "equidistant" ? 1 : undefined,

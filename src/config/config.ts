@@ -61,14 +61,6 @@ function envBigInt(name: string, def: number): bigint {
     return Number.isFinite(n) ? BigInt(n) : BigInt(def);
 }
 
-function symbolIdFromAssetId(assetId: string): string {
-    try {
-        return (BigInt(assetId) & ((1n << 64n) - 1n)).toString();
-    } catch {
-        return "1";
-    }
-}
-
 const ASSET_ID = envStr("ASSET_ID", DEFAULT_ASSET_ID);
 
 export function validateProductionConfig(env: NodeJS.ProcessEnv = process.env): string[] {
@@ -285,7 +277,6 @@ export const CFG = {
 
     USE_ORACLE_FAIR_VALUE: envBool("USE_ORACLE_FAIR_VALUE", true),
     REQUIRE_FRESH_FAIR_VALUE: envBool("REQUIRE_FRESH_FAIR_VALUE", true),
-    SYMBOL_ID: envStr("SYMBOL_ID", symbolIdFromAssetId(ASSET_ID)),
     ORACLE_STALE_PRICE_TIMEOUT_MS: envNum("ORACLE_STALE_PRICE_TIMEOUT_MS", 30000),
     ORACLE_FIRST_PRICE_TIMEOUT_MS: envNum("ORACLE_FIRST_PRICE_TIMEOUT_MS", 30000),
     FAIR_VALUE_STALE_MS: envNum("FAIR_VALUE_STALE_MS", 45000),

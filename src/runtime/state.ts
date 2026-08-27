@@ -1,5 +1,5 @@
 import { CFG } from "../config/config.js";
-import { decodeAssetId } from "../utils/assetIdUtils.js";
+import { decodeAssetId, getSymbolIdFromAssetId } from "../utils/assetIdUtils.js";
 import type { Asset, BookSnapshot, PendingOrder, OrderKey } from "../utils/types.js";
 import { TreeMap } from "data-structure-typed";
 
@@ -81,7 +81,7 @@ export function createInitialState(config = CFG): RuntimeState {
         lastMid: config.CENTER_PRICE,
         fairValue: null,
         oracle: {
-            symbolId: config.SYMBOL_ID,
+            symbolId: "",
             price: null,
             ts: null,
             receivedAtMs: 0,
@@ -110,6 +110,7 @@ export function initializePeriodLength(
     }
 
     state.periodLength = periodLength;
+    state.oracle.symbolId = getSymbolIdFromAssetId(assetId);
 }
 
 export const STATE = createInitialState();

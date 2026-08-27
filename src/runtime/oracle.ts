@@ -2,7 +2,7 @@ import {
     createOracleWebSocketClient,
     type Unsubscribe,
 } from "@gammaswap/v2-exchange-sdk";
-import { RUNTIME_CFG as CFG } from "./context.js";
+import { RUNTIME_CFG as CFG, RUNTIME_STATE as STATE } from "./context.js";
 import { debug, log, warn } from "../utils/utils.js";
 import { RuntimeEventQueue } from "./events.js";
 
@@ -36,7 +36,12 @@ export async function startOracleFeed(queue: RuntimeEventQueue): Promise<OracleF
         firstPriceWaiters.clear();
     };
 
-    unsubscribe = await client.subscribePrice(CFG.SYMBOL_ID, {
+    const symbolId = STATE.oracle.symbolId;
+    if (!symbolId) {
+        throw new Error("cannot start oracle feed before the asset symbol ID is initialized");
+    }
+
+    unsubscribe = await client.subscribePrice(symbolId, {
         onPrice: (update) => {
             notifyFirstPrice();
             debug("oracle price update:", {
@@ -55,7 +60,7 @@ export async function startOracleFeed(queue: RuntimeEventQueue): Promise<OracleF
 
     log("oracle subscribed:", {
         websocketUrl: CFG.ORACLE_FEED_WS_URL,
-        symbolId: CFG.SYMBOL_ID,
+        symbolId,
     });
 
     return {
