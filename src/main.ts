@@ -30,6 +30,7 @@ async function main(): Promise<void> {
         lotSize: CFG.LOT_SIZE,
         hardMinPrice: CFG.HARD_MIN_PRICE,
         hardMaxPrice: CFG.HARD_MAX_PRICE,
+        dustBalance: CFG.DUST_BALANCE,
         fairValue: {
             oracleFeedWsUrl: CFG.ORACLE_FEED_WS_URL,
             enabled: CFG.USE_ORACLE_FAIR_VALUE,
