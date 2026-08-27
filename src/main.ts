@@ -1,132 +1,86 @@
-import { CFG, validateProductionConfig } from "./config/config.js";
-import { isBigIntString, log, sleep, warn } from "./utils/utils.js";
-import {
-    cleanUpAllOrders,
-} from "./runtime/loops.js";
 import { deriveAccountsFromMnemonic } from "@gammaswap/v2-exchange-sdk";
-import { Wallet, isAddress } from "ethers";
-import { STATE, initializePeriodLength } from "./runtime/state.js";
-import { apiGetAsset, apiGetBalance, apiGetPosition } from "./api/api.js";
-import { startOracleFeed, type OracleFeed } from "./runtime/oracle.js";
-import { startOrderBookFeed, type OrderBookFeed } from "./runtime/orderbook.js";
-import { RuntimeEventQueue } from "./runtime/events.js";
-import { runRuntimeCoordinator } from "./runtime/coordinator.js";
-import { protocolValueToSafeNumber } from "./utils/protocolMath.js";
+import { Wallet } from "ethers";
+import { TradingBot } from "./runtime/tradingBot.js";
+import { CFG, validateProductionConfig } from "./config/config.js";
+import { log, warn } from "./utils/utils.js";
 
-async function main() {
+/**
+ * CLI entry point and package-API example. Trading lifecycle initialization is
+ * delegated to TradingBot so all users share the same startup behavior.
+ */
+async function main(): Promise<void> {
     const configurationErrors = validateProductionConfig();
     if (configurationErrors.length > 0) {
         for (const error of configurationErrors) warn("configuration error:", error);
         return;
     }
 
-    log("starting bot", {
-        LEVELS_PER_SIDE: CFG.LEVELS_PER_SIDE,
-        WIPE_LEVELS: CFG.WIPE_LEVELS,
-        TICK_SIZE: CFG.TICK_SIZE,
-        INV_MAX_ABS: CFG.INV_MAX_ABS,
-        EXCHANGE_ADDRESS: CFG.EXCHANGE_ADDRESS,
-        LEDGER_ADDRESS: CFG.LEDGER_ADDRESS,
-        ASSET_ID: CFG.ASSET_ID,
-        API_URL: CFG.API_URL,
-        ORDERBOOK_WS_URL: CFG.ORDERBOOK_WS_URL,
-        ORACLE_FEED_WS_URL: CFG.ORACLE_FEED_WS_URL,
-        USE_ORACLE_FAIR_VALUE: CFG.USE_ORACLE_FAIR_VALUE,
+    const account = deriveAccountsFromMnemonic(
+        CFG.MNEMONIC,
+        CFG.WALLET_INDEX + 1,
+    )[CFG.WALLET_INDEX];
+    const wallet = new Wallet(account.privateKey);
+
+    const bot = new TradingBot({
+        wallet,
+        apiUrl: CFG.API_URL,
+        assetId: CFG.ASSET_ID,
+        chainId: CFG.CHAIN_ID,
+        contracts: {
+            exchange: CFG.EXCHANGE_ADDRESS,
+            ledger: CFG.LEDGER_ADDRESS,
+            settlementToken: CFG.SETTLEMENT_TOKEN,
+            permit2: CFG.PERMIT2_ADDRESS,
+            depositLedger: CFG.DEPOSIT_LEDGER_ADDRESS,
+        },
+        orderbookWsUrl: CFG.ORDERBOOK_WS_URL,
+        oracleFeedWsUrl: CFG.ORACLE_FEED_WS_URL,
+        quote: {
+            levelsPerSide: CFG.LEVELS_PER_SIDE,
+            ladderModel: CFG.LADDER_PRICE_MODEL === 2 ? "growth-space" : "equidistant",
+            logitHalfSpread: CFG.LOGIT_HALF_SPREAD,
+            quoteSizeConcavity: CFG.QUOTE_SIZE_CONCAVITY,
+            tickSize: CFG.TICK_SIZE,
+            lotSize: CFG.LOT_SIZE,
+        },
+        risk: {
+            maxContractExposurePct: CFG.MAX_CONTRACT_EXPOSURE_PCT,
+            maxCapitalExposurePct: CFG.MAX_CAPITAL_EXPOSURE_PERCENT,
+            inventoryTarget: CFG.INV_TARGET,
+            inventoryMaxAbs: CFG.INV_MAX_ABS,
+        },
+        timing: {
+            quoteLoopMs: CFG.QUOTE_LOOP_MS,
+            quoteJitterMs: CFG.QUOTE_JITTER_MS,
+            aggressionMs: CFG.AGGRESS_MS,
+            aggressionJitterMs: CFG.AGGRESS_JITTER_MS,
+            bookStaleMs: CFG.BOOK_STALE_MS,
+            fairValueStaleMs: CFG.FAIR_VALUE_STALE_MS,
+        },
+        oracle: {
+            enabled: CFG.USE_ORACLE_FAIR_VALUE,
+            requireFreshValue: CFG.REQUIRE_FRESH_FAIR_VALUE,
+            stalePriceTimeoutMs: CFG.ORACLE_STALE_PRICE_TIMEOUT_MS,
+            firstPriceTimeoutMs: CFG.ORACLE_FIRST_PRICE_TIMEOUT_MS,
+        },
     });
 
-    if(!isAddress(CFG.EXCHANGE_ADDRESS) || CFG.EXCHANGE_ADDRESS == "0x0000000000000000000000000000000000000000") {
-        warn("EXCHANGE_ADDRESS is invalid!:", CFG.EXCHANGE_ADDRESS);
-        return;
-    }
-    if(!isAddress(CFG.LEDGER_ADDRESS) || CFG.LEDGER_ADDRESS == "0x0000000000000000000000000000000000000000") {
-        warn("LEDGER_ADDRESS is invalid!:", CFG.LEDGER_ADDRESS);
-        return;
-    }
+    log("starting trading bot", { account: wallet.address, assetId: CFG.ASSET_ID });
+    await bot.start();
 
-    if(!CFG.ASSET_ID || !isBigIntString(CFG.ASSET_ID)) {
-        warn("ASSET_ID is invalid!:", CFG.ASSET_ID);
-        return;
-    }
-
-    const account = deriveAccountsFromMnemonic(CFG.MNEMONIC, CFG.WALLET_INDEX + 1)[CFG.WALLET_INDEX];
-    const wallet = new Wallet(account.privateKey);
-    // All account-scoped API calls must use the address belonging to this
-    // derived wallet, never an independently configured address.
-    STATE.account = wallet.address;
-    console.log("Using address :", wallet.address);
-
-    const asset = await apiGetAsset();
-    if(!asset.registered) {
-        warn("ASSET_ID is unregistered!:", CFG.ASSET_ID);
-        return;
-    }
-
-    log("API_URL:", CFG.API_URL)
-
-    STATE.asset = asset;
-    STATE.epoch = asset.epoch;
-    initializePeriodLength(STATE, asset.assetId);
-    log("asset:", asset);
-    log("periodLength:", STATE.periodLength);
-
-    await cleanUpAllOrders(wallet);
-
-    await sleep(1000 * 3);
-
-    const resp = await apiGetBalance();
-    if(resp.pending >= CFG.DUST_BALANCE) {
-        warn("Error: Pending balance > 0, pending:", resp.pending);
-        return;
-    }
-
-    const position = await apiGetPosition(STATE.epoch);
-    STATE.invBase = protocolValueToSafeNumber(position.balance, "position balance") * (position.bSide ? -1 : 1)
-    console.log("invBase:", STATE.invBase);
-    STATE.accountBalance = protocolValueToSafeNumber(
-        resp.balance,
-        "account balance",
-    );
-    STATE.baseBal = protocolValueToSafeNumber(
-        resp.balance - resp.pending,
-        "available base balance",
-    );
-    console.log("accountBalance:", STATE.accountBalance);
-    console.log("userBalance:", STATE.baseBal);
-
-    if (STATE.baseBal < CFG.BASE_RESERVE_MIN) warn("START_BASE_BAL < BASE_RESERVE_MIN; bot may refuse quotes.");
-
-    const queue = new RuntimeEventQueue();
-    const oracle = await startOracleFeed(queue);
-    const orderbook = await startOrderBookFeed(queue);
-    registerShutdown(oracle, orderbook);
-
-    if (CFG.USE_ORACLE_FAIR_VALUE) {
-        const gotFirstPrice = await oracle.waitForFirstPrice(CFG.ORACLE_FIRST_PRICE_TIMEOUT_MS);
-        if (!gotFirstPrice && CFG.REQUIRE_FRESH_FAIR_VALUE) {
-            warn("No oracle price received before timeout; stopping because REQUIRE_FRESH_FAIR_VALUE is enabled.");
-            await Promise.all([oracle.close(), orderbook.close()]);
-            return;
-        }
-        if (!gotFirstPrice) warn("No oracle price received before timeout; falling back to book mid until one arrives.");
-    }
-
-    await runRuntimeCoordinator(wallet, queue);
-}
-
-function registerShutdown(oracle: OracleFeed, orderbook: OrderBookFeed) {
     let shuttingDown = false;
     const shutdown = (signal: NodeJS.Signals) => {
         if (shuttingDown) return;
         shuttingDown = true;
-        console.log("received", signal, "closing websocket feeds");
-        void Promise.all([oracle.close(), orderbook.close()]).finally(() => process.exit(0));
+        console.log("received", signal, "stopping trading bot");
+        void bot.stop().finally(() => process.exit(0));
     };
 
     process.once("SIGINT", shutdown);
     process.once("SIGTERM", shutdown);
 }
 
-main().catch((e) => {
-    console.error("fatal:", e);
+main().catch((error) => {
+    console.error("fatal:", error);
     process.exit(1);
 });
