@@ -64,6 +64,7 @@ export type TradingBotOptions = {
     oracle?: {
         enabled?: boolean;
         requireFreshValue?: boolean;
+        stalePriceTimeoutMs?: number;
         firstPriceTimeoutMs?: number;
     };
 };
@@ -111,6 +112,7 @@ function getOptionOverrides(options: TradingBotOptions): Record<string, unknown>
         FAIR_VALUE_STALE_MS: options.timing?.fairValueStaleMs,
         USE_ORACLE_FAIR_VALUE: options.oracle?.enabled,
         REQUIRE_FRESH_FAIR_VALUE: options.oracle?.requireFreshValue,
+        ORACLE_STALE_PRICE_TIMEOUT_MS: options.oracle?.stalePriceTimeoutMs,
         ORACLE_FIRST_PRICE_TIMEOUT_MS: options.oracle?.firstPriceTimeoutMs,
     };
 
