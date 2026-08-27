@@ -273,8 +273,6 @@ export const CFG = {
     DEPOSIT_LEDGER_ADDRESS: envStr("DEPOSIT_LEDGER_ADDRESS", "0x06E54Aa21496Ed0099219ea79a2c72247F36091A"),
     EXCHANGE_ADDRESS: envStr("EXCHANGE_ADDRESS", ""),
 
-    DUST_BALANCE: envBigInt("DUST_BALANCE", 1000000), // 1
-
     USE_ORACLE_FAIR_VALUE: envBool("USE_ORACLE_FAIR_VALUE", true),
     REQUIRE_FRESH_FAIR_VALUE: envBool("REQUIRE_FRESH_FAIR_VALUE", true),
     ORACLE_STALE_PRICE_TIMEOUT_MS: envNum("ORACLE_STALE_PRICE_TIMEOUT_MS", 30000),
@@ -286,13 +284,6 @@ export const CFG = {
     // Number of protocol price ticks required for a fair-value trade edge.
     FAIR_VALUE_MIN_EDGE_TICKS: envNum("FAIR_VALUE_MIN_EDGE_TICKS", 2),
     FAIR_VALUE_PAYS_ABOVE_STRIKE: envBool("FAIR_VALUE_PAYS_ABOVE_STRIKE", true),
-
-    // Protocol price-unit increment. The default 1,000 equals 0.1 cents.
-    TICK_SIZE: envNum("TICK_SIZE", 1000),
-    LOT_SIZE: envNum("LOT_SIZE", 10000),// 0.01
-    MAX_ORDER_SIZE: envNum("MAX_ORDER_SIZE", 100000 * 1000000), // Protocol level limit
-
-
 
     // ===============Aggression logic=================
     AGGRESS_MS: envNum("AGGRESS_MS", 300000),
@@ -359,9 +350,14 @@ export const CFG = {
     LEVEL_SPACING_NEAR: envNum("LEVEL_SPACING_NEAR", 2000),
     LEVEL_SPACING_GROWTH: envNum("LEVEL_SPACING_GROWTH", 1.5),
 
-
     INV_TARGET: envNum("INV_TARGET", 0),
     INV_MAX_ABS: envNum("INV_MAX_ABS", 5000 * 1000000),
+
+    // Protocol price-unit increment. The default 1,000 equals 0.1 cents.
+    TICK_SIZE: envNum("TICK_SIZE", 1000),
+    LOT_SIZE: envNum("LOT_SIZE", 10000),// 0.01
+    MAX_ORDER_SIZE: envNum("MAX_ORDER_SIZE", 100000 * 1000000), // Protocol level limit
+    DUST_BALANCE: envBigInt("DUST_BALANCE", 1000000), // 1
     LOG_VERBOSE: envBool("LOG_VERBOSE", true),
     LOG_DEBUG: envBool("LOG_DEBUG", false),
 } as const;
