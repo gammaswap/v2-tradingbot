@@ -1,6 +1,6 @@
 export const PROTOCOL_MIN_PRICE = 1_000;
 export const PROTOCOL_MAX_PRICE = 999_000;
-export const SDK_PRICE_STEP = 1_000;
+export const PROTOCOL_TICK_SIZE = 1_000;
 export const PROTOCOL_MIN_SIZE = 10_000;
 export const PROTOCOL_MAX_SIZE = 100_000_000_000;
 export const PROTOCOL_LOT_SIZE = 10_000;
@@ -18,7 +18,7 @@ export function assertProtocolPrice(
     const value = typeof price === "bigint" ? price : BigInt(price);
     const min = BigInt(PROTOCOL_MIN_PRICE);
     const max = BigInt(PROTOCOL_MAX_PRICE);
-    const step = BigInt(SDK_PRICE_STEP);
+    const step = BigInt(PROTOCOL_TICK_SIZE);
 
     if (value < min) {
         throw new Error(`${label} ${value} is below protocol minimum ${PROTOCOL_MIN_PRICE}`);

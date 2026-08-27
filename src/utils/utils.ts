@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { CFG, type Side } from "../config/config.js";
 import { OrderKey, PendingOrder } from "./types.js";
-import { SDK_PRICE_STEP, PROTOCOL_LOT_SIZE } from "./protocolPrice.js";
+import { PROTOCOL_TICK_SIZE, PROTOCOL_LOT_SIZE } from "./protocolPrice.js";
 
 export function sleep(ms: number) {
     return new Promise((r) => setTimeout(r, ms));
@@ -16,7 +16,7 @@ export function clamp(x: number, lo: number, hi: number) {
 }
 
 export function roundToTick(price: number, side: Side): number {
-    const t = SDK_PRICE_STEP;
+    const t = PROTOCOL_TICK_SIZE;
     if (t <= 0) return price;
     const q = price / t;
     const r = side === "buy" ? Math.floor(q) : Math.ceil(q);
