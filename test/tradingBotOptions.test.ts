@@ -3,6 +3,19 @@ import { Wallet } from "ethers";
 import { TradingBot } from "../src/runtime/tradingBot.js";
 
 describe("TradingBot options", () => {
+    const createBot = (weight: number) => new TradingBot({
+        wallet: Wallet.createRandom() as unknown as Wallet,
+        apiUrl: "https://example.com/api",
+        assetId: "1",
+        chainId: 1,
+        contracts: {
+            exchange: "0x1111111111111111111111111111111111111111",
+            ledger: "0x2222222222222222222222222222222222222222",
+            settlementToken: "0x3333333333333333333333333333333333333333",
+        },
+        fairValue: { weight },
+    });
+
     it("accepts an oracle stale-price timeout override", () => {
         const bot = new TradingBot({
             wallet: Wallet.createRandom() as unknown as Wallet,
@@ -80,5 +93,10 @@ describe("TradingBot options", () => {
         expect((bot as any).context.config.AGGRESS_JITTER_MS).toBe(300);
         expect((bot as any).context.config.FAIR_VALUE_MIN_EDGE_TICKS).toBe(3);
         expect((bot as any).context.config.BASE_RESERVE_MIN).toBe(123_456);
+    });
+
+    it("clamps constructor fair-value weights to the supported range", () => {
+        expect((createBot(-0.5) as any).context.config.FAIR_VALUE_WEIGHT).toBe(0);
+        expect((createBot(1.5) as any).context.config.FAIR_VALUE_WEIGHT).toBe(1);
     });
 });

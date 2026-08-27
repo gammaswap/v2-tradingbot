@@ -13,7 +13,7 @@ import { startOracleFeed, type OracleFeed } from "./oracle.js";
 import { startOrderBookFeed, type OrderBookFeed } from "./orderbook.js";
 import { runRuntimeCoordinator } from "./coordinator.js";
 import { protocolValueToSafeNumber } from "../utils/protocolMath.js";
-import { isBigIntString, log, sleep, warn } from "../utils/utils.js";
+import { clamp, isBigIntString, log, sleep, warn } from "../utils/utils.js";
 import { resolveTradingWallet } from "./wallet.js";
 import {
     createBotContext,
@@ -143,7 +143,9 @@ function getOptionOverrides(options: TradingBotOptions): Record<string, unknown>
         ORACLE_STALE_PRICE_TIMEOUT_MS: options.fairValue?.stalePriceTimeoutMs,
         ORACLE_FIRST_PRICE_TIMEOUT_MS: options.fairValue?.firstPriceTimeoutMs,
         FAIR_VALUE_VOL: options.fairValue?.volatility,
-        FAIR_VALUE_WEIGHT: options.fairValue?.weight,
+        FAIR_VALUE_WEIGHT: options.fairValue?.weight === undefined
+            ? undefined
+            : clamp(options.fairValue.weight, 0, 1),
         FAIR_VALUE_PAYS_ABOVE_STRIKE: options.fairValue?.paysAboveStrike,
         AGGRESS_MS: options.aggression?.aggressionMs,
         AGGRESS_JITTER_MS: options.aggression?.aggressionJitterMs,
