@@ -25,7 +25,6 @@ const originalBaseBal = STATE.baseBal;
 const originalAccountBalance = STATE.accountBalance;
 const originalReserve = CFG.BASE_RESERVE_MIN;
 const originalExposurePercent = CFG.MAX_CAPITAL_EXPOSURE_PERCENT;
-const originalOrderMarginPercent = CFG.MAX_ORDER_MARGIN_PERCENT;
 const originalPeriodLength = STATE.periodLength;
 const originalBookUpdatedAtMs = STATE.bookUpdatedAtMs;
 const originalLevelsPerSide = CFG.LEVELS_PER_SIDE;
@@ -43,7 +42,6 @@ afterEach(() => {
     STATE.accountBalance = originalAccountBalance;
     (CFG as any).BASE_RESERVE_MIN = originalReserve;
     (CFG as any).MAX_CAPITAL_EXPOSURE_PERCENT = originalExposurePercent;
-    (CFG as any).MAX_ORDER_MARGIN_PERCENT = originalOrderMarginPercent;
     STATE.periodLength = originalPeriodLength;
     STATE.bookUpdatedAtMs = originalBookUpdatedAtMs;
     (CFG as any).LEVELS_PER_SIDE = originalLevelsPerSide;
@@ -383,10 +381,9 @@ describe("capital exposure limits", () => {
         STATE.baseBal = 10_000_000;
         (CFG as any).BASE_RESERVE_MIN = 0;
         (CFG as any).MAX_CAPITAL_EXPOSURE_PERCENT = 100;
-        (CFG as any).MAX_ORDER_MARGIN_PERCENT = 10;
-
-        // A 10% margin budget is 1,000,000; at 50 cents that supports 2,000,000 size.
-        expect(capOrderSizeByMargin(true, 100_000_000, 500_000, 10_000_000)).toBe(2_000_000);
+        // The full available collateral is used; at 50 cents it supports
+        // 20,000,000 protocol-size units.
+        expect(capOrderSizeByMargin(true, 100_000_000, 500_000, 10_000_000)).toBe(20_000_000);
     });
 });
 

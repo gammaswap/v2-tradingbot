@@ -675,14 +675,10 @@ export function capOrderSizeByMargin(
 ): number {
     if (!Number.isFinite(size) || size <= 0) return 0;
 
-    // Unit-level planner callers may provide collateral without initializing
-    // the runtime balance. In the live bot STATE.baseBal is refreshed first;
-    // the fallback keeps the planner deterministic for isolated callers.
-    const balance = STATE.baseBal > 0 ? STATE.baseBal : collateral;
-    const marginBudget = Math.floor(Math.min(
-        Math.max(0, collateral),
-        Math.max(0, balance) * CFG.MAX_ORDER_MARGIN_PERCENT / 100,
-    ));
+    // This is an exchange-solvency check, not a strategy risk limit. The
+    // strategy controls total contract exposure separately; here we only cap
+    // the order at the collateral that is actually available for it.
+    const marginBudget = Math.floor(Math.max(0, collateral));
     if (marginBudget <= 0) return 0;
 
     const maxSize = maxSizeForMargin(

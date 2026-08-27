@@ -184,13 +184,6 @@ export function validateRiskConfiguration(config = CFG): string[] {
         errors.push("BASE_RESERVE_MIN must be non-negative");
     }
     if (
-        !Number.isFinite(config.MAX_ORDER_MARGIN_PERCENT) ||
-        config.MAX_ORDER_MARGIN_PERCENT < 0 ||
-        config.MAX_ORDER_MARGIN_PERCENT > 100
-    ) {
-        errors.push("MAX_ORDER_MARGIN_PERCENT must be between 0 and 100");
-    }
-    if (
         !Number.isFinite(config.RISK_AVERSION_GAMMA_0) ||
         config.RISK_AVERSION_GAMMA_0 <= 0
     ) {
@@ -339,7 +332,6 @@ export const CFG = {
 
     // ============Quote Pricing Logic===============
     MAX_CAPITAL_EXPOSURE_PERCENT: envNum("MAX_CAPITAL_EXPOSURE_PERCENT", 70),
-    MAX_ORDER_MARGIN_PERCENT: envNum("MAX_ORDER_MARGIN_PERCENT", 100),
     RISK_AVERSION_GAMMA_0: envNum("RISK_AVERSION_GAMMA_0", 1e-9),
     RISK_AVERSION_GAMMA_MAX: envNum("RISK_AVERSION_GAMMA_MAX", 1e-8),
     RISK_AVERSION_B: envNum("RISK_AVERSION_B", 5),

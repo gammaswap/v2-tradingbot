@@ -117,20 +117,9 @@ describe("price configuration validation", () => {
         );
     });
 
-    it("rejects an invalid per-order margin percentage", () => {
-        expect(validateRiskConfiguration({
-            MAX_CAPITAL_EXPOSURE_PERCENT: 100,
-            MAX_ORDER_MARGIN_PERCENT: 101,
-            BASE_RESERVE_MIN: 1_500_000,
-        } as never)).toContain(
-            "MAX_ORDER_MARGIN_PERCENT must be between 0 and 100",
-        );
-    });
-
     it("rejects an invalid logit half-spread", () => {
         expect(validateRiskConfiguration({
             MAX_CAPITAL_EXPOSURE_PERCENT: 100,
-            MAX_ORDER_MARGIN_PERCENT: 100,
             RISK_AVERSION_GAMMA_0: 1e-9,
             RISK_AVERSION_GAMMA_MAX: 1e-8,
             RISK_AVERSION_B: 5,
@@ -144,7 +133,6 @@ describe("price configuration validation", () => {
     it("requires quote slots to be an integer between 1 and 100", () => {
         const base = {
             MAX_CAPITAL_EXPOSURE_PERCENT: 100,
-            MAX_ORDER_MARGIN_PERCENT: 100,
             RISK_AVERSION_GAMMA_0: 1e-9,
             RISK_AVERSION_GAMMA_MAX: 1e-8,
             RISK_AVERSION_B: 5,
@@ -163,7 +151,6 @@ describe("price configuration validation", () => {
     it("validates total quote size and decay parameters", () => {
         const base = {
             MAX_CAPITAL_EXPOSURE_PERCENT: 100,
-            MAX_ORDER_MARGIN_PERCENT: 100,
             RISK_AVERSION_GAMMA_0: 1e-9,
             RISK_AVERSION_GAMMA_MAX: 1e-8,
             RISK_AVERSION_B: 5,
@@ -190,7 +177,6 @@ describe("price configuration validation", () => {
     it("validates quote-size concavity", () => {
         const base = {
             MAX_CAPITAL_EXPOSURE_PERCENT: 100,
-            MAX_ORDER_MARGIN_PERCENT: 100,
             RISK_AVERSION_GAMMA_0: 1e-9,
             RISK_AVERSION_GAMMA_MAX: 1e-8,
             RISK_AVERSION_B: 5,
@@ -217,7 +203,6 @@ describe("price configuration validation", () => {
     it("requires contract exposure percentage to be between 1 and 100", () => {
         const base = {
             MAX_CAPITAL_EXPOSURE_PERCENT: 100,
-            MAX_ORDER_MARGIN_PERCENT: 100,
             RISK_AVERSION_GAMMA_0: 1e-9,
             RISK_AVERSION_GAMMA_MAX: 1e-8,
             RISK_AVERSION_B: 5,
