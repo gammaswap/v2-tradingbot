@@ -270,6 +270,7 @@ export const CFG = {
     BOOK_STALE_MS: envNum("BOOK_STALE_MS", 45000),
 
     // ===============Fair Value Parameters===============
+    // Estimate of probability of contract winning based on Black-Scholes model
     // Fair-value model:
     //   tau = expiresInSec / secondsPerYear
     //   d2 = (ln(spot / strike) - 0.5 * volatility^2 * tau)
@@ -281,6 +282,7 @@ export const CFG = {
     //   fairValue = roundToTick(P(pays) * 1,000,000)
     FAIR_VALUE_VOL: envNum("FAIR_VALUE_VOL", 0.80),
     FAIR_VALUE_WEIGHT: envNum("FAIR_VALUE_WEIGHT", 1.0),
+    // When true means contract wins when price above strike
     FAIR_VALUE_PAYS_ABOVE_STRIKE: envBool("FAIR_VALUE_PAYS_ABOVE_STRIKE", true),
     // When enabled, the oracle price is used to estimate fair value and can
     // influence the quoting reference price and aggression decisions. When
@@ -288,7 +290,13 @@ export const CFG = {
     // continues from a fresh order-book midpoint and aggression uses its
     // non-oracle fallback model.
     USE_ORACLE_FAIR_VALUE: envBool("USE_ORACLE_FAIR_VALUE", true),
+    // Ongoing oracle-stream timeout. If no oracle update arrives during this
+    // interval, the SDK marks the subscription stale, STATE.oracle.stale is
+    // set to true, and the fair value is no longer considered usable.
     ORACLE_STALE_PRICE_TIMEOUT_MS: envNum("ORACLE_STALE_PRICE_TIMEOUT_MS", 30000),
+    // Startup timeout for receiving the first oracle price after subscribing.
+    // When fresh fair value is required, failure to receive that first price
+    // within this interval prevents the bot from starting its coordinator.
     ORACLE_FIRST_PRICE_TIMEOUT_MS: envNum("ORACLE_FIRST_PRICE_TIMEOUT_MS", 30000),
     // Only applies when USE_ORACLE_FAIR_VALUE is enabled. If true, trading
     // pauses until a fresh oracle fair value is available; if false, the bot
@@ -370,6 +378,10 @@ export const CFG = {
     INV_TARGET: envNum("INV_TARGET", 0),
     INV_MAX_ABS: envNum("INV_MAX_ABS", 5000 * 1000000),
 
+    // Duration that a quote slot remains paused after a terminal order
+    // failure, such as a rejected placement or failed replacement. This
+    // prevents the next quote-maintenance pass from immediately resubmitting
+    // the same slot while the market or account conditions may still be bad.
     ORDER_FAILURE_COOLDOWN_MS: envNum("ORDER_FAILURE_COOLDOWN_MS", 5_000),
     // Protocol price-unit increment. The default 1,000 equals 0.1 cents.
     TICK_SIZE: envNum("TICK_SIZE", 1000),
