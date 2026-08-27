@@ -51,6 +51,7 @@ export type TradingBotOptions = {
     quote?: {
         quoteLoopMs?: number;
         quoteJitterMs?: number;
+        orderFailureCooldownMs?: number;
         riskAversionGamma0?: number;
         riskAversionGammaMax?: number;
         riskAversionB?: number;
@@ -126,6 +127,7 @@ function getOptionOverrides(options: TradingBotOptions): Record<string, unknown>
         HARD_MAX_PRICE: options.hardMaxPrice,
         QUOTE_LOOP_MS: options.quote?.quoteLoopMs,
         QUOTE_JITTER_MS: options.quote?.quoteJitterMs,
+        ORDER_FAILURE_COOLDOWN_MS: options.quote?.orderFailureCooldownMs,
         RISK_AVERSION_GAMMA_0: options.quote?.riskAversionGamma0,
         RISK_AVERSION_GAMMA_MAX: options.quote?.riskAversionGammaMax,
         RISK_AVERSION_B: options.quote?.riskAversionB,

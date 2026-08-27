@@ -49,6 +49,7 @@ async function main(): Promise<void> {
         quote: {
             quoteLoopMs: CFG.QUOTE_LOOP_MS,
             quoteJitterMs: CFG.QUOTE_JITTER_MS,
+            orderFailureCooldownMs: CFG.ORDER_FAILURE_COOLDOWN_MS,
             riskAversionGamma0: CFG.RISK_AVERSION_GAMMA_0,
             riskAversionGammaMax: CFG.RISK_AVERSION_GAMMA_MAX,
             riskAversionB: CFG.RISK_AVERSION_B,
