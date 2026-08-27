@@ -55,6 +55,7 @@ async function main(): Promise<void> {
         risk: {
             maxContractExposurePct: CFG.MAX_CONTRACT_EXPOSURE_PCT,
             maxCapitalExposurePct: CFG.MAX_CAPITAL_EXPOSURE_PERCENT,
+            baseReserveMin: CFG.BASE_RESERVE_MIN,
             inventoryTarget: CFG.INV_TARGET,
             inventoryMaxAbs: CFG.INV_MAX_ABS,
         },

@@ -43,6 +43,9 @@ describe("TradingBot options", () => {
                 aggressionJitterMs: 300,
                 fairValueMinEdgeTicks: 3,
             },
+            risk: {
+                baseReserveMin: 123_456,
+            },
         });
 
         expect(bot).toBeInstanceOf(TradingBot);
@@ -64,5 +67,6 @@ describe("TradingBot options", () => {
         expect((bot as any).context.config.AGGRESS_MS).toBe(6_000);
         expect((bot as any).context.config.AGGRESS_JITTER_MS).toBe(300);
         expect((bot as any).context.config.FAIR_VALUE_MIN_EDGE_TICKS).toBe(3);
+        expect((bot as any).context.config.BASE_RESERVE_MIN).toBe(123_456);
     });
 });

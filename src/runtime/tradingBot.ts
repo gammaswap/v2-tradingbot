@@ -57,6 +57,7 @@ export type TradingBotOptions = {
     risk?: {
         maxContractExposurePct?: number;
         maxCapitalExposurePct?: number;
+        baseReserveMin?: number;
         inventoryTarget?: number;
         inventoryMaxAbs?: number;
     };
@@ -120,6 +121,7 @@ function getOptionOverrides(options: TradingBotOptions): Record<string, unknown>
         QUOTE_SIZE_CONCAVITY: options.quote?.quoteSizeConcavity,
         MAX_CONTRACT_EXPOSURE_PCT: options.risk?.maxContractExposurePct,
         MAX_CAPITAL_EXPOSURE_PERCENT: options.risk?.maxCapitalExposurePct,
+        BASE_RESERVE_MIN: options.risk?.baseReserveMin,
         INV_TARGET: options.risk?.inventoryTarget,
         INV_MAX_ABS: options.risk?.inventoryMaxAbs,
         FAIR_VALUE_STALE_MS: options.fairValue?.fairValueStaleMs,
