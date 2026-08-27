@@ -7,6 +7,8 @@ import {
     PROTOCOL_MIN_PRICE,
     PROTOCOL_MAX_PRICE,
     PROTOCOL_MIN_SIZE,
+    SDK_PRICE_STEP,
+    SDK_SIZE_STEP,
 } from "../utils/protocolPrice.js";
 
 const PROTOCOL_PRICE_SCALE = 1_000_000;
@@ -66,7 +68,7 @@ export function shouldPauseForFairValue(
 }
 
 export function shouldCancelReplace(o: PendingOrder, newPrice: number, newSize: number, tolTicks: number = 1) : boolean {
-    const tol = CFG.TICK_SIZE * tolTicks + 1;//1e-12;
+    const tol = SDK_PRICE_STEP * tolTicks + 1;//1e-12;
     const tolSize = 10000 * 1000; // 10 USD = $0.01 x 1000
     if (
         Math.abs(o.price - newPrice) <= tol &&
@@ -350,7 +352,7 @@ export function depthToWipe(book: BookSnapshot, side: Side, levels: number): { q
 }
 
 export function nearestOrderAtPrice(pending: Map<string, PendingOrder>, side: Side, price: number, tolTicks = 1) {
-    const tol = CFG.TICK_SIZE * tolTicks + 1;//1e-12;
+    const tol = SDK_PRICE_STEP * tolTicks + 1;//1e-12;
     for (const o of pending.values()) {
         if (o.side !== side) {
             continue;
@@ -566,7 +568,7 @@ export function distributeTotalSizeAcrossLadder(
     // Convert the total contract quantity into exchange-compatible lots. The
     // total-size calculator already returns lot-aligned values; flooring here
     // keeps this helper safe for direct callers as well.
-    const lotSize = CFG.LOT_SIZE;
+    const lotSize = SDK_SIZE_STEP;
     const totalLots = Math.floor(totalSize / lotSize);
     if (totalLots <= 0) return targetPrices.map(() => 0);
 
@@ -719,7 +721,7 @@ export function chooseFairValueAggressionSide(book: BookSnapshot, reference: num
 
     // This chooses to cross the spread to buy if reference > ask by minEdge, and sell if reference < bid by minEdge.
     const { bid, ask } = bestBidAsk(book);
-    const minEdge = CFG.FAIR_VALUE_MIN_EDGE_TICKS * CFG.TICK_SIZE;
+    const minEdge = CFG.FAIR_VALUE_MIN_EDGE_TICKS * SDK_PRICE_STEP;
     const buyEdge = ask == null ? Number.NEGATIVE_INFINITY : reference - ask;
     const sellEdge = bid == null ? Number.NEGATIVE_INFINITY : bid - reference;
     const bestEdge = Math.max(buyEdge, sellEdge);
@@ -729,7 +731,7 @@ export function chooseFairValueAggressionSide(book: BookSnapshot, reference: num
 }
 
 function roundToNearestTick(price: number): number {
-    const tick = CFG.TICK_SIZE;
+    const tick = SDK_PRICE_STEP;
     if (tick <= 0) return Math.round(price);
     return Math.round(price / tick) * tick;
 }

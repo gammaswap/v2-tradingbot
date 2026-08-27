@@ -44,8 +44,6 @@ export type TradingBotOptions = {
     contracts: ContractAddresses;
     orderbookWsUrl?: string;
     bookStaleMs?: number;
-    tickSize?: number;
-    lotSize?: number;
     hardMinPrice?: number;
     hardMaxPrice?: number;
     dustBalance?: bigint;
@@ -123,8 +121,6 @@ function getOptionOverrides(options: TradingBotOptions): Record<string, unknown>
         DEPOSIT_LEDGER_ADDRESS: options.contracts.depositLedger,
         ORDERBOOK_WS_URL: options.orderbookWsUrl,
         BOOK_STALE_MS: options.bookStaleMs,
-        TICK_SIZE: options.tickSize,
-        LOT_SIZE: options.lotSize,
         HARD_MIN_PRICE: options.hardMinPrice,
         HARD_MAX_PRICE: options.hardMaxPrice,
         DUST_BALANCE: options.dustBalance,

@@ -133,7 +133,6 @@ export function validatePriceConfiguration(config = CFG): string[] {
 export function validateOrderSizeConfiguration(config = CFG): string[] {
     const errors: string[] = [];
     const sizes = [
-        ["LOT_SIZE", config.LOT_SIZE],
         ["MAX_AGGRESS_QTY", config.MAX_AGGRESS_QTY],
         ["MAX_ORDER_SIZE", config.MAX_ORDER_SIZE],
     ] as const;
@@ -435,9 +434,6 @@ export const CFG = {
     // prevents the next quote-maintenance pass from immediately resubmitting
     // the same slot while the market or account conditions may still be bad.
     ORDER_FAILURE_COOLDOWN_MS: envNum("ORDER_FAILURE_COOLDOWN_MS", 5_000),
-    // Protocol price-unit increment. The default 1,000 equals 0.1 cents.
-    TICK_SIZE: envNum("TICK_SIZE", 1000),
-    LOT_SIZE: envNum("LOT_SIZE", 10000),// 0.01
     // Minimum pending balance that is treated as non-dust. Pending balances
     // below this threshold are treated as clear; balances at or above it
     // trigger pending-balance handling and prevent normal startup. This is a

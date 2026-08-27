@@ -26,8 +26,6 @@ async function main(): Promise<void> {
         },
         orderbookWsUrl: CFG.ORDERBOOK_WS_URL,
         bookStaleMs: CFG.BOOK_STALE_MS,
-        tickSize: CFG.TICK_SIZE,
-        lotSize: CFG.LOT_SIZE,
         hardMinPrice: CFG.HARD_MIN_PRICE,
         hardMaxPrice: CFG.HARD_MAX_PRICE,
         dustBalance: CFG.DUST_BALANCE,

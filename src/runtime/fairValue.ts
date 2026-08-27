@@ -1,7 +1,7 @@
 import { RUNTIME_CFG as CFG, RUNTIME_STATE as STATE } from "./context.js";
 import type { Asset } from "../utils/types.js";
 import { clamp, nowMs } from "../utils/utils.js";
-import { PROTOCOL_MIN_PRICE, PROTOCOL_MAX_PRICE } from "../utils/protocolPrice.js";
+import { PROTOCOL_MIN_PRICE, PROTOCOL_MAX_PRICE, SDK_PRICE_STEP } from "../utils/protocolPrice.js";
 
 const PROTOCOL_PRICE_SCALE = 1_000_000;
 const SECONDS_PER_YEAR = 365 * 24 * 60 * 60;
@@ -75,7 +75,7 @@ function probabilityAboveStrike(spot: number, strike: number, expiresInSec: numb
 }
 
 function roundToProtocolTick(value: number): number {
-    const tick = CFG.TICK_SIZE;
+    const tick = SDK_PRICE_STEP;
     if (tick <= 0) return Math.round(value);
     return clamp(
         Math.round(value / tick) * tick,

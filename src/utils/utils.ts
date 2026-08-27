@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { CFG, type Side } from "../config/config.js";
 import { OrderKey, PendingOrder } from "./types.js";
+import { SDK_PRICE_STEP, SDK_SIZE_STEP } from "./protocolPrice.js";
 
 export function sleep(ms: number) {
     return new Promise((r) => setTimeout(r, ms));
@@ -15,7 +16,7 @@ export function clamp(x: number, lo: number, hi: number) {
 }
 
 export function roundToTick(price: number, side: Side): number {
-    const t = CFG.TICK_SIZE;
+    const t = SDK_PRICE_STEP;
     if (t <= 0) return price;
     const q = price / t;
     const r = side === "buy" ? Math.floor(q) : Math.ceil(q);
@@ -23,7 +24,7 @@ export function roundToTick(price: number, side: Side): number {
 }
 
 export function roundToLot(lot: number): number {
-    const t = CFG.LOT_SIZE;
+    const t = SDK_SIZE_STEP;
     if (t <= 0) return lot;
     const q = lot / t;
     const r = Math.ceil(q);
@@ -31,14 +32,14 @@ export function roundToLot(lot: number): number {
 }
 
 export function roundToOrderLot(size: number): number {
-    if (!Number.isFinite(size) || size <= 0 || CFG.LOT_SIZE <= 0) return 0;
-    const rounded = Math.ceil(size / CFG.LOT_SIZE) * CFG.LOT_SIZE;
+    if (!Number.isFinite(size) || size <= 0 || SDK_SIZE_STEP <= 0) return 0;
+    const rounded = Math.ceil(size / SDK_SIZE_STEP) * SDK_SIZE_STEP;
     return Math.min(rounded, CFG.MAX_ORDER_SIZE);
 }
 
 export function roundDownToOrderLot(size: number): number {
-    if (!Number.isFinite(size) || size <= 0 || CFG.LOT_SIZE <= 0) return 0;
-    const rounded = Math.floor(size / CFG.LOT_SIZE) * CFG.LOT_SIZE;
+    if (!Number.isFinite(size) || size <= 0 || SDK_SIZE_STEP <= 0) return 0;
+    const rounded = Math.floor(size / SDK_SIZE_STEP) * SDK_SIZE_STEP;
     return Math.min(rounded, CFG.MAX_ORDER_SIZE);
 }
 

@@ -34,8 +34,6 @@ describe("TradingBot options", () => {
             },
             orderbookWsUrl: "wss://example.com/orderbook",
             bookStaleMs: 11_111,
-            tickSize: 1_000,
-            lotSize: 10_000,
             hardMinPrice: 2_000,
             hardMaxPrice: 998_000,
             dustBalance: 654_321n,
@@ -80,8 +78,6 @@ describe("TradingBot options", () => {
         expect((bot as any).context.config.API_TIMEOUT_MS).toBe(12_345);
         expect((bot as any).context.config.ORDERBOOK_WS_URL).toBe("wss://example.com/orderbook");
         expect((bot as any).context.config.BOOK_STALE_MS).toBe(11_111);
-        expect((bot as any).context.config.TICK_SIZE).toBe(1_000);
-        expect((bot as any).context.config.LOT_SIZE).toBe(10_000);
         expect((bot as any).context.config.HARD_MIN_PRICE).toBe(2_000);
         expect((bot as any).context.config.HARD_MAX_PRICE).toBe(998_000);
         expect((bot as any).context.config.DUST_BALANCE).toBe(654_321n);

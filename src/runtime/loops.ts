@@ -42,6 +42,7 @@ import {
 } from "./intentResponses.js";
 import { RUNTIME_QUOTE_COOLDOWNS as QUOTE_COOLDOWNS } from "./context.js";
 import { protocolValueToSafeNumber } from "../utils/protocolMath.js";
+import { SDK_PRICE_STEP } from "../utils/protocolPrice.js";
 
 export async function hasPendingOrders() {
     const resp = await apiGetBalance();
@@ -611,11 +612,11 @@ export async function runAggression(wallet: Wallet) {
         console.log("tradeQty:", tradeQty);
     }
 
-    console.log("TICK_SIZE:", CFG.TICK_SIZE);
+    console.log("TICK_SIZE:", SDK_PRICE_STEP);
     const aggressivePrice =
         side === "buy"
-            ? clamp(roundToTick(refPrice + 10 * CFG.TICK_SIZE, "sell"), CFG.HARD_MIN_PRICE, CFG.HARD_MAX_PRICE)
-            : clamp(roundToTick(refPrice - 10 * CFG.TICK_SIZE, "buy"), CFG.HARD_MIN_PRICE, CFG.HARD_MAX_PRICE);
+            ? clamp(roundToTick(refPrice + 10 * SDK_PRICE_STEP, "sell"), CFG.HARD_MIN_PRICE, CFG.HARD_MAX_PRICE)
+            : clamp(roundToTick(refPrice - 10 * SDK_PRICE_STEP, "buy"), CFG.HARD_MIN_PRICE, CFG.HARD_MAX_PRICE);
 
     console.log("aggressivePrice:", aggressivePrice, "side:", side, "qty:", tradeQty, "mid:", bookMid, "reference:", refPrice);
     try {
