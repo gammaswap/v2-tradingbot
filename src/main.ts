@@ -28,6 +28,8 @@ async function main(): Promise<void> {
         bookStaleMs: CFG.BOOK_STALE_MS,
         tickSize: CFG.TICK_SIZE,
         lotSize: CFG.LOT_SIZE,
+        hardMinPrice: CFG.HARD_MIN_PRICE,
+        hardMaxPrice: CFG.HARD_MAX_PRICE,
         fairValue: {
             oracleFeedWsUrl: CFG.ORACLE_FEED_WS_URL,
             enabled: CFG.USE_ORACLE_FAIR_VALUE,
@@ -55,6 +57,8 @@ async function main(): Promise<void> {
             totalSizeTimeBucketSeconds: CFG.TOTAL_SIZE_TIME_BUCKET_SECONDS,
             levelsPerSide: CFG.LEVELS_PER_SIDE,
             ladderModel: CFG.LADDER_PRICE_MODEL === 2 ? "growth-space" : "equidistant",
+            levelSpacingNear: CFG.LEVEL_SPACING_NEAR,
+            levelSpacingGrowth: CFG.LEVEL_SPACING_GROWTH,
             logitHalfSpread: CFG.LOGIT_HALF_SPREAD,
             quoteSizeConcavity: CFG.QUOTE_SIZE_CONCAVITY,
         },

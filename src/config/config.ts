@@ -248,6 +248,8 @@ export function validateRiskConfiguration(config = CFG): string[] {
     return errors;
 }
 
+// Prices and Sizes use protocol units: 1,000 = 0.1 cents ($0.001), and
+// 1,000,000 = 100 cents ($1.00). These values are not SDK decimals.
 export const CFG = {
     ASSET_ID,
 
@@ -404,9 +406,13 @@ export const CFG = {
     QUOTE_LOOP_MS: envNum("QUOTE_LOOP_MS", 10000),
     QUOTE_JITTER_MS: envNum("QUOTE_JITTER_MS", 5000),
 
-    // Prices use protocol units: 1,000 = 0.1 cents ($0.001), and
-    // 1,000,000 = 100 cents ($1.00). These values are not SDK decimals.
+    // HARD_MIN_PRICE is the absolute lower bound for every quote. Prices
+    // below it are never submitted, even if the strategy calculates them.
+    // It must remain within the exchange's protocol price range.
     HARD_MIN_PRICE: envNum("HARD_MIN_PRICE", 1000), // 0.1 cents ($0.001)
+    // HARD_MAX_PRICE is the absolute upper bound for every quote. Prices
+    // above it are never submitted, even if the strategy calculates them.
+    // It must remain within the exchange's protocol price range.
     HARD_MAX_PRICE: envNum("HARD_MAX_PRICE", 999000), // 99.9 cents ($0.999)
     SOFT_MIN_PRICE: envNum("SOFT_MIN_PRICE", 300000), // 30.0 cents ($0.30)
     SOFT_MAX_PRICE: envNum("SOFT_MAX_PRICE", 700000), // 70.0 cents ($0.70)
@@ -415,6 +421,10 @@ export const CFG = {
     // Initial ladder distance in protocol price units. The default 2,000
     // equals 0.2 cents ($0.002).
     LEVEL_SPACING_NEAR: envNum("LEVEL_SPACING_NEAR", 2000),
+    // Multiplicative growth applied to each successive level's spacing in the
+    // growth-space ladder model. For example, with LEVEL_SPACING_NEAR = 2,000
+    // and growth = 1.5, successive distances are 2,000, 3,000, 4,500, etc.
+    // This is a dimensionless strategy parameter, not a price denomination.
     LEVEL_SPACING_GROWTH: envNum("LEVEL_SPACING_GROWTH", 1.5),
 
     INV_TARGET: envNum("INV_TARGET", 0),

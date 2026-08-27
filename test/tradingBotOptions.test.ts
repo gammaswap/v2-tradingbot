@@ -36,6 +36,8 @@ describe("TradingBot options", () => {
             bookStaleMs: 11_111,
             tickSize: 1_000,
             lotSize: 10_000,
+            hardMinPrice: 2_000,
+            hardMaxPrice: 998_000,
             fairValue: {
                 oracleFeedWsUrl: "wss://example.com/oracle",
                 enabled: true,
@@ -56,6 +58,8 @@ describe("TradingBot options", () => {
                 totalSizeDecayK: 2.5,
                 totalSizeDecayA: 0.75,
                 totalSizeTimeBucketSeconds: 10,
+                levelSpacingNear: 2_500,
+                levelSpacingGrowth: 1.75,
             },
             aggression: {
                 aggressionMs: 6_000,
@@ -75,6 +79,8 @@ describe("TradingBot options", () => {
         expect((bot as any).context.config.BOOK_STALE_MS).toBe(11_111);
         expect((bot as any).context.config.TICK_SIZE).toBe(1_000);
         expect((bot as any).context.config.LOT_SIZE).toBe(10_000);
+        expect((bot as any).context.config.HARD_MIN_PRICE).toBe(2_000);
+        expect((bot as any).context.config.HARD_MAX_PRICE).toBe(998_000);
         expect((bot as any).context.config.ORACLE_STALE_PRICE_TIMEOUT_MS).toBe(23_456);
         expect((bot as any).context.config.FAIR_VALUE_STALE_MS).toBe(45_678);
         expect((bot as any).context.config.ORACLE_FEED_WS_URL).toBe("wss://example.com/oracle");
@@ -89,6 +95,8 @@ describe("TradingBot options", () => {
         expect((bot as any).context.config.TOTAL_SIZE_DECAY_K).toBe(2.5);
         expect((bot as any).context.config.TOTAL_SIZE_DECAY_A).toBe(0.75);
         expect((bot as any).context.config.TOTAL_SIZE_TIME_BUCKET_SECONDS).toBe(10);
+        expect((bot as any).context.config.LEVEL_SPACING_NEAR).toBe(2_500);
+        expect((bot as any).context.config.LEVEL_SPACING_GROWTH).toBe(1.75);
         expect((bot as any).context.config.AGGRESS_MS).toBe(6_000);
         expect((bot as any).context.config.AGGRESS_JITTER_MS).toBe(300);
         expect((bot as any).context.config.FAIR_VALUE_MIN_EDGE_TICKS).toBe(3);
