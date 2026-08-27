@@ -4,7 +4,7 @@ import { resolveTradingWallet } from "../src/runtime/wallet.js";
 
 describe("trading wallet resolution", () => {
     it("prefers an explicitly supplied wallet", () => {
-        const wallet = Wallet.createRandom();
+        const wallet = Wallet.createRandom() as unknown as Wallet;
         expect(resolveTradingWallet(wallet)).toBe(wallet);
     });
 
