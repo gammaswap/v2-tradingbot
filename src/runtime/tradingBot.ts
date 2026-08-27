@@ -196,6 +196,10 @@ export class TradingBot {
         );
 
         const queue = new RuntimeEventQueue();
+        // This call is unconditional so the bot always owns an OracleFeed
+        // with close() and waitForFirstPrice(). startOracleFeed() returns a
+        // no-op feed when USE_ORACLE_FAIR_VALUE is false, so no oracle
+        // websocket is started in that mode.
         this.oracleFeed = await startOracleFeed(queue);
         this.orderBookFeed = await startOrderBookFeed(queue);
 

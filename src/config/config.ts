@@ -267,17 +267,38 @@ export const CFG = {
     DEPOSIT_LEDGER_ADDRESS: envStr("DEPOSIT_LEDGER_ADDRESS", "0x06E54Aa21496Ed0099219ea79a2c72247F36091A"),
     EXCHANGE_ADDRESS: envStr("EXCHANGE_ADDRESS", ""),
 
-    USE_ORACLE_FAIR_VALUE: envBool("USE_ORACLE_FAIR_VALUE", true),
-    REQUIRE_FRESH_FAIR_VALUE: envBool("REQUIRE_FRESH_FAIR_VALUE", true),
-    ORACLE_STALE_PRICE_TIMEOUT_MS: envNum("ORACLE_STALE_PRICE_TIMEOUT_MS", 30000),
-    ORACLE_FIRST_PRICE_TIMEOUT_MS: envNum("ORACLE_FIRST_PRICE_TIMEOUT_MS", 30000),
-    FAIR_VALUE_STALE_MS: envNum("FAIR_VALUE_STALE_MS", 45000),
     BOOK_STALE_MS: envNum("BOOK_STALE_MS", 45000),
+
+    // ===============Fair Value Parameters===============
+    // Fair-value model:
+    //   tau = expiresInSec / secondsPerYear
+    //   d2 = (ln(spot / strike) - 0.5 * volatility^2 * tau)
+    //        / (volatility * sqrt(tau))
+    //   P(spot >= strike at expiration) = NormalCDF(d2)
+    // If the market pays below the strike, the probability is inverted:
+    //   P(pays) = 1 - NormalCDF(d2)
+    // The resulting probability is converted to protocol price units:
+    //   fairValue = roundToTick(P(pays) * 1,000,000)
     FAIR_VALUE_VOL: envNum("FAIR_VALUE_VOL", 0.80),
     FAIR_VALUE_WEIGHT: envNum("FAIR_VALUE_WEIGHT", 1.0),
-    // Number of protocol price ticks required for a fair-value trade edge.
-    FAIR_VALUE_MIN_EDGE_TICKS: envNum("FAIR_VALUE_MIN_EDGE_TICKS", 2),
     FAIR_VALUE_PAYS_ABOVE_STRIKE: envBool("FAIR_VALUE_PAYS_ABOVE_STRIKE", true),
+    // When enabled, the oracle price is used to estimate fair value and can
+    // influence the quoting reference price and aggression decisions. When
+    // disabled, the oracle feed and fair-value model are not used; quoting
+    // continues from a fresh order-book midpoint and aggression uses its
+    // non-oracle fallback model.
+    USE_ORACLE_FAIR_VALUE: envBool("USE_ORACLE_FAIR_VALUE", true),
+    ORACLE_STALE_PRICE_TIMEOUT_MS: envNum("ORACLE_STALE_PRICE_TIMEOUT_MS", 30000),
+    ORACLE_FIRST_PRICE_TIMEOUT_MS: envNum("ORACLE_FIRST_PRICE_TIMEOUT_MS", 30000),
+    // Only applies when USE_ORACLE_FAIR_VALUE is enabled. If true, trading
+    // pauses until a fresh oracle fair value is available; if false, the bot
+    // may fall back to a fresh order-book midpoint.
+    REQUIRE_FRESH_FAIR_VALUE: envBool("REQUIRE_FRESH_FAIR_VALUE", true),
+    // Maximum age of STATE.fairValue.updatedAtMs before the fair value is
+    // considered stale. A fair value is fresh when the current time minus
+    // updatedAtMs is less than or equal to this value. This is separate from
+    // ORACLE_STALE_PRICE_TIMEOUT_MS, which detects an inactive websocket.
+    FAIR_VALUE_STALE_MS: envNum("FAIR_VALUE_STALE_MS", 45000),
 
     // ===============Aggression logic=================
     AGGRESS_MS: envNum("AGGRESS_MS", 300000),
@@ -289,6 +310,8 @@ export const CFG = {
     MEANREV_K: envNum("MEANREV_K", 2.0),
     INV_SKEW_STRENGTH: envNum("INV_SKEW_STRENGTH", 0.35),
     CENTER_PRICE: envNum("CENTER_PRICE", 500000), // 50.0 cents ($0.50)
+    // Number of protocol price ticks required for a fair-value trade edge.
+    FAIR_VALUE_MIN_EDGE_TICKS: envNum("FAIR_VALUE_MIN_EDGE_TICKS", 2),
 
     // ============Collateral availability for order placement===============
     // These two settings work together. The available collateral used by the

@@ -12,6 +12,10 @@ export type OracleFeed = {
 };
 
 export async function startOracleFeed(queue: RuntimeEventQueue): Promise<OracleFeed> {
+    // TradingBot starts this function for every bot so feed cleanup and the
+    // first-price lifecycle use one consistent interface. When fair value is
+    // disabled, no websocket or subscription is created; a no-op feed is
+    // returned instead.
     if (!CFG.USE_ORACLE_FAIR_VALUE) {
         return {
             close: async () => {},
