@@ -7,6 +7,11 @@ describe("TradingBot options", () => {
         const bot = new TradingBot({
             wallet: Wallet.createRandom() as unknown as Wallet,
             apiUrl: "https://example.com/api",
+            api: {
+                key: "constructor-api-key",
+                secret: "constructor-api-secret",
+                timeoutMs: 12_345,
+            },
             assetId: "1",
             chainId: 1,
             contracts: {
@@ -15,11 +20,14 @@ describe("TradingBot options", () => {
                 settlementToken: "0x3333333333333333333333333333333333333333",
             },
             oracle: {
-                stalePriceTimeoutMs: 12_345,
+                stalePriceTimeoutMs: 23_456,
             },
         });
 
         expect(bot).toBeInstanceOf(TradingBot);
-        expect((bot as any).context.config.ORACLE_STALE_PRICE_TIMEOUT_MS).toBe(12_345);
+        expect((bot as any).context.config.API_KEY).toBe("constructor-api-key");
+        expect((bot as any).context.config.API_SECRET).toBe("constructor-api-secret");
+        expect((bot as any).context.config.API_TIMEOUT_MS).toBe(12_345);
+        expect((bot as any).context.config.ORACLE_STALE_PRICE_TIMEOUT_MS).toBe(23_456);
     });
 });

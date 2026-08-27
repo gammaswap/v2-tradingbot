@@ -34,6 +34,11 @@ export type ContractAddresses = {
 export type TradingBotOptions = {
     wallet?: Wallet;
     apiUrl: string;
+    api?: {
+        key?: string;
+        secret?: string;
+        timeoutMs?: number;
+    };
     assetId: string;
     chainId: number;
     contracts: ContractAddresses;
@@ -82,6 +87,9 @@ export type TradingBotStatus = {
 function getOptionOverrides(options: TradingBotOptions): Record<string, unknown> {
     const overrides: Record<string, unknown> = {
         API_URL: options.apiUrl,
+        API_KEY: options.api?.key,
+        API_SECRET: options.api?.secret,
+        API_TIMEOUT_MS: options.api?.timeoutMs,
         ASSET_ID: options.assetId,
         CHAIN_ID: options.chainId,
         EXCHANGE_ADDRESS: options.contracts.exchange,
