@@ -253,7 +253,6 @@ export function validateRiskConfiguration(config = CFG): string[] {
 
 export const CFG = {
     ASSET_ID,
-    EPOCH: envStr("EPOCH", "0"),
 
     // ===============SDK Parameters===============
     RPC_URL: envStr("RPC_URL", "http://localhost:8545"),
