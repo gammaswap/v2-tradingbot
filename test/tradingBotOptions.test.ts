@@ -5,7 +5,7 @@ import { TradingBot } from "../src/runtime/tradingBot.js";
 describe("TradingBot options", () => {
     it("accepts an oracle stale-price timeout override", () => {
         const bot = new TradingBot({
-            wallet: Wallet.createRandom(),
+            wallet: Wallet.createRandom() as unknown as Wallet,
             apiUrl: "https://example.com/api",
             assetId: "1",
             chainId: 1,
