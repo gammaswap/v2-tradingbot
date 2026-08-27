@@ -37,6 +37,9 @@ describe("TradingBot options", () => {
             quote: {
                 quoteLoopMs: 5_000,
                 quoteJitterMs: 250,
+                totalSizeDecayK: 2.5,
+                totalSizeDecayA: 0.75,
+                totalSizeTimeBucketSeconds: 10,
             },
             aggression: {
                 aggressionMs: 6_000,
@@ -64,6 +67,9 @@ describe("TradingBot options", () => {
         expect((bot as any).context.config.FAIR_VALUE_PAYS_ABOVE_STRIKE).toBe(false);
         expect((bot as any).context.config.QUOTE_LOOP_MS).toBe(5_000);
         expect((bot as any).context.config.QUOTE_JITTER_MS).toBe(250);
+        expect((bot as any).context.config.TOTAL_SIZE_DECAY_K).toBe(2.5);
+        expect((bot as any).context.config.TOTAL_SIZE_DECAY_A).toBe(0.75);
+        expect((bot as any).context.config.TOTAL_SIZE_TIME_BUCKET_SECONDS).toBe(10);
         expect((bot as any).context.config.AGGRESS_MS).toBe(6_000);
         expect((bot as any).context.config.AGGRESS_JITTER_MS).toBe(300);
         expect((bot as any).context.config.FAIR_VALUE_MIN_EDGE_TICKS).toBe(3);

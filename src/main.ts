@@ -47,6 +47,9 @@ async function main(): Promise<void> {
         quote: {
             quoteLoopMs: CFG.QUOTE_LOOP_MS,
             quoteJitterMs: CFG.QUOTE_JITTER_MS,
+            totalSizeDecayK: CFG.TOTAL_SIZE_DECAY_K,
+            totalSizeDecayA: CFG.TOTAL_SIZE_DECAY_A,
+            totalSizeTimeBucketSeconds: CFG.TOTAL_SIZE_TIME_BUCKET_SECONDS,
             levelsPerSide: CFG.LEVELS_PER_SIDE,
             ladderModel: CFG.LADDER_PRICE_MODEL === 2 ? "growth-space" : "equidistant",
             logitHalfSpread: CFG.LOGIT_HALF_SPREAD,

@@ -355,13 +355,25 @@ export const CFG = {
     LOGIT_HALF_SPREAD: envNum("LOGIT_HALF_SPREAD", 0.5),
 
     // ============Quote Size Parameters============
+    // Total quote size decays toward expiration using:
+    //   H(t) = H_0 * [1 - (1 - t/T)^k]^A
+    // where H_0 is the maximum total contracts allocated to either side,
+    // t is the bucketed number of seconds remaining, T is the epoch length,
+    // k controls how long size stays near H_0, and A controls how sharply
+    // size collapses near expiration. H_0 is derived from account balance
+    // and MAX_CONTRACT_EXPOSURE_PCT rather than configured independently.
+    // The resulting side totals are:
+    //   bidSize = max(0, inventoryTarget + H(t) - currentInventory)
+    //   askSize = max(0, currentInventory - inventoryTarget + H(t))
+    // Inventory values are signed contract quantities; final sizes are
+    // non-negative contract quantities.
     // Controls how strongly size is concentrated at prices farthest from the
     // best bid or ask. 1 is linear; values above 1 emphasize outer levels.
     QUOTE_SIZE_CONCAVITY: envNum("QUOTE_SIZE_CONCAVITY", 1),
     // Maximum contract allocation as a percentage of account balance. Both
     // bid and ask totals are capped independently at this allocation.
     MAX_CONTRACT_EXPOSURE_PCT: envNum("MAX_CONTRACT_EXPOSURE_PCT", 5),
-    // Values greater than 1 keep total size near its initial level for longer.
+    // Values greater than 1 keep total size near H_0 for longer.
     TOTAL_SIZE_DECAY_K: envNum("TOTAL_SIZE_DECAY_K", 2),
     // Values between 0 and 1 control how violently size collapses near expiration.
     TOTAL_SIZE_DECAY_A: envNum("TOTAL_SIZE_DECAY_A", 0.5),

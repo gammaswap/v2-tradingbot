@@ -49,6 +49,9 @@ export type TradingBotOptions = {
     quote?: {
         quoteLoopMs?: number;
         quoteJitterMs?: number;
+        totalSizeDecayK?: number;
+        totalSizeDecayA?: number;
+        totalSizeTimeBucketSeconds?: number;
         levelsPerSide?: number;
         ladderModel?: "equidistant" | "growth-space";
         logitHalfSpread?: number;
@@ -114,6 +117,9 @@ function getOptionOverrides(options: TradingBotOptions): Record<string, unknown>
         LOT_SIZE: options.lotSize,
         QUOTE_LOOP_MS: options.quote?.quoteLoopMs,
         QUOTE_JITTER_MS: options.quote?.quoteJitterMs,
+        TOTAL_SIZE_DECAY_K: options.quote?.totalSizeDecayK,
+        TOTAL_SIZE_DECAY_A: options.quote?.totalSizeDecayA,
+        TOTAL_SIZE_TIME_BUCKET_SECONDS: options.quote?.totalSizeTimeBucketSeconds,
         LEVELS_PER_SIDE: options.quote?.levelsPerSide,
         LADDER_PRICE_MODEL: options.quote?.ladderModel === "growth-space" ? 2 :
             options.quote?.ladderModel === "equidistant" ? 1 : undefined,
