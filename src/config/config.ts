@@ -252,18 +252,18 @@ export function validateRiskConfiguration(config = CFG): string[] {
 }
 
 export const CFG = {
-    RPC_URL: envStr("RPC_URL", "http://localhost:8545"),
-    API_URL: envApiUrl(),
-    API_TIMEOUT_MS: envNum("API_TIMEOUT_MS", 30_000),
-    ORDER_FAILURE_COOLDOWN_MS: envNum("ORDER_FAILURE_COOLDOWN_MS", 5_000),
-    ORDERBOOK_WS_URL: envStr("ORDERBOOK_WS_URL", "wss://exchange-api.gammaswap.com/ws/"),
-    ORACLE_FEED_WS_URL: envStr("ORACLE_FEED_WS_URL", "wss://exchange-api.gammaswap.com/oracle-ws/"),
     ASSET_ID,
     EPOCH: envStr("EPOCH", "0"),
     USER_ADDRESS: envStr("USER_ADDRESS", "0xa829c1D4542F70714B35fFe95a247373329131df"),
 
+    // ===============SDK Parameters===============
+    RPC_URL: envStr("RPC_URL", "http://localhost:8545"),
+    API_URL: envApiUrl(),
+    ORDERBOOK_WS_URL: envStr("ORDERBOOK_WS_URL", "wss://exchange-api.gammaswap.com/ws/"),
+    ORACLE_FEED_WS_URL: envStr("ORACLE_FEED_WS_URL", "wss://exchange-api.gammaswap.com/oracle-ws/"),
     API_KEY: envStr("API_KEY", ""),
     API_SECRET: envStr("API_SECRET", ""),
+    API_TIMEOUT_MS: envNum("API_TIMEOUT_MS", 30_000),
     MNEMONIC: envStr("MNEMONIC", DEFAULT_TEST_MNEMONIC),
     WALLET_INDEX: envNum("WALLET_INDEX", 0),
     CHAIN_ID: envNum("CHAIN_ID", 84532), // baseSepolia
@@ -353,6 +353,7 @@ export const CFG = {
     INV_TARGET: envNum("INV_TARGET", 0),
     INV_MAX_ABS: envNum("INV_MAX_ABS", 5000 * 1000000),
 
+    ORDER_FAILURE_COOLDOWN_MS: envNum("ORDER_FAILURE_COOLDOWN_MS", 5_000),
     // Protocol price-unit increment. The default 1,000 equals 0.1 cents.
     TICK_SIZE: envNum("TICK_SIZE", 1000),
     LOT_SIZE: envNum("LOT_SIZE", 10000),// 0.01
