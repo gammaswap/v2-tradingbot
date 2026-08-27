@@ -43,7 +43,10 @@ export type TradingBotOptions = {
     chainId: number;
     contracts: ContractAddresses;
     orderbookWsUrl?: string;
+    bookStaleMs?: number;
     quote?: {
+        quoteLoopMs?: number;
+        quoteJitterMs?: number;
         levelsPerSide?: number;
         ladderModel?: "equidistant" | "growth-space";
         logitHalfSpread?: number;
@@ -57,15 +60,8 @@ export type TradingBotOptions = {
         inventoryTarget?: number;
         inventoryMaxAbs?: number;
     };
-    timing?: {
-        quoteLoopMs?: number;
-        quoteJitterMs?: number;
-        aggressionMs?: number;
-        aggressionJitterMs?: number;
-        bookStaleMs?: number;
-        fairValueStaleMs?: number;
-    };
     fairValue?: {
+        fairValueStaleMs?: number;
         oracleFeedWsUrl?: string;
         enabled?: boolean;
         requireFreshValue?: boolean;
@@ -76,6 +72,8 @@ export type TradingBotOptions = {
         paysAboveStrike?: boolean;
     };
     aggression?: {
+        aggressionMs?: number;
+        aggressionJitterMs?: number;
         fairValueMinEdgeTicks?: number;
     };
 };
@@ -90,6 +88,12 @@ export type TradingBotStatus = {
     bookConnected: boolean;
 };
 
+/*
+ * The options above intentionally group timing controls with the subsystem
+ * whose behavior they affect. Keep this mapping centralized so constructor
+ * overrides continue to use the same validation and defaults as environment
+ * configuration.
+ */
 function getOptionOverrides(options: TradingBotOptions): Record<string, unknown> {
     const overrides: Record<string, unknown> = {
         API_URL: options.apiUrl,
@@ -104,7 +108,9 @@ function getOptionOverrides(options: TradingBotOptions): Record<string, unknown>
         PERMIT2_ADDRESS: options.contracts.permit2,
         DEPOSIT_LEDGER_ADDRESS: options.contracts.depositLedger,
         ORDERBOOK_WS_URL: options.orderbookWsUrl,
-        ORACLE_FEED_WS_URL: options.fairValue?.oracleFeedWsUrl,
+        BOOK_STALE_MS: options.bookStaleMs,
+        QUOTE_LOOP_MS: options.quote?.quoteLoopMs,
+        QUOTE_JITTER_MS: options.quote?.quoteJitterMs,
         LEVELS_PER_SIDE: options.quote?.levelsPerSide,
         LADDER_PRICE_MODEL: options.quote?.ladderModel === "growth-space" ? 2 :
             options.quote?.ladderModel === "equidistant" ? 1 : undefined,
@@ -116,12 +122,8 @@ function getOptionOverrides(options: TradingBotOptions): Record<string, unknown>
         MAX_CAPITAL_EXPOSURE_PERCENT: options.risk?.maxCapitalExposurePct,
         INV_TARGET: options.risk?.inventoryTarget,
         INV_MAX_ABS: options.risk?.inventoryMaxAbs,
-        QUOTE_LOOP_MS: options.timing?.quoteLoopMs,
-        QUOTE_JITTER_MS: options.timing?.quoteJitterMs,
-        AGGRESS_MS: options.timing?.aggressionMs,
-        AGGRESS_JITTER_MS: options.timing?.aggressionJitterMs,
-        BOOK_STALE_MS: options.timing?.bookStaleMs,
-        FAIR_VALUE_STALE_MS: options.timing?.fairValueStaleMs,
+        FAIR_VALUE_STALE_MS: options.fairValue?.fairValueStaleMs,
+        ORACLE_FEED_WS_URL: options.fairValue?.oracleFeedWsUrl,
         USE_ORACLE_FAIR_VALUE: options.fairValue?.enabled,
         REQUIRE_FRESH_FAIR_VALUE: options.fairValue?.requireFreshValue,
         ORACLE_STALE_PRICE_TIMEOUT_MS: options.fairValue?.stalePriceTimeoutMs,
@@ -129,6 +131,8 @@ function getOptionOverrides(options: TradingBotOptions): Record<string, unknown>
         FAIR_VALUE_VOL: options.fairValue?.volatility,
         FAIR_VALUE_WEIGHT: options.fairValue?.weight,
         FAIR_VALUE_PAYS_ABOVE_STRIKE: options.fairValue?.paysAboveStrike,
+        AGGRESS_MS: options.aggression?.aggressionMs,
+        AGGRESS_JITTER_MS: options.aggression?.aggressionJitterMs,
         FAIR_VALUE_MIN_EDGE_TICKS: options.aggression?.fairValueMinEdgeTicks,
     };
 

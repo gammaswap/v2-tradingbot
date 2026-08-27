@@ -19,17 +19,26 @@ describe("TradingBot options", () => {
                 ledger: "0x2222222222222222222222222222222222222222",
                 settlementToken: "0x3333333333333333333333333333333333333333",
             },
+            orderbookWsUrl: "wss://example.com/orderbook",
+            bookStaleMs: 11_111,
             fairValue: {
                 oracleFeedWsUrl: "wss://example.com/oracle",
                 enabled: true,
                 requireFreshValue: true,
                 stalePriceTimeoutMs: 23_456,
                 firstPriceTimeoutMs: 34_567,
+                fairValueStaleMs: 45_678,
                 volatility: 0.9,
                 weight: 0.8,
                 paysAboveStrike: false,
             },
+            quote: {
+                quoteLoopMs: 5_000,
+                quoteJitterMs: 250,
+            },
             aggression: {
+                aggressionMs: 6_000,
+                aggressionJitterMs: 300,
                 fairValueMinEdgeTicks: 3,
             },
         });
@@ -38,11 +47,18 @@ describe("TradingBot options", () => {
         expect((bot as any).context.config.API_KEY).toBe("constructor-api-key");
         expect((bot as any).context.config.API_SECRET).toBe("constructor-api-secret");
         expect((bot as any).context.config.API_TIMEOUT_MS).toBe(12_345);
+        expect((bot as any).context.config.ORDERBOOK_WS_URL).toBe("wss://example.com/orderbook");
+        expect((bot as any).context.config.BOOK_STALE_MS).toBe(11_111);
         expect((bot as any).context.config.ORACLE_STALE_PRICE_TIMEOUT_MS).toBe(23_456);
+        expect((bot as any).context.config.FAIR_VALUE_STALE_MS).toBe(45_678);
         expect((bot as any).context.config.ORACLE_FEED_WS_URL).toBe("wss://example.com/oracle");
         expect((bot as any).context.config.FAIR_VALUE_VOL).toBe(0.9);
         expect((bot as any).context.config.FAIR_VALUE_WEIGHT).toBe(0.8);
         expect((bot as any).context.config.FAIR_VALUE_PAYS_ABOVE_STRIKE).toBe(false);
+        expect((bot as any).context.config.QUOTE_LOOP_MS).toBe(5_000);
+        expect((bot as any).context.config.QUOTE_JITTER_MS).toBe(250);
+        expect((bot as any).context.config.AGGRESS_MS).toBe(6_000);
+        expect((bot as any).context.config.AGGRESS_JITTER_MS).toBe(300);
         expect((bot as any).context.config.FAIR_VALUE_MIN_EDGE_TICKS).toBe(3);
     });
 });

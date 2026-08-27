@@ -253,8 +253,6 @@ export const CFG = {
 
     // ===============SDK Parameters===============
     API_URL: envApiUrl(),
-    ORDERBOOK_WS_URL: envStr("ORDERBOOK_WS_URL", "wss://exchange-api.gammaswap.com/ws/"),
-    ORACLE_FEED_WS_URL: envStr("ORACLE_FEED_WS_URL", "wss://exchange-api.gammaswap.com/oracle-ws/"),
     API_KEY: envStr("API_KEY", ""),
     API_SECRET: envStr("API_SECRET", ""),
     API_TIMEOUT_MS: envNum("API_TIMEOUT_MS", 30_000),
@@ -267,9 +265,15 @@ export const CFG = {
     DEPOSIT_LEDGER_ADDRESS: envStr("DEPOSIT_LEDGER_ADDRESS", "0x06E54Aa21496Ed0099219ea79a2c72247F36091A"),
     EXCHANGE_ADDRESS: envStr("EXCHANGE_ADDRESS", ""),
 
+    ORDERBOOK_WS_URL: envStr("ORDERBOOK_WS_URL", "wss://exchange-api.gammaswap.com/ws/"),
+    // Maximum age, in milliseconds, for the last usable order-book update.
+    // The strategy compares the current time with STATE.bookUpdatedAtMs. If
+    // the book is older than this threshold, it is considered stale and the
+    // bot pauses quoting until a fresh usable book update arrives.
     BOOK_STALE_MS: envNum("BOOK_STALE_MS", 45000),
 
     // ===============Fair Value Parameters===============
+    ORACLE_FEED_WS_URL: envStr("ORACLE_FEED_WS_URL", "wss://exchange-api.gammaswap.com/oracle-ws/"),
     // Estimate of probability of contract winning based on Black-Scholes model
     // Fair-value model:
     //   tau = expiresInSec / secondsPerYear
@@ -281,6 +285,14 @@ export const CFG = {
     // The resulting probability is converted to protocol price units:
     //   fairValue = roundToTick(P(pays) * 1,000,000)
     FAIR_VALUE_VOL: envNum("FAIR_VALUE_VOL", 0.80),
+    // Weight applied when combining the oracle-derived fair value with the
+    // current order-book midpoint. The value is clamped to [0, 1]:
+    //   referencePrice = weight * fairValue
+    //                  + (1 - weight) * bookMid
+    // A weight of 1 uses only the oracle fair value, while a weight of 0
+    // uses only the book midpoint. The calculation is performed in the
+    // protocol's price units, and the result is rounded to the nearest tick.
+    // This result is the reference price used for quoting.
     FAIR_VALUE_WEIGHT: envNum("FAIR_VALUE_WEIGHT", 1.0),
     // When true means contract wins when price above strike
     FAIR_VALUE_PAYS_ABOVE_STRIKE: envBool("FAIR_VALUE_PAYS_ABOVE_STRIKE", true),
