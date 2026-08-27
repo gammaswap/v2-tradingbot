@@ -4,7 +4,7 @@ import {
     PROTOCOL_MAX_PRICE,
     PROTOCOL_MIN_SIZE,
     PROTOCOL_MAX_SIZE,
-    SDK_SIZE_STEP,
+    PROTOCOL_LOT_SIZE,
 } from "../utils/protocolPrice.js";
 
 const DEFAULT_ASSET_ID = "261336857817713630688382311349658711122006440411137";
@@ -145,8 +145,8 @@ export function validateOrderSizeConfiguration(config = CFG): string[] {
         if (value < PROTOCOL_MIN_SIZE || value > PROTOCOL_MAX_SIZE) {
             errors.push(`${name} must be between ${PROTOCOL_MIN_SIZE} and ${PROTOCOL_MAX_SIZE}`);
         }
-        if (value % SDK_SIZE_STEP !== 0) {
-            errors.push(`${name} must be a multiple of ${SDK_SIZE_STEP}`);
+        if (value % PROTOCOL_LOT_SIZE !== 0) {
+            errors.push(`${name} must be a multiple of ${PROTOCOL_LOT_SIZE}`);
         }
     }
 

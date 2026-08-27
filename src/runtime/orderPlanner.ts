@@ -3,7 +3,7 @@ import type { CancelReplaceInstruction, NewOrderInstruction, PendingOrder } from
 import { availableCollateral, canPlaceOrder, capOrderSizeByMargin, shouldCancelReplace } from "./strategy.js";
 import { roundToOrderLot } from "../utils/utils.js";
 import { protocolNotional } from "../utils/protocolMath.js";
-import { SDK_SIZE_STEP } from "../utils/protocolPrice.js";
+import { PROTOCOL_LOT_SIZE } from "../utils/protocolPrice.js";
 
 export type OrderPlan = {
     cancelReplaces: CancelReplaceInstruction[];
@@ -41,7 +41,7 @@ export function planOrders(
         const newMargin = protocolNotional(size, newMarginPrice);
         const marginChange = newMargin - oldMargin;
 
-        if (size < SDK_SIZE_STEP) {
+        if (size < PROTOCOL_LOT_SIZE) {
             cancels.push(oldOrder.id);
             collateral -= oldMargin;
             continue;
@@ -65,7 +65,7 @@ export function planOrders(
                 price,
                 collateral + oldMargin,
             );
-            if (replacementSize < SDK_SIZE_STEP) {
+            if (replacementSize < PROTOCOL_LOT_SIZE) {
                 cancels.push(oldOrder.id);
                 collateral -= oldMargin;
                 continue;
@@ -102,7 +102,7 @@ export function planOrders(
             const price = newPrices[i];
             const requestedSize = roundToOrderLot(newSizes[i]);
             const size = capOrderSizeByMargin(isBuy, requestedSize, price, collateral);
-            if (size < SDK_SIZE_STEP) continue;
+            if (size < PROTOCOL_LOT_SIZE) continue;
             const newMargin = protocolNotional(size, isBuy ? price : 1_000_000 - price);
             if (!canPlaceOrder(isBuy, size, price, collateral)) continue;
 

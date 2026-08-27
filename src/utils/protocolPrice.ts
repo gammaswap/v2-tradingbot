@@ -3,7 +3,7 @@ export const PROTOCOL_MAX_PRICE = 999_000;
 export const SDK_PRICE_STEP = 1_000;
 export const PROTOCOL_MIN_SIZE = 10_000;
 export const PROTOCOL_MAX_SIZE = 100_000_000_000;
-export const SDK_SIZE_STEP = 10_000;
+export const PROTOCOL_LOT_SIZE = 10_000;
 export const PROTOCOL_MIN_ORDER_MARGIN = 10n;
 const PROTOCOL_SCALE = 1_000_000n;
 
@@ -44,7 +44,7 @@ export function assertProtocolSize(
     const value = typeof size === "bigint" ? size : BigInt(size);
     const min = BigInt(PROTOCOL_MIN_SIZE);
     const max = BigInt(PROTOCOL_MAX_SIZE);
-    const step = BigInt(SDK_SIZE_STEP);
+    const step = BigInt(PROTOCOL_LOT_SIZE);
 
     if (value < min) throw new Error(`${label} is below protocol minimum ${PROTOCOL_MIN_SIZE}`);
     if (value > max) throw new Error(`${label} exceeds protocol maximum ${PROTOCOL_MAX_SIZE}`);

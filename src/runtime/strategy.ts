@@ -8,7 +8,7 @@ import {
     PROTOCOL_MAX_PRICE,
     PROTOCOL_MIN_SIZE,
     SDK_PRICE_STEP,
-    SDK_SIZE_STEP,
+    PROTOCOL_LOT_SIZE,
 } from "../utils/protocolPrice.js";
 
 const PROTOCOL_PRICE_SCALE = 1_000_000;
@@ -568,7 +568,7 @@ export function distributeTotalSizeAcrossLadder(
     // Convert the total contract quantity into exchange-compatible lots. The
     // total-size calculator already returns lot-aligned values; flooring here
     // keeps this helper safe for direct callers as well.
-    const lotSize = SDK_SIZE_STEP;
+    const lotSize = PROTOCOL_LOT_SIZE;
     const totalLots = Math.floor(totalSize / lotSize);
     if (totalLots <= 0) return targetPrices.map(() => 0);
 
