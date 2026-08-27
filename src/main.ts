@@ -48,6 +48,14 @@ async function main() {
         return;
     }
 
+    const account = deriveAccountsFromMnemonic(CFG.MNEMONIC, CFG.WALLET_INDEX + 1)[CFG.WALLET_INDEX];
+    const wallet = new Wallet(account.privateKey);
+    // All account-scoped API calls must use the address belonging to this
+    // derived wallet, never an independently configured address.
+    (CFG as any).USER_ADDRESS = wallet.address;
+    STATE.account = wallet.address;
+    console.log("Using address :", wallet.address);
+
     const asset = await apiGetAsset();
     if(!asset.registered) {
         warn("ASSET_ID is unregistered!:", CFG.ASSET_ID);
@@ -55,10 +63,6 @@ async function main() {
     }
 
     log("API_URL:", CFG.API_URL)
-
-    const account = deriveAccountsFromMnemonic(CFG.MNEMONIC, CFG.WALLET_INDEX + 1)[CFG.WALLET_INDEX];
-    const wallet = new Wallet(account.privateKey);
-    console.log("Using address :", wallet.address);
 
     STATE.asset = asset;
     STATE.epoch = asset.epoch;
