@@ -1,5 +1,3 @@
-import { deriveAccountsFromMnemonic } from "@gammaswap/v2-exchange-sdk";
-import { Wallet } from "ethers";
 import { TradingBot } from "./runtime/tradingBot.js";
 import { CFG, validateProductionConfig } from "./config/config.js";
 import { log, warn } from "./utils/utils.js";
@@ -15,14 +13,7 @@ async function main(): Promise<void> {
         return;
     }
 
-    const account = deriveAccountsFromMnemonic(
-        CFG.MNEMONIC,
-        CFG.WALLET_INDEX + 1,
-    )[CFG.WALLET_INDEX];
-    const wallet = new Wallet(account.privateKey);
-
     const bot = new TradingBot({
-        wallet,
         apiUrl: CFG.API_URL,
         assetId: CFG.ASSET_ID,
         chainId: CFG.CHAIN_ID,
@@ -65,7 +56,7 @@ async function main(): Promise<void> {
         },
     });
 
-    log("starting trading bot", { account: wallet.address, assetId: CFG.ASSET_ID });
+    log("starting trading bot", { assetId: CFG.ASSET_ID });
     await bot.start();
 
     let shuttingDown = false;

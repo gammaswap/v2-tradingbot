@@ -14,6 +14,7 @@ import { startOrderBookFeed, type OrderBookFeed } from "./orderbook.js";
 import { runRuntimeCoordinator } from "./coordinator.js";
 import { protocolValueToSafeNumber } from "../utils/protocolMath.js";
 import { isBigIntString, log, sleep, warn } from "../utils/utils.js";
+import { resolveTradingWallet } from "./wallet.js";
 import {
     createBotContext,
     runWithBotContext,
@@ -31,7 +32,7 @@ export type ContractAddresses = {
 };
 
 export type TradingBotOptions = {
-    wallet: Wallet;
+    wallet?: Wallet;
     apiUrl: string;
     assetId: string;
     chainId: number;
@@ -141,7 +142,7 @@ export class TradingBot {
             }
         }
 
-        this.wallet = options.wallet;
+        this.wallet = resolveTradingWallet(options.wallet);
         this.context = createBotContext(getOptionOverrides(options) as any);
         this.context.state.account = this.wallet.address;
 
