@@ -25,7 +25,19 @@ async function main(): Promise<void> {
             depositLedger: CFG.DEPOSIT_LEDGER_ADDRESS,
         },
         orderbookWsUrl: CFG.ORDERBOOK_WS_URL,
-        oracleFeedWsUrl: CFG.ORACLE_FEED_WS_URL,
+        fairValue: {
+            oracleFeedWsUrl: CFG.ORACLE_FEED_WS_URL,
+            enabled: CFG.USE_ORACLE_FAIR_VALUE,
+            requireFreshValue: CFG.REQUIRE_FRESH_FAIR_VALUE,
+            stalePriceTimeoutMs: CFG.ORACLE_STALE_PRICE_TIMEOUT_MS,
+            firstPriceTimeoutMs: CFG.ORACLE_FIRST_PRICE_TIMEOUT_MS,
+            volatility: CFG.FAIR_VALUE_VOL,
+            weight: CFG.FAIR_VALUE_WEIGHT,
+            paysAboveStrike: CFG.FAIR_VALUE_PAYS_ABOVE_STRIKE,
+        },
+        aggression: {
+            fairValueMinEdgeTicks: CFG.FAIR_VALUE_MIN_EDGE_TICKS,
+        },
         quote: {
             levelsPerSide: CFG.LEVELS_PER_SIDE,
             ladderModel: CFG.LADDER_PRICE_MODEL === 2 ? "growth-space" : "equidistant",
@@ -47,12 +59,6 @@ async function main(): Promise<void> {
             aggressionJitterMs: CFG.AGGRESS_JITTER_MS,
             bookStaleMs: CFG.BOOK_STALE_MS,
             fairValueStaleMs: CFG.FAIR_VALUE_STALE_MS,
-        },
-        oracle: {
-            enabled: CFG.USE_ORACLE_FAIR_VALUE,
-            requireFreshValue: CFG.REQUIRE_FRESH_FAIR_VALUE,
-            stalePriceTimeoutMs: CFG.ORACLE_STALE_PRICE_TIMEOUT_MS,
-            firstPriceTimeoutMs: CFG.ORACLE_FIRST_PRICE_TIMEOUT_MS,
         },
     });
 

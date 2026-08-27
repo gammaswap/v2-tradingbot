@@ -19,8 +19,18 @@ describe("TradingBot options", () => {
                 ledger: "0x2222222222222222222222222222222222222222",
                 settlementToken: "0x3333333333333333333333333333333333333333",
             },
-            oracle: {
+            fairValue: {
+                oracleFeedWsUrl: "wss://example.com/oracle",
+                enabled: true,
+                requireFreshValue: true,
                 stalePriceTimeoutMs: 23_456,
+                firstPriceTimeoutMs: 34_567,
+                volatility: 0.9,
+                weight: 0.8,
+                paysAboveStrike: false,
+            },
+            aggression: {
+                fairValueMinEdgeTicks: 3,
             },
         });
 
@@ -29,5 +39,10 @@ describe("TradingBot options", () => {
         expect((bot as any).context.config.API_SECRET).toBe("constructor-api-secret");
         expect((bot as any).context.config.API_TIMEOUT_MS).toBe(12_345);
         expect((bot as any).context.config.ORACLE_STALE_PRICE_TIMEOUT_MS).toBe(23_456);
+        expect((bot as any).context.config.ORACLE_FEED_WS_URL).toBe("wss://example.com/oracle");
+        expect((bot as any).context.config.FAIR_VALUE_VOL).toBe(0.9);
+        expect((bot as any).context.config.FAIR_VALUE_WEIGHT).toBe(0.8);
+        expect((bot as any).context.config.FAIR_VALUE_PAYS_ABOVE_STRIKE).toBe(false);
+        expect((bot as any).context.config.FAIR_VALUE_MIN_EDGE_TICKS).toBe(3);
     });
 });

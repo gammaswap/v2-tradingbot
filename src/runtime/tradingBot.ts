@@ -43,7 +43,6 @@ export type TradingBotOptions = {
     chainId: number;
     contracts: ContractAddresses;
     orderbookWsUrl?: string;
-    oracleFeedWsUrl?: string;
     quote?: {
         levelsPerSide?: number;
         ladderModel?: "equidistant" | "growth-space";
@@ -66,11 +65,18 @@ export type TradingBotOptions = {
         bookStaleMs?: number;
         fairValueStaleMs?: number;
     };
-    oracle?: {
+    fairValue?: {
+        oracleFeedWsUrl?: string;
         enabled?: boolean;
         requireFreshValue?: boolean;
         stalePriceTimeoutMs?: number;
         firstPriceTimeoutMs?: number;
+        volatility?: number;
+        weight?: number;
+        paysAboveStrike?: boolean;
+    };
+    aggression?: {
+        fairValueMinEdgeTicks?: number;
     };
 };
 
@@ -98,7 +104,7 @@ function getOptionOverrides(options: TradingBotOptions): Record<string, unknown>
         PERMIT2_ADDRESS: options.contracts.permit2,
         DEPOSIT_LEDGER_ADDRESS: options.contracts.depositLedger,
         ORDERBOOK_WS_URL: options.orderbookWsUrl,
-        ORACLE_FEED_WS_URL: options.oracleFeedWsUrl,
+        ORACLE_FEED_WS_URL: options.fairValue?.oracleFeedWsUrl,
         LEVELS_PER_SIDE: options.quote?.levelsPerSide,
         LADDER_PRICE_MODEL: options.quote?.ladderModel === "growth-space" ? 2 :
             options.quote?.ladderModel === "equidistant" ? 1 : undefined,
@@ -116,10 +122,14 @@ function getOptionOverrides(options: TradingBotOptions): Record<string, unknown>
         AGGRESS_JITTER_MS: options.timing?.aggressionJitterMs,
         BOOK_STALE_MS: options.timing?.bookStaleMs,
         FAIR_VALUE_STALE_MS: options.timing?.fairValueStaleMs,
-        USE_ORACLE_FAIR_VALUE: options.oracle?.enabled,
-        REQUIRE_FRESH_FAIR_VALUE: options.oracle?.requireFreshValue,
-        ORACLE_STALE_PRICE_TIMEOUT_MS: options.oracle?.stalePriceTimeoutMs,
-        ORACLE_FIRST_PRICE_TIMEOUT_MS: options.oracle?.firstPriceTimeoutMs,
+        USE_ORACLE_FAIR_VALUE: options.fairValue?.enabled,
+        REQUIRE_FRESH_FAIR_VALUE: options.fairValue?.requireFreshValue,
+        ORACLE_STALE_PRICE_TIMEOUT_MS: options.fairValue?.stalePriceTimeoutMs,
+        ORACLE_FIRST_PRICE_TIMEOUT_MS: options.fairValue?.firstPriceTimeoutMs,
+        FAIR_VALUE_VOL: options.fairValue?.volatility,
+        FAIR_VALUE_WEIGHT: options.fairValue?.weight,
+        FAIR_VALUE_PAYS_ABOVE_STRIKE: options.fairValue?.paysAboveStrike,
+        FAIR_VALUE_MIN_EDGE_TICKS: options.aggression?.fairValueMinEdgeTicks,
     };
 
     return Object.fromEntries(Object.entries(overrides).filter(([, value]) => value !== undefined));
