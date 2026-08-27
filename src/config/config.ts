@@ -281,12 +281,6 @@ export const CFG = {
     DEPOSIT_LEDGER_ADDRESS: envStr("DEPOSIT_LEDGER_ADDRESS", "0x06E54Aa21496Ed0099219ea79a2c72247F36091A"),
     EXCHANGE_ADDRESS: envStr("EXCHANGE_ADDRESS", ""),
 
-    // Prices use protocol units: 1,000 = 0.1 cents ($0.001), and
-    // 1,000,000 = 100 cents ($1.00). These values are not SDK decimals.
-    HARD_MIN_PRICE: envNum("HARD_MIN_PRICE", 1000), // 0.1 cents ($0.001)
-    HARD_MAX_PRICE: envNum("HARD_MAX_PRICE", 999000), // 99.9 cents ($0.999)
-    SOFT_MIN_PRICE: envNum("SOFT_MIN_PRICE", 300000), // 30.0 cents ($0.30)
-    SOFT_MAX_PRICE: envNum("SOFT_MAX_PRICE", 700000), // 70.0 cents ($0.70)
     DUST_BALANCE: envBigInt("DUST_BALANCE", 1000000), // 1
 
     USE_ORACLE_FAIR_VALUE: envBool("USE_ORACLE_FAIR_VALUE", true),
@@ -307,17 +301,7 @@ export const CFG = {
     LOT_SIZE: envNum("LOT_SIZE", 10000),// 0.01
     MAX_ORDER_SIZE: envNum("MAX_ORDER_SIZE", 100000 * 1000000), // Protocol level limit
 
-    // Quotes per side
-    LEVELS_PER_SIDE: envNum("LEVELS_PER_SIDE", 5),
-    LADDER_PRICE_MODEL: envNum("LADDER_PRICE_MODEL", 1),
-    QUOTE_LOOP_MS: envNum("QUOTE_LOOP_MS", 10000),
-    QUOTE_JITTER_MS: envNum("QUOTE_JITTER_MS", 5000),
 
-    // ========Quote Size Growth Space Ladder Parameters==============
-    // Initial ladder distance in protocol price units. The default 2,000
-    // equals 0.2 cents ($0.002).
-    LEVEL_SPACING_NEAR: envNum("LEVEL_SPACING_NEAR", 2000),
-    LEVEL_SPACING_GROWTH: envNum("LEVEL_SPACING_GROWTH", 1.5),
 
     // ===============Aggression logic=================
     AGGRESS_MS: envNum("AGGRESS_MS", 300000),
@@ -330,8 +314,20 @@ export const CFG = {
     INV_SKEW_STRENGTH: envNum("INV_SKEW_STRENGTH", 0.35),
     CENTER_PRICE: envNum("CENTER_PRICE", 500000), // 50.0 cents ($0.50)
 
-    // ============Quote Pricing Logic===============
+    // ============Collateral availability for order placement===============
+    // These two settings work together. The available collateral used by the
+    // order planner is the smaller of:
+    //   1. the percentage-based limit below, and
+    //   2. the balance remaining after BASE_RESERVE_MIN is withheld.
+    // MAX_CAPITAL_EXPOSURE_PERCENT is therefore a proportional usage limit;
+    // it does not limit contract exposure and does not preserve a fixed
+    // dollar balance by itself.
     MAX_CAPITAL_EXPOSURE_PERCENT: envNum("MAX_CAPITAL_EXPOSURE_PERCENT", 70),
+    // Absolute balance that the order planner must leave unused. This is the
+    // hard collateral floor and complements the percentage-based limit above.
+    BASE_RESERVE_MIN: envNum("BASE_RESERVE_MIN", 1500 * 1000000),
+
+    // ============Quote Price Parameters===============
     RISK_AVERSION_GAMMA_0: envNum("RISK_AVERSION_GAMMA_0", 1e-9),
     RISK_AVERSION_GAMMA_MAX: envNum("RISK_AVERSION_GAMMA_MAX", 1e-8),
     RISK_AVERSION_B: envNum("RISK_AVERSION_B", 5),
@@ -339,7 +335,7 @@ export const CFG = {
     // probability p: p * (1 - p) * LOGIT_HALF_SPREAD.
     LOGIT_HALF_SPREAD: envNum("LOGIT_HALF_SPREAD", 0.5),
 
-    // ============Quote Size Concave Ladder Parameters============
+    // ============Quote Size Parameters============
     // Controls how strongly size is concentrated at prices farthest from the
     // best bid or ask. 1 is linear; values above 1 emphasize outer levels.
     QUOTE_SIZE_CONCAVITY: envNum("QUOTE_SIZE_CONCAVITY", 1),
@@ -353,10 +349,28 @@ export const CFG = {
     // Recalculate bucketed remaining time only at these intervals.
     TOTAL_SIZE_TIME_BUCKET_SECONDS: envNum("TOTAL_SIZE_TIME_BUCKET_SECONDS", 5),
 
+    // ==========Quote Ladder Parameters==============
+    LEVELS_PER_SIDE: envNum("LEVELS_PER_SIDE", 5),
+    LADDER_PRICE_MODEL: envNum("LADDER_PRICE_MODEL", 1),
+    QUOTE_LOOP_MS: envNum("QUOTE_LOOP_MS", 10000),
+    QUOTE_JITTER_MS: envNum("QUOTE_JITTER_MS", 5000),
+
+    // Prices use protocol units: 1,000 = 0.1 cents ($0.001), and
+    // 1,000,000 = 100 cents ($1.00). These values are not SDK decimals.
+    HARD_MIN_PRICE: envNum("HARD_MIN_PRICE", 1000), // 0.1 cents ($0.001)
+    HARD_MAX_PRICE: envNum("HARD_MAX_PRICE", 999000), // 99.9 cents ($0.999)
+    SOFT_MIN_PRICE: envNum("SOFT_MIN_PRICE", 300000), // 30.0 cents ($0.30)
+    SOFT_MAX_PRICE: envNum("SOFT_MAX_PRICE", 700000), // 70.0 cents ($0.70)
+
+    // ========Quote Growth Space Ladder Parameters==============
+    // Initial ladder distance in protocol price units. The default 2,000
+    // equals 0.2 cents ($0.002).
+    LEVEL_SPACING_NEAR: envNum("LEVEL_SPACING_NEAR", 2000),
+    LEVEL_SPACING_GROWTH: envNum("LEVEL_SPACING_GROWTH", 1.5),
+
+
     INV_TARGET: envNum("INV_TARGET", 0),
     INV_MAX_ABS: envNum("INV_MAX_ABS", 5000 * 1000000),
-    BASE_RESERVE_MIN: envNum("BASE_RESERVE_MIN", 1500 * 1000000),
-
     LOG_VERBOSE: envBool("LOG_VERBOSE", true),
     LOG_DEBUG: envBool("LOG_DEBUG", false),
 } as const;
