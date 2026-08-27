@@ -39,6 +39,7 @@ describe("TradingBot options", () => {
             hardMinPrice: 2_000,
             hardMaxPrice: 998_000,
             dustBalance: 654_321n,
+            maxOrderSize: 80_000_000_000,
             fairValue: {
                 oracleFeedWsUrl: "wss://example.com/oracle",
                 enabled: true,
@@ -84,6 +85,7 @@ describe("TradingBot options", () => {
         expect((bot as any).context.config.HARD_MIN_PRICE).toBe(2_000);
         expect((bot as any).context.config.HARD_MAX_PRICE).toBe(998_000);
         expect((bot as any).context.config.DUST_BALANCE).toBe(654_321n);
+        expect((bot as any).context.config.MAX_ORDER_SIZE).toBe(80_000_000_000);
         expect((bot as any).context.config.ORACLE_STALE_PRICE_TIMEOUT_MS).toBe(23_456);
         expect((bot as any).context.config.FAIR_VALUE_STALE_MS).toBe(45_678);
         expect((bot as any).context.config.ORACLE_FEED_WS_URL).toBe("wss://example.com/oracle");

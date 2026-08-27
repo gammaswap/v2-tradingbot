@@ -438,8 +438,16 @@ export const CFG = {
     // Protocol price-unit increment. The default 1,000 equals 0.1 cents.
     TICK_SIZE: envNum("TICK_SIZE", 1000),
     LOT_SIZE: envNum("LOT_SIZE", 10000),// 0.01
-    MAX_ORDER_SIZE: envNum("MAX_ORDER_SIZE", 100000 * 1000000), // Protocol level limit
-    DUST_BALANCE: envBigInt("DUST_BALANCE", 1000000), // 1
+    // Minimum pending balance that is treated as non-dust. Pending balances
+    // below this threshold are treated as clear; balances at or above it
+    // trigger pending-balance handling and prevent normal startup. This is a
+    // protocol balance amount: the default 1,000,000 represents 1 unit at 1e6 scale.
+    DUST_BALANCE: envBigInt("DUST_BALANCE", 1000000),
+    // Maximum size of one submitted order, expressed in protocol size units
+    // (1 contract = 1,000,000 units). The exchange's current protocol-level
+    // limit is 100,000 contracts, so the default is 100,000 * 1,000,000.
+    // The order planner also applies this cap after rounding to the lot size.
+    MAX_ORDER_SIZE: envNum("MAX_ORDER_SIZE", 100000 * 1000000),
     LOG_VERBOSE: envBool("LOG_VERBOSE", true),
     LOG_DEBUG: envBool("LOG_DEBUG", false),
 } as const;

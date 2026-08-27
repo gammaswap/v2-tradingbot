@@ -49,6 +49,7 @@ export type TradingBotOptions = {
     hardMinPrice?: number;
     hardMaxPrice?: number;
     dustBalance?: bigint;
+    maxOrderSize?: number;
     quote?: {
         quoteLoopMs?: number;
         quoteJitterMs?: number;
@@ -127,6 +128,7 @@ function getOptionOverrides(options: TradingBotOptions): Record<string, unknown>
         HARD_MIN_PRICE: options.hardMinPrice,
         HARD_MAX_PRICE: options.hardMaxPrice,
         DUST_BALANCE: options.dustBalance,
+        MAX_ORDER_SIZE: options.maxOrderSize,
         QUOTE_LOOP_MS: options.quote?.quoteLoopMs,
         QUOTE_JITTER_MS: options.quote?.quoteJitterMs,
         ORDER_FAILURE_COOLDOWN_MS: options.quote?.orderFailureCooldownMs,
