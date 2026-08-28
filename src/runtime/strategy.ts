@@ -694,9 +694,17 @@ export function capOrderSizeByMargin(
 
 // ---- direction choice ----
 
-export function computePBuy(mid: number): number {
+/**
+ * Normalizes a market price around CENTER_PRICE for the directional models.
+ * The result is negative below the center and positive above it.
+ */
+export function normalizedCenterDeviation(mid: number): number {
     const range = Math.max(1e-9, CFG.SOFT_MAX_PRICE - CFG.CENTER_PRICE);
-    const x = (mid - CFG.CENTER_PRICE) / range;
+    return (mid - CFG.CENTER_PRICE) / range;
+}
+
+export function computePBuy(mid: number): number {
+    const x = normalizedCenterDeviation(mid);
     let pBuy = 0.5 - 0.5 * tanh(CFG.MEANREV_K * clamp(x, -2, 2));
 
     const invNorm = clamp((STATE.invBase - CFG.INV_TARGET) / Math.max(1e-9, CFG.INV_MAX_ABS), -1, 1);
@@ -706,8 +714,7 @@ export function computePBuy(mid: number): number {
 }
 
 export function chooseAggressionSide(mid: number): Side {
-    const range = Math.max(1e-9, CFG.SOFT_MAX_PRICE - CFG.CENTER_PRICE);
-    const x = (mid - CFG.CENTER_PRICE) / range;
+    const x = normalizedCenterDeviation(mid);
 
     const outward: Side = x >= 0 ? "buy" : "sell";
     if (Math.random() < CFG.EXTREME_PUSH_PROB) return outward;

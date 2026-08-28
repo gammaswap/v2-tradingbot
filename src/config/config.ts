@@ -322,8 +322,32 @@ export const CFG = {
     FAIR_VALUE_STALE_MS: envNum("FAIR_VALUE_STALE_MS", 45000),
 
     // ===============Aggression logic=================
+    // Base delay, in milliseconds, between attempts to run the aggression
+    // model. An aggression attempt is only eligible after this delay has
+    // elapsed since the previous aggression check.
     AGGRESS_MS: envNum("AGGRESS_MS", 300000),
+    // Maximum random timing adjustment, in milliseconds, applied to the base
+    // aggression delay. The next aggression check is scheduled using a
+    // jittered delay, which prevents the bot from acting at one perfectly
+    // predictable interval.
     AGGRESS_JITTER_MS: envNum("AGGRESS_JITTER_MS", 12000),
+    // Number of protocol price ticks required for a fair-value trade edge.
+    FAIR_VALUE_MIN_EDGE_TICKS: envNum("FAIR_VALUE_MIN_EDGE_TICKS", 2),
+    // When no fresh oracle fair value is available, chooseAggressionSide()
+    // uses a mean-reversion model to choose a buy or sell direction:
+    //   x = (midPrice - CENTER_PRICE) /
+    //       max(1e-9, SOFT_MAX_PRICE - CENTER_PRICE)
+    //   pBuy = 0.5 - 0.5 * tanh(MEANREV_K * x)
+    // A positive x means the market is above CENTER_PRICE, so pBuy falls as
+    // x rises and selling becomes more likely. A negative x means the market
+    // is below CENTER_PRICE, so pBuy rises and buying becomes more likely.
+    // Inventory then adjusts pBuy to discourage increasing an existing
+    // position: long inventory lowers pBuy, while short inventory raises it.
+    // With probability EXTREME_PUSH_PROB, the model instead chooses the
+    // outward direction (buy above the center or sell below it), providing an
+    // intentional countertrend exception to the mean-reversion signal.
+    // When a fresh oracle fair value is available, aggression uses the
+    // fair-value edge against the best bid/ask instead of this fallback model.
     WIPE_LEVELS: Math.max(1, Math.floor(envNum("WIPE_LEVELS", 2))),
     SLIP_BUFFER: envNum("SLIP_BUFFER", 0.15),
     MAX_AGGRESS_QTY: envNum("MAX_AGGRESS_QTY", 500*1000000),
@@ -331,8 +355,6 @@ export const CFG = {
     MEANREV_K: envNum("MEANREV_K", 2.0),
     INV_SKEW_STRENGTH: envNum("INV_SKEW_STRENGTH", 0.35),
     CENTER_PRICE: envNum("CENTER_PRICE", 500000), // 50.0 cents ($0.50)
-    // Number of protocol price ticks required for a fair-value trade edge.
-    FAIR_VALUE_MIN_EDGE_TICKS: envNum("FAIR_VALUE_MIN_EDGE_TICKS", 2),
 
     // ============Collateral availability for order placement===============
     // These two settings work together. The available collateral used by the
