@@ -362,7 +362,13 @@ export const CFG = {
     // When a fresh oracle fair value is available, aggression uses the
     // fair-value edge against the best bid/ask instead of this fallback model.
     CENTER_PRICE: envNum("CENTER_PRICE", 500000), // 50.0 cents ($0.50)
+    SOFT_MAX_PRICE: envNum("SOFT_MAX_PRICE", 700000), // 70.0 cents ($0.70)
+    // Controls mean-reversion strength: higher values make pBuy move more
+    // quickly toward buying below CENTER_PRICE and selling above it; lower
+    // values make the response weaker. At zero, price has no effect.
     MEANREV_K: envNum("MEANREV_K", 2.0),
+    // Controls inventory correction: higher values more strongly favor selling
+    // when long and buying when short; zero disables inventory adjustment.
     INV_SKEW_STRENGTH: envNum("INV_SKEW_STRENGTH", 0.35),
     // Probability of reversing the fallback mean-reversion recommendation.
     // A value of 0 disables the outward reversal, so direction comes only
@@ -453,7 +459,6 @@ export const CFG = {
     // It must remain within the exchange's protocol price range.
     HARD_MAX_PRICE: envNum("HARD_MAX_PRICE", 999000), // 99.9 cents ($0.999)
     SOFT_MIN_PRICE: envNum("SOFT_MIN_PRICE", 300000), // 30.0 cents ($0.30)
-    SOFT_MAX_PRICE: envNum("SOFT_MAX_PRICE", 700000), // 70.0 cents ($0.70)
 
     // ========Quote Growth Space Ladder Parameters==============
     // Initial ladder distance in protocol price units. The default 2,000
