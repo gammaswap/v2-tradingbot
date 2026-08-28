@@ -240,14 +240,22 @@ export function validateRiskConfiguration(config = CFG): string[] {
 // Prices and Sizes use protocol units: 1,000 = 0.1 cents ($0.001), and
 // 1,000,000 = 100 cents ($1.00). These values are not SDK decimals.
 export const CFG = {
+    // Asset identifier used for API requests and derived websocket symbol
+    // subscriptions. It is encoded as a string because it may exceed the
+    // safe integer range of JavaScript numbers.
     ASSET_ID,
 
     // ===============SDK Parameters===============
     API_URL: envApiUrl(),
     API_KEY: envStr("API_KEY", ""),
     API_SECRET: envStr("API_SECRET", ""),
+    // Maximum time, in milliseconds, that an SDK/API request may wait before
+    // timing out.
     API_TIMEOUT_MS: envNum("API_TIMEOUT_MS", 30_000),
+    // Wallet seed phrase used when no wallet is supplied to TradingBot. Use a
+    // securely managed production secret rather than the development default.
     MNEMONIC: envStr("MNEMONIC", DEFAULT_TEST_MNEMONIC),
+    // Derivation index selecting which account is created from MNEMONIC.
     WALLET_INDEX: envNum("WALLET_INDEX", 0),
     CHAIN_ID: envNum("CHAIN_ID", 84532), // baseSepolia
     PERMIT2_ADDRESS: envStr("PERMIT2_ADDRESS", "0x000000000022D473030F116dDEE9F6B43aC78BA3"),
@@ -435,9 +443,18 @@ export const CFG = {
     TOTAL_SIZE_TIME_BUCKET_SECONDS: envNum("TOTAL_SIZE_TIME_BUCKET_SECONDS", 5),
 
     // ==========Quote Ladder Parameters==============
+    // Number of passive quote price levels to create on each side of the
+    // market. Each side may end up with fewer usable levels after price-range
+    // and marketability filters are applied.
     LEVELS_PER_SIDE: envNum("LEVELS_PER_SIDE", 5),
+    // Ladder construction model: 1 builds equidistant levels; 2 uses the
+    // growth-space model, whose spacing expands by LEVEL_SPACING_GROWTH.
     LADDER_PRICE_MODEL: envNum("LADDER_PRICE_MODEL", 1),
+    // Base interval, in milliseconds, between passive quote-maintenance
+    // passes.
     QUOTE_LOOP_MS: envNum("QUOTE_LOOP_MS", 10000),
+    // Maximum random timing adjustment, in milliseconds, applied to the quote
+    // loop interval to avoid a perfectly predictable schedule.
     QUOTE_JITTER_MS: envNum("QUOTE_JITTER_MS", 5000),
 
     // HARD_MIN_PRICE is the absolute lower bound for every quote. Prices
