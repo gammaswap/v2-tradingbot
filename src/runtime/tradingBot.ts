@@ -4,6 +4,7 @@ import {
     validatePriceConfiguration,
     validateProductionConfig,
     validateRiskConfiguration,
+    type AggressionModel,
 } from "../config/config.js";
 import { apiGetAsset, apiGetBalance, apiGetPosition } from "../api/api.js";
 import { cleanUpAllOrders } from "./loops.js";
@@ -84,6 +85,7 @@ export type TradingBotOptions = {
         paysAboveStrike?: boolean;
     };
     aggression?: {
+        model?: AggressionModel;
         aggressionMs?: number;
         aggressionJitterMs?: number;
         fairValueMinEdgeTicks?: number;
@@ -159,6 +161,7 @@ function getOptionOverrides(options: TradingBotOptions): Record<string, unknown>
         FAIR_VALUE_PAYS_ABOVE_STRIKE: options.fairValue?.paysAboveStrike,
         AGGRESS_MS: options.aggression?.aggressionMs,
         AGGRESS_JITTER_MS: options.aggression?.aggressionJitterMs,
+        AGGRESSION_MODEL: options.aggression?.model,
         FAIR_VALUE_MIN_EDGE_TICKS: options.aggression?.fairValueMinEdgeTicks,
     };
 

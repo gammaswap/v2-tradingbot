@@ -14,10 +14,11 @@ import {
     midPrice,
     referencePrice,
     shouldPauseForFairValue,
+    shouldPauseForAggression,
     buildTargetLadderPrices,
     LADDER_PRICE_MODEL,
     distributeTotalSizeAcrossLadder,
-    chooseFairValueAggressionSide,
+    chooseAggressionSide,
     depthToWipe,
     canAggressBuy,
     canAggressSell,
@@ -536,7 +537,7 @@ export async function runAggression(wallet: Wallet) {
         log("aggression skipped: current asset is unavailable or resolved");
         return;
     }
-    if (shouldPauseForFairValue(book)) {
+    if (shouldPauseForAggression(book)) {
         console.log("aggression skipped: reference price is stale or unavailable");
         return;
     }
@@ -554,9 +555,9 @@ export async function runAggression(wallet: Wallet) {
     const bookMid = midPrice(book);
     const refPrice = referencePrice(book);
     console.log("mid:", bookMid, "reference:", refPrice, "fairValue:", STATE.fairValue?.protocolPrice);
-    let side = chooseFairValueAggressionSide(book, refPrice); // do we have an edge to aggress in any direction?
+    let side = chooseAggressionSide(book, refPrice);
     if (side == null) {
-        log("aggression skipped (no fair value edge)", {
+        log("aggression skipped (model selected no trade)", {
             bid: book.bids[0]?.price,
             ask: book.asks[0]?.price,
             reference: refPrice,

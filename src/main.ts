@@ -42,6 +42,7 @@ async function main(): Promise<void> {
             paysAboveStrike: CFG.FAIR_VALUE_PAYS_ABOVE_STRIKE,
         },
         aggression: {
+            model: CFG.AGGRESSION_MODEL,
             aggressionMs: CFG.AGGRESS_MS,
             aggressionJitterMs: CFG.AGGRESS_JITTER_MS,
             fairValueMinEdgeTicks: CFG.FAIR_VALUE_MIN_EDGE_TICKS,

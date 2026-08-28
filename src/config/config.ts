@@ -1,4 +1,5 @@
 export type Side = "buy" | "sell";
+export type AggressionModel = "none" | "edge" | "mean-reversion" | "edge-with-fallback";
 import {
     PROTOCOL_MIN_PRICE,
     PROTOCOL_MAX_PRICE,
@@ -149,6 +150,17 @@ export function validateOrderSizeConfiguration(config = CFG): string[] {
 
 export function validateRiskConfiguration(config = CFG): string[] {
     const errors: string[] = [];
+
+    if (![
+        "none",
+        "edge",
+        "mean-reversion",
+        "edge-with-fallback",
+    ].includes(config.AGGRESSION_MODEL)) {
+        errors.push(
+            "AGGRESSION_MODEL must be none, edge, mean-reversion, or edge-with-fallback",
+        );
+    }
 
     if (
         !Number.isFinite(config.MAX_CAPITAL_EXPOSURE_PERCENT) ||
@@ -322,6 +334,12 @@ export const CFG = {
     FAIR_VALUE_STALE_MS: envNum("FAIR_VALUE_STALE_MS", 45000),
 
     // ===============Aggression logic=================
+    // Selects how the bot chooses IOC aggression trades:
+    //   none                disables aggression;
+    //   edge                trades only on a fresh fair-value edge;
+    //   mean-reversion      uses the CENTER_PRICE/inventory model;
+    //   edge-with-fallback  tries a fair-value edge, then mean reversion.
+    AGGRESSION_MODEL: envStr("AGGRESSION_MODEL", "edge-with-fallback") as AggressionModel,
     // Base delay, in milliseconds, between attempts to run the aggression
     // model. An aggression attempt is only eligible after this delay has
     // elapsed since the previous aggression check.
@@ -346,8 +364,8 @@ export const CFG = {
     SLIP_BUFFER: envNum("SLIP_BUFFER", 0.15),
     // Number of protocol price ticks required for a fair-value trade edge.
     FAIR_VALUE_MIN_EDGE_TICKS: envNum("FAIR_VALUE_MIN_EDGE_TICKS", 2),
-    // When no fresh oracle fair value is available, chooseAggressionSide()
-    // uses a mean-reversion model to choose a buy or sell direction:
+    // The mean-reversion fallback used by chooseAggressionSide() when
+    // AGGRESSION_MODEL selects it chooses a buy or sell direction:
     //   x = (midPrice - CENTER_PRICE) /
     //       max(1e-9, SOFT_MAX_PRICE - CENTER_PRICE)
     //   pBuy = 0.5 - 0.5 * tanh(MEANREV_K * x)

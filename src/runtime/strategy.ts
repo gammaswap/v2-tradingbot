@@ -67,6 +67,16 @@ export function shouldPauseForFairValue(
     return !hasFreshBook(book);
 }
 
+export function shouldPauseForAggression(book: BookSnapshot | null = STATE.book): boolean {
+    if (CFG.AGGRESSION_MODEL === "none") return false;
+    if (CFG.AGGRESSION_MODEL === "edge") return !hasFreshFairValue();
+    if (CFG.AGGRESSION_MODEL === "mean-reversion") return !hasFreshBook(book);
+
+    // edge-with-fallback uses the oracle edge when available and requires a
+    // usable book when it must fall back to mean reversion.
+    return !hasFreshFairValue() && !hasFreshBook(book);
+}
+
 export function shouldCancelReplace(o: PendingOrder, newPrice: number, newSize: number, tolTicks: number = 1) : boolean {
     const tol = PROTOCOL_TICK_SIZE * tolTicks + 1;//1e-12;
     const tolSize = 10000 * 1000; // 10 USD = $0.01 x 1000
@@ -713,7 +723,7 @@ export function computePBuy(mid: number): number {
     return clamp(pBuy, 0.02, 0.98);
 }
 
-export function chooseAggressionSide(mid: number): Side {
+export function chooseMeanReversionAggressionSide(mid: number): Side {
     const x = normalizedCenterDeviation(mid);
 
     const outward: Side = x >= 0 ? "buy" : "sell";
@@ -723,8 +733,8 @@ export function chooseAggressionSide(mid: number): Side {
     return Math.random() < pBuy ? "buy" : "sell";
 }
 
-export function chooseFairValueAggressionSide(book: BookSnapshot, reference: number): Side | null {
-    if (!hasFreshFairValue()) return chooseAggressionSide(reference);
+export function chooseFairValueEdgeSide(book: BookSnapshot, reference: number): Side | null {
+    if (!hasFreshFairValue()) return null;
 
     // This chooses to cross the spread to buy if reference > ask by minEdge, and sell if reference < bid by minEdge.
     const { bid, ask } = bestBidAsk(book);
@@ -735,6 +745,20 @@ export function chooseFairValueAggressionSide(book: BookSnapshot, reference: num
 
     if (bestEdge < minEdge) return null;
     return buyEdge >= sellEdge ? "buy" : "sell";
+}
+
+export function chooseAggressionSide(book: BookSnapshot, reference: number): Side | null {
+    switch (CFG.AGGRESSION_MODEL) {
+        case "none":
+            return null;
+        case "mean-reversion":
+            return chooseMeanReversionAggressionSide(reference);
+        case "edge":
+            return chooseFairValueEdgeSide(book, reference);
+        case "edge-with-fallback":
+            return chooseFairValueEdgeSide(book, reference) ??
+                chooseMeanReversionAggressionSide(reference);
+    }
 }
 
 function roundToNearestTick(price: number): number {

@@ -63,6 +63,7 @@ describe("TradingBot options", () => {
                 levelSpacingGrowth: 1.75,
             },
             aggression: {
+                model: "edge",
                 aggressionMs: 6_000,
                 aggressionJitterMs: 300,
                 fairValueMinEdgeTicks: 3,
@@ -101,6 +102,7 @@ describe("TradingBot options", () => {
         expect((bot as any).context.config.LEVEL_SPACING_GROWTH).toBe(1.75);
         expect((bot as any).context.config.AGGRESS_MS).toBe(6_000);
         expect((bot as any).context.config.AGGRESS_JITTER_MS).toBe(300);
+        expect((bot as any).context.config.AGGRESSION_MODEL).toBe("edge");
         expect((bot as any).context.config.FAIR_VALUE_MIN_EDGE_TICKS).toBe(3);
         expect((bot as any).context.config.BASE_RESERVE_MIN).toBe(123_456);
     });
