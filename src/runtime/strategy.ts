@@ -10,6 +10,9 @@ import {
     PROTOCOL_TICK_SIZE,
     PROTOCOL_LOT_SIZE,
 } from "../utils/protocolPrice.js";
+import { Logger } from "../utils/logger.js";
+
+const logger = new Logger("strategy");
 
 const PROTOCOL_PRICE_SCALE = 1_000_000;
 
@@ -378,17 +381,17 @@ export function buildGrowthSpaceLadderPrices(
     mid: number,
     book: BookSnapshot | null = null,
 ): { bids: number[]; asks: number[] } {
-    console.log("===============buildTargetLadderPrices:start==================");
+    logger.debug("===============buildTargetLadderPrices:start==================");
     const bidPrices = new Set<number>();
     const askPrices = new Set<number>();
     const bestAsk = book?.asks[0]?.price ?? null;
     const bestBid = book?.bids[0]?.price ?? null;
     let spacing = CFG.LEVEL_SPACING_NEAR;
-    console.log("mid:", mid);
-    console.log("spacing:", spacing);
+    logger.debug("mid:", mid);
+    logger.debug("spacing:", spacing);
 
     for (let i = 0; i < CFG.LEVELS_PER_SIDE; i++) {
-        console.log("level:i:",i,"spacing:",spacing)
+        logger.debug("level:i:",i,"spacing:",spacing)
         const bidP = roundToTick(mid - spacing, "buy");
         const askP = roundToTick(mid + spacing, "sell");
 
@@ -415,7 +418,7 @@ export function buildGrowthSpaceLadderPrices(
         spacing *= CFG.LEVEL_SPACING_GROWTH;
     }
 
-    console.log("===============buildTargetLadderPrices:end==================");
+    logger.debug("===============buildTargetLadderPrices:end==================");
     return { bids: [...bidPrices], asks: [...askPrices] };
 }
 
@@ -653,13 +656,13 @@ export function canPlaceOrder(isBuy: boolean, size: number, price: number, colla
 
 export function canPlaceAsk(size: number, price: number, collateral?: number): boolean {
     const _collateral = collateral ?? availableCollateral();
-    console.log("availableCollateral():", availableCollateral(), "collateral:", collateral, " size:", size, "price:", price, " =>")
+    logger.debug("availableCollateral():", availableCollateral(), "collateral:", collateral, " size:", size, "price:", price, " =>")
     return protocolNotional(size, 1_000_000 - price) <= _collateral;
 }
 
 export function canPlaceBid(size: number, price: number, collateral?: number): boolean {
     const _collateral = collateral ?? availableCollateral();
-    console.log("availableCollateral():", availableCollateral(), "collateral:", collateral, "size:", size, "price:", price, " =>")
+    logger.debug("availableCollateral():", availableCollateral(), "collateral:", collateral, "size:", size, "price:", price, " =>")
     return protocolNotional(size, price) <= _collateral;
 }
 

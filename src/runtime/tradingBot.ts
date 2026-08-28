@@ -14,8 +14,9 @@ import { startOracleFeed, type OracleFeed } from "./oracle.js";
 import { startOrderBookFeed, type OrderBookFeed } from "./orderbook.js";
 import { runRuntimeCoordinator } from "./coordinator.js";
 import { protocolValueToSafeNumber } from "../utils/protocolMath.js";
-import { clamp, isBigIntString, log, sleep, warn } from "../utils/utils.js";
+import { clamp, isBigIntString, sleep } from "../utils/utils.js";
 import { resolveTradingWallet } from "./wallet.js";
+import { Logger } from "../utils/logger.js";
 import {
     createBotContext,
     runWithBotContext,
@@ -23,6 +24,8 @@ import {
     RUNTIME_STATE as STATE,
     type BotContext,
 } from "./context.js";
+
+const logger = new Logger("tradingBot");
 
 export type ContractAddresses = {
     exchange: string;
@@ -277,7 +280,7 @@ export class TradingBot {
         ).finally(() => {
             this.running = false;
         });
-        log("trading bot started", { assetId: CFG.ASSET_ID, epoch: STATE.epoch.toString() });
+        logger.info("trading bot started", { assetId: CFG.ASSET_ID, epoch: STATE.epoch.toString() });
     }
 
     async stop(): Promise<void> {

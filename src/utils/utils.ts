@@ -60,18 +60,6 @@ export function idempotencyKey(prefix: string) {
     return `${prefix}-${crypto.randomUUID()}`;
 }
 
-export function debug(...args: any[]) {
-    if (CFG.LOG_DEBUG) console.log(new Date().toISOString(), ...args);
-}
-
-export function log(...args: any[]) {
-    if (CFG.LOG_VERBOSE || CFG.LOG_DEBUG) console.log(new Date().toISOString(), ...args);
-}
-
-export function warn(...args: any[]) {
-    console.warn(new Date().toISOString(), ...args);
-}
-
 export function isBigIntString(value: string): boolean {
     if (typeof value !== "string") return false;
 

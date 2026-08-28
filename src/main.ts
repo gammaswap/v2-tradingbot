@@ -1,6 +1,8 @@
 import { TradingBot } from "./runtime/tradingBot.js";
 import { CFG, validateProductionConfig } from "./config/config.js";
-import { log, warn } from "./utils/utils.js";
+import { Logger } from "./utils/logger.js";
+
+const logger = new Logger("main");
 
 /**
  * CLI entry point and package-API example. Trading lifecycle initialization is
@@ -9,7 +11,7 @@ import { log, warn } from "./utils/utils.js";
 async function main(): Promise<void> {
     const configurationErrors = validateProductionConfig();
     if (configurationErrors.length > 0) {
-        for (const error of configurationErrors) warn("configuration error:", error);
+        for (const error of configurationErrors) logger.warn("configuration error:", error);
         return;
     }
 
@@ -79,14 +81,14 @@ async function main(): Promise<void> {
         },
     });
 
-    log("starting trading bot", { assetId: CFG.ASSET_ID });
+    logger.info("starting trading bot", { assetId: CFG.ASSET_ID });
     await bot.start();
 
     let shuttingDown = false;
     const shutdown = (signal: NodeJS.Signals) => {
         if (shuttingDown) return;
         shuttingDown = true;
-        console.log("received", signal, "stopping trading bot");
+        logger.info("received", signal, "stopping trading bot");
         void bot.stop().finally(() => process.exit(0));
     };
 
@@ -95,6 +97,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-    console.error("fatal:", error);
+    logger.error("fatal:", error);
     process.exit(1);
 });

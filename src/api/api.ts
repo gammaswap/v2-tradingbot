@@ -25,6 +25,9 @@ import type {
     PendingOrder,
 } from "../utils/types.js";
 import { assertProtocolOrder, assertProtocolPrice } from "../utils/protocolPrice.js";
+import { Logger } from "../utils/logger.js";
+
+const logger = new Logger("api");
 
 const PRICE_TENTH_CENT_SCALE = 1_000n;
 const SIZE_HUNDREDTH_SCALE = 10_000n;
@@ -318,7 +321,7 @@ export async function apiSendOrder(wallet: Wallet, order: { epoch: bigint | numb
         ...(order.nonce == null ? {} : { nonce: order.nonce }),
     });
 
-    console.log("signedOrderMessage:", res.request);
+    logger.debug("signedOrderMessage:", res.request);
     return res;
 }
 
@@ -334,7 +337,7 @@ export async function apiCancelOrder(wallet: Wallet, epoch: bigint | number, ord
         ? await client.cancelAll({ ...input, ...nonceInput })
         : await client.cancelOrder({ ...input, orderHash, ...nonceInput });
 
-    console.log("signedCancelMessage:", res.request);
+    logger.debug("signedCancelMessage:", res.request);
     return res;
 }
 
@@ -345,7 +348,7 @@ export async function apiClaim(wallet: Wallet, epoch: bigint | number) {
         epoch: epoch.toString(),
     });
 
-    console.log("signedClaimMessage:", res.request);
+    logger.debug("signedClaimMessage:", res.request);
     return res;
 }
 
@@ -380,6 +383,6 @@ export async function apiCancelReplaceOrder(
         replacementNonce: input.replacementNonce,
     });
 
-    console.log("signedCancelReplaceMessage:", res.request);
+    logger.debug("signedCancelReplaceMessage:", res.request);
     return res;
 }

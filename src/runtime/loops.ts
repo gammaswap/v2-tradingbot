@@ -9,7 +9,7 @@ import {
     apiGetPosition,
     apiSendOrder
 } from "../api/api.js";
-import { jitter, log, nowMs, sleep, warn, clamp, roundToTick, roundToOrderLot, getOrderKey } from "../utils/utils.js";
+import { jitter, nowMs, sleep, clamp, roundToTick, roundToOrderLot, getOrderKey } from "../utils/utils.js";
 import {
     midPrice,
     referencePrice,
@@ -44,10 +44,13 @@ import {
 import { RUNTIME_QUOTE_COOLDOWNS as QUOTE_COOLDOWNS } from "./context.js";
 import { protocolValueToSafeNumber } from "../utils/protocolMath.js";
 import { PROTOCOL_TICK_SIZE } from "../utils/protocolPrice.js";
+import { Logger } from "../utils/logger.js";
+
+const logger = new Logger("loops");
 
 export async function hasPendingOrders() {
     const resp = await apiGetBalance();
-    console.log("cleanUpAllOrders:cancel all orders >> pending", resp.pending);
+    logger.info("cleanUpAllOrders:cancel all orders >> pending", resp.pending);
     const hasPendingBalance = resp.pending >= CFG.DUST_BALANCE;
     await sleep(1000 * 2);
     return hasPendingBalance;
@@ -58,15 +61,15 @@ export async function cleanUpAllOrders(wallet: Wallet) {
     let tryCount = 0;
     while(!done) {
         if(await hasPendingOrders()) {
-            console.log("cleanUpAllOrders:cancel all orders >> tryCount:", tryCount);
+            logger.info("cleanUpAllOrders:cancel all orders >> tryCount:", tryCount);
             await cancelAllOrders(wallet);
             tryCount++;
         } else {
-            console.log("cleanUpAllOrders:done");
+            logger.info("cleanUpAllOrders:done");
             done = true;
         }
         if(tryCount >= 10) {
-            console.log("cleanUpAllOrders:cancel all orders >> max tryCount reached");
+            logger.info("cleanUpAllOrders:cancel all orders >> max tryCount reached");
             done = true;
         }
     }
@@ -75,36 +78,36 @@ export async function cleanUpAllOrders(wallet: Wallet) {
 export async function cancelAllOrders(wallet: Wallet, startingEpoch: bigint = STATE.epoch) {
     let epoch = startingEpoch;
     let done = false;
-    console.log("==============cancelAllOrders:start", epoch,"========================");
+    logger.info("==============cancelAllOrders:start", epoch,"========================");
     while(!done && epoch >= 0n) {
-        console.log("cancelAllOrders:epoch:", epoch);
+        logger.info("cancelAllOrders:epoch:", epoch);
         // look for pending orders
         const pending = await apiGetPending(STATE.account, epoch);
         if(pending.buys.length > 0 || pending.sells.length > 0) {
             // has pending orders, send cancel all
-            console.log("cancelAllOrders:cancel all orders >> pending.buys:", pending.buys.length, "pending.sells:", pending.sells.length, "epoch:", epoch);
+            logger.info("cancelAllOrders:cancel all orders >> pending.buys:", pending.buys.length, "pending.sells:", pending.sells.length, "epoch:", epoch);
             await apiCancelOrder(wallet, epoch, ZeroHash);
             epoch--;
         } else {
-            console.log("cancelAllOrders:skipping: epoch:", epoch);
+            logger.info("cancelAllOrders:skipping: epoch:", epoch);
             epoch--;
         }
         await sleep(1000 * 3);
 
         const resp = await apiGetBalance();
         if(resp.pending < CFG.DUST_BALANCE) {
-            warn("Error: Pending balance > 0, pending:", resp.pending);
+            logger.warn("Error: Pending balance > 0, pending:", resp.pending);
             done = true;
             return;
         }
 
         await sleep(1000 * 3);
     }
-    console.log("==============cancelAllOrders:end", epoch,"========================");
+    logger.info("==============cancelAllOrders:end", epoch,"========================");
 }
 
 export async function runAssetEpochCheck(wallet: Wallet): Promise<AssetEpochCheckResult> {
-    console.log("=============runAssetEpochCheck:start",(new Date()).toUTCString(),"============================");
+    logger.info("=============runAssetEpochCheck:start============================");
     const currentAsset = await apiGetAsset();
     const result = await reconcileAssetEpoch(STATE, currentAsset, wallet, {
         getPosition: async (epoch) => apiGetPosition(epoch),
@@ -116,14 +119,14 @@ export async function runAssetEpochCheck(wallet: Wallet): Promise<AssetEpochChec
         },
         markResolved: markFairValueStale,
     });
-    console.log("asset refreshed:", STATE.asset);
-    console.log("=============runAssetEpochCheck:end",(new Date()).toUTCString(),"============================");
+    logger.info("asset refreshed:", STATE.asset);
+    logger.info("=============runAssetEpochCheck:end============================");
     return result;
 }
 
 export async function refreshPrivateState(wallet: Wallet): Promise<void> {
     const epoch = STATE.epoch;
-    console.log("=============refreshPrivateState:start", epoch.toString(), "============================");
+    logger.info("=============refreshPrivateState:start", epoch.toString(), "============================");
 
     try {
         const [pendingResp, balance, position] = await Promise.all([
@@ -148,16 +151,16 @@ export async function refreshPrivateState(wallet: Wallet): Promise<void> {
             position.balance,
             "position balance",
         ) * (position.bSide ? -1 : 1);
-        console.log("trading state refreshed:", {
+        logger.info("trading state refreshed:", {
             pending: STATE.pending.size,
             baseBal: STATE.baseBal,
             invBase: STATE.invBase,
         });
     } catch (e: any) {
-        warn("private state refresh error:", e?.message ?? e);
+        logger.warn("private state refresh error:", e?.message ?? e);
     }
 
-    console.log("=============refreshPrivateState:end",(new Date()).toUTCString(),"============================");
+    logger.info("=============refreshPrivateState:end============================");
 }
 
 function applyPendingResponse(pendingResp: Awaited<ReturnType<typeof apiGetPending>>): void {
@@ -191,15 +194,15 @@ function applyPendingResponse(pendingResp: Awaited<ReturnType<typeof apiGetPendi
 
 
 export async function runQuoteMaintenance(wallet: Wallet) {
-    console.log("=============runQuoteMaintenance:start",(new Date()).toUTCString(),"============================");
+    logger.info("=============runQuoteMaintenance:start============================");
     const book = STATE.book;
     if (!book) return;
     if (!canTradeCurrentAsset(STATE)) {
-        log("quote maintenance skipped: current asset is unavailable or resolved");
+        logger.info("quote maintenance skipped: current asset is unavailable or resolved");
         return;
     }
     if (shouldPauseForFairValue(book)) {
-        warn("quote maintenance skipped: reference price is stale or unavailable");
+        logger.warn("quote maintenance skipped: reference price is stale or unavailable");
         return;
     }
 
@@ -224,7 +227,11 @@ export async function runQuoteMaintenance(wallet: Wallet) {
         CFG.HARD_MIN_PRICE,
         CFG.HARD_MAX_PRICE,
     );
-    console.log("book >> bids:", book.bids.length, "asks:", book.asks.length," total:", book.asks.length + book.bids.length, "mid:", bookMid, "reference:", refPrice, "calculatedBidAsk:", calculatedBidAsk, "quoteCenter:", quoteCenter, "gamma:", gamma, "inventorySkew:", inventorySkew, "fairValue:", STATE.fairValue?.protocolPrice, "oracleStale:", STATE.oracle.stale);
+    logger.debug("book >> bids:", book.bids.length, "asks:", book.asks.length," total:",
+        book.asks.length + book.bids.length, "mid:", bookMid, "reference:", refPrice,
+        "calculatedBidAsk:", calculatedBidAsk, "quoteCenter:", quoteCenter, "gamma:", gamma,
+        "inventorySkew:", inventorySkew, "fairValue:", STATE.fairValue?.protocolPrice,
+        "oracleStale:", STATE.oracle.stale);
     const calculatedTargets = buildTargetLadderPrices(
         book,
         refPrice,
@@ -235,7 +242,7 @@ export async function runQuoteMaintenance(wallet: Wallet) {
             ? LADDER_PRICE_MODEL.GROWTH_SPACE
             : LADDER_PRICE_MODEL.EQUIDISTANT,
     );
-    console.log("calculated target ladder:", calculatedTargets);
+    logger.debug("calculated target ladder:", calculatedTargets);
     const { bids: targetBidPrices, asks: targetAskPrices } = calculatedTargets;
     const { bidSize, askSize } = calculateTotalSizes(STATE.asset!);
     const bidSizes = distributeTotalSizeAcrossLadder(
@@ -248,10 +255,7 @@ export async function runQuoteMaintenance(wallet: Wallet) {
         targetAskPrices,
         "sell",
     );
-    console.log("targetBids:", targetBidPrices);
-    console.log("targetAsks:", targetAskPrices);
-    console.log("bidSizes:", bidSizes);
-    console.log("askSizes:", askSizes);
+    logger.debug("targetBids:",targetBidPrices,"\ntargetAsks:",targetAskPrices,"\nbidSizes:",bidSizes,"\naskSizes:",askSizes);
     const pendingBids = Array.from(STATE.pendingBuys.values()) as PendingOrder[];
     const pendingSells = Array.from(STATE.pendingSells.values()) as PendingOrder[];
     const { cancelReplaces: buyCancelReplaces, cancels: buyCancels, newOrders: buyNewOrders } = planOrders(pendingBids, targetBidPrices, bidSizes, "buy");
@@ -298,11 +302,11 @@ export async function runQuoteMaintenance(wallet: Wallet) {
                     replacementNonce: intent.replacementNonce!,
                 });
             handleCancelReplaceResponse(intent, response);
-            log(`cancel replace`, { price: instr.price, size: instr.size, side: instr.side, cancelId: instr.cancelId });
+            logger.info(`cancel replace`, { price: instr.price, size: instr.size, side: instr.side, cancelId: instr.cancelId });
         } catch (e: any) {
             ORDER_INTENTS.markUnknown(intent);
-            warn(`failed cancel replace cancelId: ${instr.cancelId}, price: ${instr.price}, size: ${instr.size},` +
-                `side: ${instr.side}, error:`, e?.message ?? e);
+            logger.warn(`failed cancel replace cancelId: ${instr.cancelId}, price: ${instr.price}, ` +
+                `size: ${instr.size}, side: ${instr.side}, error:`, e?.message ?? e);
         }
     }
 
@@ -318,7 +322,7 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     }
 
     if (!(await reconcileOrderIntents(wallet))) {
-        warn("quote maintenance paused: unresolved cancellations remain");
+        logger.warn("quote maintenance paused: unresolved cancellations remain");
         return;
     }
 
@@ -365,14 +369,14 @@ export async function runQuoteMaintenance(wallet: Wallet) {
                     nonce: intent.nonce,
                 });
             handlePlaceOrderResponse(intent, response);
-            log("placed order", { price: instr.price, size: instr.size, side: instr.side });
+            logger.info("placed order", { price: instr.price, size: instr.size, side: instr.side });
         } catch (e: any) {
             ORDER_INTENTS.markUnknown(intent);
-            warn(`failed to place order price: ${instr.price}, size: ${instr.size}, side: ${instr.side}, error:`, e?.message ?? e);
+            logger.warn(`failed to place order price: ${instr.price}, size: ${instr.size}, side: ${instr.side}, error:`, e?.message ?? e);
         }
     }
 
-    console.log("=============runQuoteMaintenance:end",(new Date()).toUTCString(),"============================");
+    logger.info("=============runQuoteMaintenance:end",(new Date()).toUTCString(),"============================");
 }
 
 /**
@@ -396,7 +400,7 @@ export async function reconcileOrderIntents(wallet: Wallet): Promise<boolean> {
                 ...pending.sells.map((order) => order.id),
             ]));
         } catch (e: any) {
-            warn(`unable to reconcile cancellations for epoch ${epochKey}:`, e?.message ?? e);
+            logger.warn(`unable to reconcile cancellations for epoch ${epochKey}:`, e?.message ?? e);
             return false;
         }
     }
@@ -413,10 +417,10 @@ export async function reconcileOrderIntents(wallet: Wallet): Promise<boolean> {
             try {
                 const response = await apiCancelOrder(wallet, intent.epoch, intent.targetOrderHash, intent.nonce);
                 handleCancelResponse(intent, response);
-                log("cancellation submitted", { id: intent.targetOrderHash, attempt: intent.attempts });
+                logger.info("cancellation submitted", { id: intent.targetOrderHash, attempt: intent.attempts });
             } catch (e: any) {
                 ORDER_INTENTS.markUnknown(intent);
-                warn(`failed to cancel id: ${intent.targetOrderHash}, error:`, e?.message ?? e);
+                logger.warn(`failed to cancel id: ${intent.targetOrderHash}, error:`, e?.message ?? e);
             }
         } else {
             ORDER_INTENTS.markCompleted(intent);
@@ -448,7 +452,7 @@ export async function reconcileOrderIntents(wallet: Wallet): Promise<boolean> {
             const stillPending = pendingIds?.has(intent.targetOrderHash) ?? false;
             if (!stillPending) ORDER_INTENTS.markCompleted(intent);
         } catch (e: any) {
-            warn(`unable to verify cancellation ${intent.targetOrderHash}:`, e?.message ?? e);
+            logger.warn(`unable to verify cancellation ${intent.targetOrderHash}:`, e?.message ?? e);
         }
     }
 
@@ -482,7 +486,7 @@ export async function reconcilePlaceIntents(wallet: Wallet): Promise<void> {
             ]));
             if (intent.epoch === STATE.epoch) applyPendingResponse(pending);
         } catch (e: any) {
-            warn(`unable to reconcile passive orders for epoch ${epochKey}:`, e?.message ?? e);
+            logger.warn(`unable to reconcile passive orders for epoch ${epochKey}:`, e?.message ?? e);
         }
     }
 
@@ -517,7 +521,7 @@ export async function reconcileCancelReplaceIntents(wallet: Wallet): Promise<voi
             ]));
             if (intent.epoch === STATE.epoch) applyPendingResponse(pending);
         } catch (e: any) {
-            warn(`unable to reconcile cancel-replaces for epoch ${epochKey}:`, e?.message ?? e);
+            logger.warn(`unable to reconcile cancel-replaces for epoch ${epochKey}:`, e?.message ?? e);
         }
     }
 
@@ -534,11 +538,11 @@ export async function runAggression(wallet: Wallet) {
     const book = STATE.book;
     if (!book) return;
     if (!canTradeCurrentAsset(STATE)) {
-        log("aggression skipped: current asset is unavailable or resolved");
+        logger.info("aggression skipped: current asset is unavailable or resolved");
         return;
     }
     if (shouldPauseForAggression(book)) {
-        console.log("aggression skipped: reference price is stale or unavailable");
+        logger.info("aggression skipped: reference price is stale or unavailable");
         return;
     }
 
@@ -546,18 +550,18 @@ export async function runAggression(wallet: Wallet) {
     const tradeDelay = jitter(CFG.AGGRESS_MS, CFG.AGGRESS_JITTER_MS);
     const msSinceLastTrade = currTime - STATE.lastTradeTime;
     if(msSinceLastTrade < tradeDelay) {
-        console.log("aggression skipped (trade delay)", { msSinceLastTrade, tradeDelay });
+        logger.info("aggression skipped (trade delay)", { msSinceLastTrade, tradeDelay });
         return;
     }
     STATE.lastTradeTime = currTime;
 
-    console.log("========================runAggression:start",(new Date()).toUTCString(),"==========================");
+    logger.info("========================runAggression:start==========================");
     const bookMid = midPrice(book);
     const refPrice = referencePrice(book);
-    console.log("mid:", bookMid, "reference:", refPrice, "fairValue:", STATE.fairValue?.protocolPrice);
+    logger.debug("mid:", bookMid, "reference:", refPrice, "fairValue:", STATE.fairValue?.protocolPrice);
     let side = chooseAggressionSide(book, refPrice);
     if (side == null) {
-        log("aggression skipped (model selected no trade)", {
+        logger.info("aggression skipped (model selected no trade)", {
             bid: book.bids[0]?.price,
             ask: book.asks[0]?.price,
             reference: refPrice,
@@ -565,61 +569,61 @@ export async function runAggression(wallet: Wallet) {
         });
         return;
     }
-    console.log("side:", side);
-    console.log("CFG.WIPE_LEVELS:", CFG.WIPE_LEVELS);
-    console.log("asksLen:", book.asks.length, "bidsLen:", book.bids.length);
+    logger.debug("side:", side);
+    logger.debug("CFG.WIPE_LEVELS:", CFG.WIPE_LEVELS);
+    logger.debug("asksLen:", book.asks.length, "bidsLen:", book.bids.length);
 
     if (side === "buy" && book.asks.length < CFG.WIPE_LEVELS) return;
     if (side === "sell" && book.bids.length < CFG.WIPE_LEVELS) return;
 
     const reqBuy = depthToWipe(book, "buy", CFG.WIPE_LEVELS).qty;
     const reqSell = depthToWipe(book, "sell", CFG.WIPE_LEVELS).qty;
-    console.log("reqBuy:", reqBuy);
-    console.log("reqSell:", reqSell);
+    logger.debug("reqBuy:", reqBuy);
+    logger.debug("reqSell:", reqSell);
     let tradeQty = roundToOrderLot((side === "buy" ? reqBuy : reqSell) * (1 + CFG.SLIP_BUFFER));
-    console.log("tradeQty1:", tradeQty);
+    logger.debug("tradeQty1:", tradeQty);
     tradeQty = roundToOrderLot(Math.min(tradeQty, CFG.MAX_AGGRESS_QTY));
     tradeQty = capOrderSizeByMargin(side === "buy", tradeQty, refPrice);
-    console.log("tradeQty2:", tradeQty);
+    logger.debug("tradeQty2:", tradeQty);
 
     const feasibleChosen = side === "buy"
         ? canAggressBuy(tradeQty, refPrice)
         : canAggressSell(tradeQty, refPrice);
-    console.log("feasibleChosen:", feasibleChosen);
+    logger.debug("feasibleChosen:", feasibleChosen);
 
     if (!feasibleChosen) { // we had an edge but couldn't trade. See if we can aggress in the other direction, not due to an edge
         const other = side === "buy" ? "sell" : "buy";
-        console.log("other:", other);
+        logger.debug("other:", other);
         const otherReq = other === "buy" ? reqBuy : reqSell;
-        console.log("otherReq:", otherReq);
+        logger.debug("otherReq:", otherReq);
         let otherQty = roundToOrderLot(Math.min(otherReq * (1 + CFG.SLIP_BUFFER), CFG.MAX_AGGRESS_QTY));
         otherQty = capOrderSizeByMargin(other === "buy", otherQty, refPrice);
-        console.log("otherQty:", otherQty);
+        logger.debug("otherQty:", otherQty);
 
         const feasibleOther = other === "buy"
             ? canAggressBuy(otherQty, refPrice)
             : canAggressSell(otherQty, refPrice);
-        console.log("feasibleOther:", feasibleOther);
+        logger.debug("feasibleOther:", feasibleOther);
 
         if (!feasibleOther) {
-            log("aggression skipped (not feasible)", {
+            logger.info("aggression skipped (not feasible)", {
                 mid: bookMid, reference: refPrice, chosen: side, qty: tradeQty, baseBal: STATE.baseBal, inv: STATE.invBase,
             });
             return;
         }
         side = other;
         tradeQty = otherQty;
-        console.log("side:", side);
-        console.log("tradeQty:", tradeQty);
+        logger.debug("side:", side);
+        logger.debug("tradeQty:", tradeQty);
     }
 
-    console.log("TICK_SIZE:", PROTOCOL_TICK_SIZE);
+    logger.debug("TICK_SIZE:", PROTOCOL_TICK_SIZE);
     const aggressivePrice =
         side === "buy"
             ? clamp(roundToTick(refPrice + 10 * PROTOCOL_TICK_SIZE, "sell"), CFG.HARD_MIN_PRICE, CFG.HARD_MAX_PRICE)
             : clamp(roundToTick(refPrice - 10 * PROTOCOL_TICK_SIZE, "buy"), CFG.HARD_MIN_PRICE, CFG.HARD_MAX_PRICE);
 
-    console.log("aggressivePrice:", aggressivePrice, "side:", side, "qty:", tradeQty, "mid:", bookMid, "reference:", refPrice);
+    logger.debug("aggressivePrice:", aggressivePrice, "side:", side, "qty:", tradeQty, "mid:", bookMid, "reference:", refPrice);
     try {
         const intent = ORDER_INTENTS.getOrCreate({
             kind: "place",
@@ -641,7 +645,7 @@ export async function runAggression(wallet: Wallet) {
             nonce: intent.nonce,
         });
         handlePlaceOrderResponse(intent, resp);
-        log("aggressed", { side, qty: tradeQty, price: aggressivePrice, mid: bookMid, reference: refPrice });
+        logger.info("aggressed", { side, qty: tradeQty, price: aggressivePrice, mid: bookMid, reference: refPrice });
 
         const balance = await apiGetBalance();
         STATE.baseBal = protocolValueToSafeNumber(
@@ -664,8 +668,8 @@ export async function runAggression(wallet: Wallet) {
             }
         }
     } catch (e: any) {
-        warn("aggression error:", e?.message ?? e);
+        logger.warn("aggression error:", e?.message ?? e);
     }
 
-    console.log("========================runAggression:end",(new Date()).toUTCString(),"==========================");
+    logger.info("========================runAggression:end==========================");
 }

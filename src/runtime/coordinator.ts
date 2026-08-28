@@ -13,8 +13,11 @@ import {
     installBookSnapshot,
     type LocalOrderBookState,
 } from "./orderbookReducer.js";
-import { jitter, debug, log, nowMs, warn } from "../utils/utils.js";
+import { jitter, nowMs } from "../utils/utils.js";
 import { protocolValueToSafeNumber } from "../utils/protocolMath.js";
+import { Logger } from "../utils/logger.js";
+
+const logger = new Logger("coordinator");
 
 const EPOCH_CHECK_MS = 1_000;
 
@@ -101,7 +104,7 @@ export async function runCoordinatorStep(context: CoordinatorStepContext): Promi
             } catch (error: any) {
                 context.assetReady = false;
                 bookReady = false;
-                warn("asset state refresh failed; trading is paused:", error?.message ?? error);
+                logger.warn("asset state refresh failed; trading is paused:", error?.message ?? error);
             }
             context.nextEpochCheck = now + EPOCH_CHECK_MS;
         }
@@ -127,19 +130,19 @@ async function resyncBook(state: LocalOrderBookState): Promise<boolean> {
         const snapshot = await apiGetBook(STATE.epoch);
         const ready = installBookSnapshot(state, snapshot);
         if (!ready) {
-            warn("REST book snapshot did not cover buffered websocket events; another resync is required");
+            logger.warn("REST book snapshot did not cover buffered websocket events; another resync is required");
             return false;
         }
 
         publishLocalBook(state);
-        log("local orderbook resynced", {
+        logger.info("local orderbook resynced", {
             seqId: state.seqId?.toString(),
             bids: STATE.book?.bids.length,
             asks: STATE.book?.asks.length,
         });
         return true;
     } catch (error: any) {
-        warn("orderbook resync failed:", error?.message ?? error);
+        logger.warn("orderbook resync failed:", error?.message ?? error);
         return false;
     }
 }
@@ -169,14 +172,14 @@ function processEvents(
         if (event.type === "market-resync") {
             needsResync = true;
             skipMarketEvents = true;
-            warn("market resync requested:", event.reason);
+            logger.warn("market resync requested:", event.reason);
             continue;
         }
 
         if (event.type === "oracle-price") {
             STATE.oracle.connected = true;
             const estimate = updateFairValueFromOracle(event.update.price, event.update.ts);
-            debug("oracle state updated", {
+            logger.debug("oracle state updated", {
                 symbolId: event.update.symbolId.toString(),
                 price: event.update.price.toString(),
                 fairValue: estimate?.protocolPrice,
@@ -223,7 +226,7 @@ function applyTradeHint(update: WebSocketTradeUpdate): boolean {
 
     STATE.invBase += order.side === "buy" ? fill : -fill;
     STATE.lastTradeTime = nowMs();
-    log("order execution hint", {
+    logger.info("order execution hint", {
         orderId: update.data.orderId,
         side: order.side,
         fill,

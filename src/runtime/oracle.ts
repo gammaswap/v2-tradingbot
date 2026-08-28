@@ -3,8 +3,10 @@ import {
     type Unsubscribe,
 } from "@gammaswap/v2-exchange-sdk";
 import { RUNTIME_CFG as CFG, RUNTIME_STATE as STATE } from "./context.js";
-import { debug, log, warn } from "../utils/utils.js";
 import { RuntimeEventQueue } from "./events.js";
+import { Logger } from "../utils/logger.js";
+
+const logger = new Logger("oracle");
 
 export type OracleFeed = {
     close(): Promise<void>;
@@ -26,7 +28,7 @@ export async function startOracleFeed(queue: RuntimeEventQueue): Promise<OracleF
     const client = createOracleWebSocketClient({
         websocketUrl: CFG.ORACLE_FEED_WS_URL,
         stalePriceTimeoutMs: CFG.ORACLE_STALE_PRICE_TIMEOUT_MS,
-        onError: (error) => warn("oracle websocket error:", error),
+        onError: (error) => logger.warn("oracle websocket error:", error),
     });
 
     let unsubscribe: Unsubscribe | null = null;
@@ -48,7 +50,7 @@ export async function startOracleFeed(queue: RuntimeEventQueue): Promise<OracleF
     unsubscribe = await client.subscribePrice(symbolId, {
         onPrice: (update) => {
             notifyFirstPrice();
-            debug("oracle price update:", {
+            logger.debug("oracle price update:", {
                 symbolId: update.symbolId.toString(),
                 price: update.price.toString(),
                 ts: update.ts.toString(),
@@ -56,13 +58,13 @@ export async function startOracleFeed(queue: RuntimeEventQueue): Promise<OracleF
             queue.publish({ type: "oracle-price", update });
         },
         onStale: (symbolId) => {
-            warn("oracle stream stale:", symbolId);
+            logger.warn("oracle stream stale:", symbolId);
             queue.publish({ type: "oracle-stale", symbolId });
         },
-        onError: (error) => warn("oracle subscription error:", error),
+        onError: (error) => logger.warn("oracle subscription error:", error),
     });
 
-    log("oracle subscribed:", {
+    logger.info("oracle subscribed:", {
         websocketUrl: CFG.ORACLE_FEED_WS_URL,
         symbolId,
     });
@@ -75,7 +77,7 @@ export async function startOracleFeed(queue: RuntimeEventQueue): Promise<OracleF
                 try {
                     await unsubscribe();
                 } catch (e: any) {
-                    warn("oracle unsubscribe error:", e?.message ?? e);
+                    logger.warn("oracle unsubscribe error:", e?.message ?? e);
                 }
             }
             client.close();

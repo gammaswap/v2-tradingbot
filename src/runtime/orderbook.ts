@@ -4,7 +4,9 @@ import {
 } from "@gammaswap/v2-exchange-sdk";
 import { RUNTIME_CFG as CFG } from "./context.js";
 import { RuntimeEventQueue } from "./events.js";
-import { log, warn } from "../utils/utils.js";
+import { Logger } from "../utils/logger.js";
+
+const logger = new Logger("orderbook");
 
 export type OrderBookFeed = {
     close(): Promise<void>;
@@ -14,7 +16,7 @@ export async function startOrderBookFeed(queue: RuntimeEventQueue): Promise<Orde
     const client = createExchangeWebSocketClient({
         websocketUrl: CFG.ORDERBOOK_WS_URL,
         reconnect: true,
-        onError: (error) => warn("orderbook websocket error:", error),
+        onError: (error) => logger.warn("orderbook websocket error:", error),
     });
 
     const unsubscribe: Unsubscribe = await client.subscribeOrderBook(CFG.ASSET_ID, {
@@ -22,13 +24,13 @@ export async function startOrderBookFeed(queue: RuntimeEventQueue): Promise<Orde
             queue.publish({ type: "market", update });
         },
         onResyncRequired: (assetId) => {
-            warn("orderbook websocket requires resync:", assetId);
+            logger.warn("orderbook websocket requires resync:", assetId);
             queue.publish({ type: "market-resync", reason: `SDK resync for ${assetId}` });
         },
-        onError: (error) => warn("orderbook subscription error:", error),
+        onError: (error) => logger.warn("orderbook subscription error:", error),
     });
 
-    log("orderbook subscribed", {
+    logger.info("orderbook subscribed", {
         websocketUrl: CFG.ORDERBOOK_WS_URL,
         assetId: CFG.ASSET_ID,
     });

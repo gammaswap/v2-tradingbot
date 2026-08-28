@@ -525,6 +525,4 @@ export const CFG = {
     // limit is 100,000 contracts, so the default is 100,000 * 1,000,000.
     // The order planner also applies this cap after rounding to the lot size.
     MAX_ORDER_SIZE: envNum("MAX_ORDER_SIZE", 100000 * 1000000),
-    LOG_VERBOSE: envBool("LOG_VERBOSE", true),
-    LOG_DEBUG: envBool("LOG_DEBUG", false),
 } as const;
