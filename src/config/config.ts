@@ -331,6 +331,19 @@ export const CFG = {
     // jittered delay, which prevents the bot from acting at one perfectly
     // predictable interval.
     AGGRESS_JITTER_MS: envNum("AGGRESS_JITTER_MS", 12000),
+    // Number of opposite-side order-book levels whose quantities are summed
+    // when sizing an aggression order. A buy measures ask-side depth; a sell
+    // measures bid-side depth. The value is normalized to at least one level.
+    WIPE_LEVELS: Math.max(1, Math.floor(envNum("WIPE_LEVELS", 2))),
+    // Maximum quantity for one aggression order, expressed in protocol size
+    // units. The final quantity is capped by this value, rounded to the
+    // protocol lot size, and also limited by collateral and inventory checks.
+    // It must not exceed MAX_ORDER_SIZE.
+    MAX_AGGRESS_QTY: envNum("MAX_AGGRESS_QTY", 500*1000000),
+    // Additional quantity buffer applied after summing WIPE_LEVELS:
+    //   requested quantity = book depth * (1 + SLIP_BUFFER)
+    // This provides room for the book to change before the IOC order arrives.
+    SLIP_BUFFER: envNum("SLIP_BUFFER", 0.15),
     // Number of protocol price ticks required for a fair-value trade edge.
     FAIR_VALUE_MIN_EDGE_TICKS: envNum("FAIR_VALUE_MIN_EDGE_TICKS", 2),
     // When no fresh oracle fair value is available, chooseAggressionSide()
@@ -348,13 +361,10 @@ export const CFG = {
     // intentional countertrend exception to the mean-reversion signal.
     // When a fresh oracle fair value is available, aggression uses the
     // fair-value edge against the best bid/ask instead of this fallback model.
-    WIPE_LEVELS: Math.max(1, Math.floor(envNum("WIPE_LEVELS", 2))),
-    SLIP_BUFFER: envNum("SLIP_BUFFER", 0.15),
-    MAX_AGGRESS_QTY: envNum("MAX_AGGRESS_QTY", 500*1000000),
-    EXTREME_PUSH_PROB: envNum("EXTREME_PUSH_PROB", 0.10),
+    CENTER_PRICE: envNum("CENTER_PRICE", 500000), // 50.0 cents ($0.50)
     MEANREV_K: envNum("MEANREV_K", 2.0),
     INV_SKEW_STRENGTH: envNum("INV_SKEW_STRENGTH", 0.35),
-    CENTER_PRICE: envNum("CENTER_PRICE", 500000), // 50.0 cents ($0.50)
+    EXTREME_PUSH_PROB: envNum("EXTREME_PUSH_PROB", 0.10),
 
     // ============Collateral availability for order placement===============
     // These two settings work together. The available collateral used by the
