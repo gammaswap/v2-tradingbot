@@ -364,6 +364,13 @@ export const CFG = {
     CENTER_PRICE: envNum("CENTER_PRICE", 500000), // 50.0 cents ($0.50)
     MEANREV_K: envNum("MEANREV_K", 2.0),
     INV_SKEW_STRENGTH: envNum("INV_SKEW_STRENGTH", 0.35),
+    // Probability of reversing the fallback mean-reversion recommendation.
+    // A value of 0 disables the outward reversal, so direction comes only
+    // from the mean-reversion and inventory-skew model. Values greater than 0
+    // and less than 1 probabilistically reverse that recommendation: above
+    // CENTER_PRICE the reversal buys instead of sells, and below CENTER_PRICE
+    // it sells instead of buys. This applies only when no fresh oracle fair
+    // value is available; oracle-edge aggression does not use this field.
     EXTREME_PUSH_PROB: envNum("EXTREME_PUSH_PROB", 0.10),
 
     // ============Collateral availability for order placement===============
