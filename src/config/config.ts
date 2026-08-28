@@ -479,7 +479,15 @@ export const CFG = {
     // Used when choosing growth-space model (model 2)
     LEVEL_SPACING_GROWTH: envNum("LEVEL_SPACING_GROWTH", 1.5),
 
+    // Signed inventory level the strategy aims to maintain, expressed in
+    // protocol size units. Zero targets a neutral position; positive values
+    // target a long position and negative values target a short position.
+    // It influences passive quote totals and fallback aggression direction.
     INV_TARGET: envNum("INV_TARGET", 0),
+    // Maximum absolute signed inventory allowed by passive quoting and
+    // aggression checks, expressed in protocol size units. The default is
+    // 5,000 contracts (5,000 * 1,000,000 units) in either direction. It also
+    // normalizes inventory for the fallback aggression model.
     INV_MAX_ABS: envNum("INV_MAX_ABS", 5000 * 1000000),
 
     // Duration that a quote slot remains paused after a terminal order
