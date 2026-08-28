@@ -67,6 +67,12 @@ describe("TradingBot options", () => {
                 aggressionMs: 6_000,
                 aggressionJitterMs: 300,
                 fairValueMinEdgeTicks: 3,
+                wipeLevels: 4,
+                slipBuffer: 0.2,
+                maxAggressQty: 400_000_000,
+                meanReversionK: 3,
+                inventorySkewStrength: 0.5,
+                extremePushProbability: 0.15,
             },
             risk: {
                 baseReserveMin: 123_456,
@@ -104,6 +110,12 @@ describe("TradingBot options", () => {
         expect((bot as any).context.config.AGGRESS_JITTER_MS).toBe(300);
         expect((bot as any).context.config.AGGRESSION_MODEL).toBe("edge");
         expect((bot as any).context.config.FAIR_VALUE_MIN_EDGE_TICKS).toBe(3);
+        expect((bot as any).context.config.WIPE_LEVELS).toBe(4);
+        expect((bot as any).context.config.SLIP_BUFFER).toBe(0.2);
+        expect((bot as any).context.config.MAX_AGGRESS_QTY).toBe(400_000_000);
+        expect((bot as any).context.config.MEANREV_K).toBe(3);
+        expect((bot as any).context.config.INV_SKEW_STRENGTH).toBe(0.5);
+        expect((bot as any).context.config.EXTREME_PUSH_PROB).toBe(0.15);
         expect((bot as any).context.config.BASE_RESERVE_MIN).toBe(123_456);
     });
 

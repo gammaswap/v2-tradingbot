@@ -89,6 +89,12 @@ export type TradingBotOptions = {
         aggressionMs?: number;
         aggressionJitterMs?: number;
         fairValueMinEdgeTicks?: number;
+        wipeLevels?: number;
+        slipBuffer?: number;
+        maxAggressQty?: number;
+        meanReversionK?: number;
+        inventorySkewStrength?: number;
+        extremePushProbability?: number;
     };
 };
 
@@ -163,6 +169,12 @@ function getOptionOverrides(options: TradingBotOptions): Record<string, unknown>
         AGGRESS_JITTER_MS: options.aggression?.aggressionJitterMs,
         AGGRESSION_MODEL: options.aggression?.model,
         FAIR_VALUE_MIN_EDGE_TICKS: options.aggression?.fairValueMinEdgeTicks,
+        WIPE_LEVELS: options.aggression?.wipeLevels,
+        SLIP_BUFFER: options.aggression?.slipBuffer,
+        MAX_AGGRESS_QTY: options.aggression?.maxAggressQty,
+        MEANREV_K: options.aggression?.meanReversionK,
+        INV_SKEW_STRENGTH: options.aggression?.inventorySkewStrength,
+        EXTREME_PUSH_PROB: options.aggression?.extremePushProbability,
     };
 
     return Object.fromEntries(Object.entries(overrides).filter(([, value]) => value !== undefined));

@@ -362,8 +362,10 @@ export const CFG = {
     //   requested quantity = book depth * (1 + SLIP_BUFFER)
     // This provides room for the book to change before the IOC order arrives.
     SLIP_BUFFER: envNum("SLIP_BUFFER", 0.15),
+    // Edge Aggression model parameter.
     // Number of protocol price ticks required for a fair-value trade edge.
     FAIR_VALUE_MIN_EDGE_TICKS: envNum("FAIR_VALUE_MIN_EDGE_TICKS", 2),
+    // Mean reversion aggression model parameters.
     // The mean-reversion fallback used by chooseAggressionSide() when
     // AGGRESSION_MODEL selects it chooses a buy or sell direction:
     //   x = (midPrice - CENTER_PRICE) /

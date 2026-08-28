@@ -46,6 +46,12 @@ async function main(): Promise<void> {
             aggressionMs: CFG.AGGRESS_MS,
             aggressionJitterMs: CFG.AGGRESS_JITTER_MS,
             fairValueMinEdgeTicks: CFG.FAIR_VALUE_MIN_EDGE_TICKS,
+            wipeLevels: CFG.WIPE_LEVELS,
+            slipBuffer: CFG.SLIP_BUFFER,
+            maxAggressQty: CFG.MAX_AGGRESS_QTY,
+            meanReversionK: CFG.MEANREV_K,
+            inventorySkewStrength: CFG.INV_SKEW_STRENGTH,
+            extremePushProbability: CFG.EXTREME_PUSH_PROB,
         },
         quote: {
             quoteLoopMs: CFG.QUOTE_LOOP_MS,
