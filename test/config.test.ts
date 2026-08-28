@@ -69,7 +69,6 @@ describe("price configuration validation", () => {
         const errors = validatePriceConfiguration({
             HARD_MIN_PRICE: 999,
             HARD_MAX_PRICE: 1_000_000,
-            SOFT_MIN_PRICE: 2_000,
             SOFT_MAX_PRICE: 998_000,
             CENTER_PRICE: 500_000,
         } as never);
@@ -84,12 +83,11 @@ describe("price configuration validation", () => {
         const errors = validatePriceConfiguration({
             HARD_MIN_PRICE: 100_000,
             HARD_MAX_PRICE: 900_000,
-            SOFT_MIN_PRICE: 300_000,
             SOFT_MAX_PRICE: 700_000,
             CENTER_PRICE: 800_000,
         } as never);
 
-        expect(errors).toContain("CENTER_PRICE must be between SOFT_MIN_PRICE and SOFT_MAX_PRICE");
+        expect(errors).toContain("CENTER_PRICE must not exceed SOFT_MAX_PRICE");
     });
 
     it("rejects order sizes outside the protocol limits", () => {

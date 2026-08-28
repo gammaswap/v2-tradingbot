@@ -91,7 +91,6 @@ export function validatePriceConfiguration(config = CFG): string[] {
     const prices = [
         ["HARD_MIN_PRICE", config.HARD_MIN_PRICE],
         ["HARD_MAX_PRICE", config.HARD_MAX_PRICE],
-        ["SOFT_MIN_PRICE", config.SOFT_MIN_PRICE],
         ["SOFT_MAX_PRICE", config.SOFT_MAX_PRICE],
         ["CENTER_PRICE", config.CENTER_PRICE],
     ] as const;
@@ -111,20 +110,11 @@ export function validatePriceConfiguration(config = CFG): string[] {
     if (config.HARD_MIN_PRICE > config.HARD_MAX_PRICE) {
         errors.push("HARD_MIN_PRICE must not exceed HARD_MAX_PRICE");
     }
-    if (config.SOFT_MIN_PRICE > config.SOFT_MAX_PRICE) {
-        errors.push("SOFT_MIN_PRICE must not exceed SOFT_MAX_PRICE");
-    }
-    if (config.SOFT_MIN_PRICE < config.HARD_MIN_PRICE) {
-        errors.push("SOFT_MIN_PRICE must not be below HARD_MIN_PRICE");
-    }
     if (config.SOFT_MAX_PRICE > config.HARD_MAX_PRICE) {
         errors.push("SOFT_MAX_PRICE must not exceed HARD_MAX_PRICE");
     }
-    if (
-        config.CENTER_PRICE < config.SOFT_MIN_PRICE ||
-        config.CENTER_PRICE > config.SOFT_MAX_PRICE
-    ) {
-        errors.push("CENTER_PRICE must be between SOFT_MIN_PRICE and SOFT_MAX_PRICE");
+    if (config.CENTER_PRICE > config.SOFT_MAX_PRICE) {
+        errors.push("CENTER_PRICE must not exceed SOFT_MAX_PRICE");
     }
 
     return errors;
@@ -458,7 +448,6 @@ export const CFG = {
     // above it are never submitted, even if the strategy calculates them.
     // It must remain within the exchange's protocol price range.
     HARD_MAX_PRICE: envNum("HARD_MAX_PRICE", 999000), // 99.9 cents ($0.999)
-    SOFT_MIN_PRICE: envNum("SOFT_MIN_PRICE", 300000), // 30.0 cents ($0.30)
 
     // ========Quote Growth Space Ladder Parameters==============
     // Initial ladder distance in protocol price units. The default 2,000
