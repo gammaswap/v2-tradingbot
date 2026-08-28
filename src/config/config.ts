@@ -240,9 +240,11 @@ export function validateRiskConfiguration(config = CFG): string[] {
 // Prices and Sizes use protocol units: 1,000 = 0.1 cents ($0.001), and
 // 1,000,000 = 100 cents ($1.00). These values are not SDK decimals.
 export const CFG = {
-    // Asset identifier used for API requests and derived websocket symbol
-    // subscriptions. It is encoded as a string because it may exceed the
-    // safe integer range of JavaScript numbers.
+    // Fallback asset identifier used by the environment-driven CLI/example
+    // configuration for API requests and derived websocket subscriptions. A
+    // constructor-provided TradingBot assetId takes precedence over this
+    // value. It is encoded as a string because it may exceed JavaScript's
+    // safe integer range.
     ASSET_ID,
 
     // ===============SDK Parameters===============
@@ -468,12 +470,13 @@ export const CFG = {
 
     // ========Quote Growth Space Ladder Parameters==============
     // Initial ladder distance in protocol price units. The default 2,000
-    // equals 0.2 cents ($0.002).
+    // equals 0.2 cents ($0.002). Used when choosing growth-space model (model 2)
     LEVEL_SPACING_NEAR: envNum("LEVEL_SPACING_NEAR", 2000),
     // Multiplicative growth applied to each successive level's spacing in the
     // growth-space ladder model. For example, with LEVEL_SPACING_NEAR = 2,000
     // and growth = 1.5, successive distances are 2,000, 3,000, 4,500, etc.
     // This is a dimensionless strategy parameter, not a price denomination.
+    // Used when choosing growth-space model (model 2)
     LEVEL_SPACING_GROWTH: envNum("LEVEL_SPACING_GROWTH", 1.5),
 
     INV_TARGET: envNum("INV_TARGET", 0),
