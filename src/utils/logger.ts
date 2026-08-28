@@ -1,4 +1,17 @@
-type LogLevel = "info" | "debug" | "warn" | "error";
+import { RUNTIME_CFG } from "../runtime/context.js";
+
+export type LogLevel = "info" | "debug" | "warn" | "error";
+
+const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
+    debug: 10,
+    info: 20,
+    warn: 30,
+    error: 40,
+};
+
+function isLogLevel(value: unknown): value is LogLevel {
+    return value === "debug" || value === "info" || value === "warn" || value === "error";
+}
 
 export class Logger {
     private readonly tags: string[];
@@ -28,6 +41,11 @@ export class Logger {
     }
 
     private print(level: LogLevel, ...args: unknown[]) {
+        const configuredLevel = RUNTIME_CFG.LOG_LEVEL;
+        // Invalid configuration is rejected during startup. Treating it as
+        // "info" here keeps the logger safe if it is used before validation.
+        const minimumLevel = isLogLevel(configuredLevel) ? configuredLevel : "info";
+        if (LOG_LEVEL_PRIORITY[level] < LOG_LEVEL_PRIORITY[minimumLevel]) return;
         console.log(this.format(level), ...args);
     }
 

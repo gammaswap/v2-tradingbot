@@ -1,5 +1,6 @@
 export type Side = "buy" | "sell";
 export type AggressionModel = "none" | "edge" | "mean-reversion" | "edge-with-fallback";
+import type { LogLevel } from "../utils/logger.js";
 import {
     PROTOCOL_MIN_PRICE,
     PROTOCOL_MAX_PRICE,
@@ -151,6 +152,13 @@ export function validateOrderSizeConfiguration(config = CFG): string[] {
 export function validateRiskConfiguration(config = CFG): string[] {
     const errors: string[] = [];
 
+    if (
+        config.LOG_LEVEL !== undefined &&
+        !["debug", "info", "warn", "error"].includes(config.LOG_LEVEL)
+    ) {
+        errors.push("LOG_LEVEL must be debug, info, warn, or error");
+    }
+
     if (![
         "none",
         "edge",
@@ -260,6 +268,10 @@ export const CFG = {
     ASSET_ID,
 
     // ===============SDK Parameters===============
+    // Minimum severity printed by the logger. The levels are cumulative:
+    // debug prints debug/info/warn/error, info prints info/warn/error, warn
+    // prints warn/error, and error prints only error.
+    LOG_LEVEL: envStr("LOG_LEVEL", "info").trim().toLowerCase() as LogLevel,
     API_URL: envApiUrl(),
     API_KEY: envStr("API_KEY", ""),
     API_SECRET: envStr("API_SECRET", ""),

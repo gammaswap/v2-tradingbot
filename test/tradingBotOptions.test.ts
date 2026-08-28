@@ -19,6 +19,7 @@ describe("TradingBot options", () => {
     it("accepts an oracle stale-price timeout override", () => {
         const bot = new TradingBot({
             wallet: Wallet.createRandom() as unknown as Wallet,
+            logLevel: "debug",
             apiUrl: "https://example.com/api",
             api: {
                 key: "constructor-api-key",
@@ -81,6 +82,7 @@ describe("TradingBot options", () => {
 
         expect(bot).toBeInstanceOf(TradingBot);
         expect((bot as any).context.config.API_KEY).toBe("constructor-api-key");
+        expect((bot as any).context.config.LOG_LEVEL).toBe("debug");
         expect((bot as any).context.config.API_SECRET).toBe("constructor-api-secret");
         expect((bot as any).context.config.API_TIMEOUT_MS).toBe(12_345);
         expect((bot as any).context.config.ORDERBOOK_WS_URL).toBe("wss://example.com/orderbook");

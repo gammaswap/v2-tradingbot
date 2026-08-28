@@ -16,7 +16,7 @@ import { runRuntimeCoordinator } from "./coordinator.js";
 import { protocolValueToSafeNumber } from "../utils/protocolMath.js";
 import { clamp, isBigIntString, sleep } from "../utils/utils.js";
 import { resolveTradingWallet } from "./wallet.js";
-import { Logger } from "../utils/logger.js";
+import { Logger, type LogLevel } from "../utils/logger.js";
 import {
     createBotContext,
     runWithBotContext,
@@ -37,6 +37,7 @@ export type ContractAddresses = {
 
 export type TradingBotOptions = {
     wallet?: Wallet;
+    logLevel?: LogLevel;
     apiUrl: string;
     api?: {
         key?: string;
@@ -119,6 +120,7 @@ export type TradingBotStatus = {
  */
 function getOptionOverrides(options: TradingBotOptions): Record<string, unknown> {
     const overrides: Record<string, unknown> = {
+        LOG_LEVEL: options.logLevel,
         API_URL: options.apiUrl,
         API_KEY: options.api?.key,
         API_SECRET: options.api?.secret,
