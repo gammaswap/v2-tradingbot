@@ -8,7 +8,7 @@ import {
 const API_URL = process.env.API_URL || "http://localhost:3000";
 const CHAIN_ID = process.env.CHAIN_ID || "31337";
 const MNEMONIC =
-    process.env.TEST_MNEMONIC ||
+    process.env.MNEMONIC ||
     "test test test test test test test test test test test junk";
 const WALLET_INDEX = Number(process.env.WALLET_INDEX || "0");
 const AGENT_INDEX = Number(process.env.AGENT_INDEX || "1");

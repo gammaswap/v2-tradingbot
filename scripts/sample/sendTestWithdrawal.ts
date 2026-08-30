@@ -11,7 +11,7 @@ const LEDGER_ADDRESS =
     process.env.LEDGER_CONTRACT ||
     "0x0000000000000000000000000000000000000000";
 const MNEMONIC =
-    process.env.TEST_MNEMONIC ||
+    process.env.MNEMONIC ||
     "test test test test test test test test test test test junk";
 const WALLET_INDEX = Number(process.env.WALLET_INDEX || "0");
 const WITHDRAWAL_AMOUNT = process.env.WITHDRAWAL_AMOUNT || "1000";

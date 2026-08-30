@@ -14,7 +14,7 @@ const SETTLEMENT_TOKEN_ADDRESS =
     process.env.SETTLEMENT_TOKEN ||
     "0x0000000000000000000000000000000000000000";
 const MNEMONIC =
-    process.env.TEST_MNEMONIC ||
+    process.env.MNEMONIC ||
     "test test test test test test test test test test test junk";
 const WALLET_INDEX = Number(process.env.WALLET_INDEX || "0");
 const ASSET_ID =

@@ -7,7 +7,7 @@ import {
 
 const API_URL = process.env.API_URL || "http://localhost:3000";
 const MNEMONIC =
-    process.env.TEST_MNEMONIC ||
+    process.env.MNEMONIC ||
     "test test test test test test test test test test test junk";
 const ASSET_ID =
     process.env.ASSET_ID ||

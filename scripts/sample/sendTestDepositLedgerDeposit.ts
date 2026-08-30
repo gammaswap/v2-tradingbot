@@ -7,11 +7,11 @@ import {
 
 const RPC_URL = process.env.RPC_URL || "http://localhost:8545";
 const CHAIN_ID = process.env.CHAIN_ID || "31337";
-const TEST_MNEMONIC =
-    process.env.TEST_MNEMONIC ||
+const MNEMONIC =
+    process.env.MNEMONIC ||
     "test test test test test test test test test test test junk";
 const WALLET_INDEX = Number(process.env.WALLET_INDEX || "0");
-const DEPOSIT_LEDGER_CONTRACT = process.env.DEPOSIT_LEDGER_CONTRACT;
+const DEPOSIT_LEDGER_CONTRACT = process.env.DEPOSIT_LEDGER_ADDRESS;
 const DEPOSIT_AMOUNT = process.env.DEPOSIT_AMOUNT || "1000";
 
 async function main() {
@@ -24,7 +24,7 @@ async function main() {
     console.log("WALLET_INDEX:", WALLET_INDEX);
     console.log("DEPOSIT_AMOUNT:", DEPOSIT_AMOUNT);
 
-    const account = deriveAccountsFromMnemonic(TEST_MNEMONIC, WALLET_INDEX + 1)[WALLET_INDEX];
+    const account = deriveAccountsFromMnemonic(MNEMONIC, WALLET_INDEX + 1)[WALLET_INDEX];
     console.log("Using wallet:", account.address);
 
     const wallet = new Wallet(account.privateKey);
