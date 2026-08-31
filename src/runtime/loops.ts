@@ -106,6 +106,47 @@ export async function cancelAllOrders(wallet: Wallet, startingEpoch: bigint = ST
     logger.info("==============cancelAllOrders:end", epoch,"========================");
 }
 
+/**
+ * Cancels orders during graceful process shutdown without relying on the
+ * account-balance cleanup loop. A zero order hash means cancel-all for the
+ * specified asset and epoch. Pending-order snapshots are checked after each
+ * request because an accepted cancel request may still be processing.
+ */
+export async function cancelAllOpenOrdersOnShutdown(
+    wallet: Wallet,
+    startingEpoch: bigint = STATE.epoch,
+): Promise<void> {
+    const maxAttempts = 5;
+    const retryDelayMs = 1_000;
+
+    for (let epoch = startingEpoch; epoch >= 0n; epoch--) {
+        let pending = await apiGetPending(STATE.account, epoch);
+
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            if (pending.buys.length === 0 && pending.sells.length === 0) break;
+
+            logger.info("submitting shutdown cancel-all", {
+                epoch: epoch.toString(),
+                buys: pending.buys.length,
+                sells: pending.sells.length,
+                attempt,
+            });
+            await apiCancelOrder(wallet, epoch, ZeroHash);
+
+            await sleep(retryDelayMs);
+            pending = await apiGetPending(STATE.account, epoch);
+        }
+
+        if (pending.buys.length > 0 || pending.sells.length > 0) {
+            logger.error("shutdown could not confirm all orders cancelled", {
+                epoch: epoch.toString(),
+                buys: pending.buys.length,
+                sells: pending.sells.length,
+            });
+        }
+    }
+}
+
 export async function runAssetEpochCheck(wallet: Wallet): Promise<AssetEpochCheckResult> {
     logger.info("=============runAssetEpochCheck:start============================");
     const currentAsset = await apiGetAsset();

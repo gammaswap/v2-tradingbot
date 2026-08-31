@@ -7,7 +7,7 @@ import {
     type AggressionModel,
 } from "../config/config.js";
 import { apiGetAsset, apiGetBalance, apiGetPosition } from "../api/api.js";
-import { cleanUpAllOrders } from "./loops.js";
+import { cancelAllOpenOrdersOnShutdown, cleanUpAllOrders } from "./loops.js";
 import { initializePeriodLength } from "./state.js";
 import { RuntimeEventQueue } from "./events.js";
 import { startOracleFeed, type OracleFeed } from "./oracle.js";
@@ -190,6 +190,7 @@ export class TradingBot {
     private readonly context: BotContext;
     private readonly abortController = new AbortController();
     private coordinatorPromise: Promise<void> | null = null;
+    private shutdownPromise: Promise<void> | null = null;
     private oracleFeed: OracleFeed | null = null;
     private orderBookFeed: OrderBookFeed | null = null;
     private running = false;
@@ -286,17 +287,41 @@ export class TradingBot {
     }
 
     async stop(): Promise<void> {
-        return runWithBotContext(this.context, () => this.stopInContext());
+        if (!this.running && !this.coordinatorPromise) return;
+        if (!this.shutdownPromise) {
+            this.shutdownPromise = runWithBotContext(
+                this.context,
+                () => this.stopInContext(),
+            );
+        }
+        return this.shutdownPromise;
     }
 
     private async stopInContext(): Promise<void> {
-        if (!this.running && !this.coordinatorPromise) return;
-
+        logger.info("stopping trading bot");
         this.abortController.abort();
+
+        // Wait for an in-flight coordinator pass so it cannot submit new work
+        // concurrently with the shutdown cancel-all request.
+        try {
+            await this.coordinatorPromise;
+        } catch (error) {
+            logger.warn("coordinator stopped with an error:", error);
+        }
+
         await this.stopFeeds();
-        await this.coordinatorPromise;
+
+        // Cancel-all is best effort and bounded. A failure is logged, but it
+        // must not prevent websocket cleanup or the process from exiting.
+        try {
+            await cancelAllOpenOrdersOnShutdown(this.wallet, STATE.epoch);
+        } catch (error) {
+            logger.error("failed to cancel open orders during shutdown:", error);
+        }
+
         this.coordinatorPromise = null;
         this.running = false;
+        logger.info("trading bot stopped");
     }
 
     getStatus(): TradingBotStatus {

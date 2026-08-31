@@ -22,7 +22,13 @@ vi.mock("../src/api/api.js", () => ({
 }));
 
 const { STATE } = await import("../src/runtime/state.js");
-const { reconcileOrderIntents, runAssetEpochCheck, runAggression, runQuoteMaintenance } = await import("../src/runtime/loops.js");
+const {
+    cancelAllOpenOrdersOnShutdown,
+    reconcileOrderIntents,
+    runAssetEpochCheck,
+    runAggression,
+    runQuoteMaintenance,
+} = await import("../src/runtime/loops.js");
 const { ORDER_INTENTS } = await import("../src/runtime/orderIntent.js");
 
 function asset(epoch: bigint, overrides: Partial<ApiAssetResponse> = {}): ApiAssetResponse {
@@ -116,6 +122,30 @@ describe("asset epoch lifecycle", () => {
 
         expect(result).toEqual({ changed: false, resolved: true });
         expect(STATE.asset?.isResolved).toBe(true);
+    });
+});
+
+describe("graceful shutdown order cancellation", () => {
+    it("does not submit cancel-all when no orders are pending", async () => {
+        apiGetPending.mockResolvedValue({ buys: [], sells: [] });
+
+        await cancelAllOpenOrdersOnShutdown({} as never, 2n);
+
+        expect(apiGetPending).toHaveBeenCalledTimes(3);
+        expect(apiCancelOrder).not.toHaveBeenCalled();
+    });
+
+    it("rechecks pending orders after submitting cancel-all", async () => {
+        apiGetPending
+            .mockResolvedValueOnce({ buys: [{ id: "order" }], sells: [] })
+            .mockResolvedValue({ buys: [], sells: [] });
+
+        const promise = cancelAllOpenOrdersOnShutdown({} as never, 0n);
+        await vi.runAllTimersAsync();
+        await promise;
+
+        expect(apiCancelOrder).toHaveBeenCalledWith(expect.anything(), 0n, expect.any(String));
+        expect(apiGetPending).toHaveBeenCalledTimes(2);
     });
 });
 
