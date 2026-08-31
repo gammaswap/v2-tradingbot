@@ -26,4 +26,5 @@ echo "Starting $BOT_NAME using $ENV_FILE"
 
 # Replace this shell process so PM2 signals are delivered directly to Node.
 # PM2 captures stdout/stderr and writes them to the paths in bots.config.cjs.
-exec pnpm --cwd "$ROOT" start
+cd "$ROOT"
+exec pnpm start
