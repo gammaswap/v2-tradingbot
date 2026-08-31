@@ -19,4 +19,4 @@ mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/asset2-$(date +%Y%m%d-%H%M%S).log"
 
 echo "Starting bot; logging to $LOG_FILE"
-pnpm --cwd "$ROOT" start >>"$LOG_FILE" 2>&1
+exec pnpm --cwd "$ROOT" start >>"$LOG_FILE" 2>&1
