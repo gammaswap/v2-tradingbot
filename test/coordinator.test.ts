@@ -20,6 +20,7 @@ vi.mock("../src/runtime/loops.js", () => ({
 
 const { runCoordinatorStep } = await import("../src/runtime/coordinator.js");
 const { STATE } = await import("../src/runtime/state.js");
+const { RUNTIME_CFG } = await import("../src/runtime/context.js");
 
 function asset(isResolved = false): Asset {
     return {
@@ -40,6 +41,7 @@ beforeEach(() => {
     vi.setSystemTime(1_700_000_000_000);
     STATE.asset = asset();
     STATE.epoch = 1n;
+    RUNTIME_CFG.IS_TAKER = false;
     apiGetBook.mockReset();
     refreshPrivateState.mockClear();
     runAggression.mockClear();
@@ -83,5 +85,19 @@ describe("coordinator step", () => {
 
         expect(runQuoteMaintenance).not.toHaveBeenCalled();
         expect(runAggression).not.toHaveBeenCalled();
+    });
+
+    it("runs aggression but not quote maintenance in taker mode", async () => {
+        RUNTIME_CFG.IS_TAKER = true;
+        const takerContext = context();
+        takerContext.nextQuote = 0;
+        takerContext.nextAggression = 0;
+
+        const promise = runCoordinatorStep(takerContext);
+        await vi.advanceTimersByTimeAsync(0);
+        await promise;
+
+        expect(runAggression).toHaveBeenCalledOnce();
+        expect(runQuoteMaintenance).not.toHaveBeenCalled();
     });
 });

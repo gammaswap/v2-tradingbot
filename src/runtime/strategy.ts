@@ -71,7 +71,6 @@ export function shouldPauseForFairValue(
 }
 
 export function shouldPauseForAggression(book: BookSnapshot | null = STATE.book): boolean {
-    if (CFG.AGGRESSION_MODEL === "none") return false;
     if (CFG.AGGRESSION_MODEL === "edge") return !hasFreshFairValue();
     if (CFG.AGGRESSION_MODEL === "mean-reversion") return !hasFreshBook(book);
 
@@ -752,8 +751,6 @@ export function chooseFairValueEdgeSide(book: BookSnapshot, reference: number): 
 
 export function chooseAggressionSide(book: BookSnapshot, reference: number): Side | null {
     switch (CFG.AGGRESSION_MODEL) {
-        case "none":
-            return null;
         case "mean-reversion":
             return chooseMeanReversionAggressionSide(reference);
         case "edge":

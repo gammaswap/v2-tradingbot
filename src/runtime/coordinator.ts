@@ -112,13 +112,14 @@ export async function runCoordinatorStep(context: CoordinatorStepContext): Promi
         context.bookReady = bookReady && !localBook.needsResync;
         const tradingEnabled = context.bookReady && context.assetReady && STATE.asset != null && !STATE.asset.isResolved;
 
-        if (tradingEnabled && (now >= context.nextQuote || actions.tradeOccurred || actions.needsResync)) {
+        if (tradingEnabled && !CFG.IS_TAKER &&
+            (now >= context.nextQuote || actions.tradeOccurred || actions.needsResync)) {
             await runQuoteMaintenance(wallet);
             await refreshPrivateState(wallet);
             context.nextQuote = now + jitter(CFG.QUOTE_LOOP_MS, CFG.QUOTE_JITTER_MS);
         }
 
-        if (tradingEnabled && now >= context.nextAggression) {
+        if (tradingEnabled && CFG.IS_TAKER && now >= context.nextAggression) {
             await runAggression(wallet);
             await refreshPrivateState(wallet);
             context.nextAggression = now + jitter(CFG.AGGRESS_MS, CFG.AGGRESS_JITTER_MS);

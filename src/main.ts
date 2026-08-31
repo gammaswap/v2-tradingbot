@@ -17,6 +17,7 @@ async function main(): Promise<void> {
 
     const bot = new TradingBot({
         logLevel: CFG.LOG_LEVEL,
+        isTaker: CFG.IS_TAKER,
         apiUrl: CFG.API_URL,
         assetId: CFG.ASSET_ID,
         chainId: CFG.CHAIN_ID,

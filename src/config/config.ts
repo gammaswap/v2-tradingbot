@@ -1,5 +1,5 @@
 export type Side = "buy" | "sell";
-export type AggressionModel = "none" | "edge" | "mean-reversion" | "edge-with-fallback";
+export type AggressionModel = "edge" | "mean-reversion" | "edge-with-fallback";
 import type { LogLevel } from "../utils/logger.js";
 import {
     PROTOCOL_MIN_PRICE,
@@ -160,13 +160,12 @@ export function validateRiskConfiguration(config = CFG): string[] {
     }
 
     if (![
-        "none",
         "edge",
         "mean-reversion",
         "edge-with-fallback",
     ].includes(config.AGGRESSION_MODEL)) {
         errors.push(
-            "AGGRESSION_MODEL must be none, edge, mean-reversion, or edge-with-fallback",
+            "AGGRESSION_MODEL must be edge, mean-reversion, or edge-with-fallback",
         );
     }
 
@@ -272,6 +271,11 @@ export const CFG = {
     // debug prints debug/info/warn/error, info prints info/warn/error, warn
     // prints warn/error, and error prints only error.
     LOG_LEVEL: envStr("LOG_LEVEL", "info").trim().toLowerCase() as LogLevel,
+    // Trading mode. false selects maker mode (passive quoting only); true
+    // selects taker mode (IOC aggression only). Maker and taker bots should
+    // normally use separate accounts so their inventory and risk limits are
+    // independent.
+    IS_TAKER: envBool("IS_TAKER", false),
     API_URL: envApiUrl(),
     API_KEY: envStr("API_KEY", ""),
     API_SECRET: envStr("API_SECRET", ""),
@@ -346,8 +350,9 @@ export const CFG = {
     FAIR_VALUE_STALE_MS: envNum("FAIR_VALUE_STALE_MS", 45000),
 
     // ===============Aggression logic=================
-    // Selects how the bot chooses IOC aggression trades:
-    //   none                disables aggression;
+    // Selects how a taker bot chooses IOC aggression trades. This setting is
+    // used only when IS_TAKER=true; IS_TAKER=false disables aggression and
+    // runs passive quote maintenance instead.
     //   edge                trades only on a fresh fair-value edge;
     //   mean-reversion      uses the CENTER_PRICE/inventory model;
     //   edge-with-fallback  tries a fair-value edge, then mean reversion.

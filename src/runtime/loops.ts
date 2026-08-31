@@ -259,6 +259,10 @@ function applyPendingResponse(pendingResp: Awaited<ReturnType<typeof apiGetPendi
 
 
 export async function runQuoteMaintenance(wallet: Wallet) {
+    if (CFG.IS_TAKER) {
+        logger.debug("quote maintenance skipped: bot is configured as taker");
+        return;
+    }
     logger.info("=============runQuoteMaintenance:start============================");
     const book = STATE.book;
     if (!book) return;
@@ -600,6 +604,10 @@ export async function reconcileCancelReplaceIntents(wallet: Wallet): Promise<voi
 }
 
 export async function runAggression(wallet: Wallet) {
+    if (!CFG.IS_TAKER) {
+        logger.debug("aggression skipped: bot is configured as maker");
+        return;
+    }
     const book = STATE.book;
     if (!book) return;
     if (!canTradeCurrentAsset(STATE)) {

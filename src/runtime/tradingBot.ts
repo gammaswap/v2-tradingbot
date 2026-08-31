@@ -38,6 +38,7 @@ export type ContractAddresses = {
 export type TradingBotOptions = {
     wallet?: Wallet;
     logLevel?: LogLevel;
+    isTaker?: boolean;
     apiUrl: string;
     api?: {
         key?: string;
@@ -121,6 +122,7 @@ export type TradingBotStatus = {
 function getOptionOverrides(options: TradingBotOptions): Record<string, unknown> {
     const overrides: Record<string, unknown> = {
         LOG_LEVEL: options.logLevel,
+        IS_TAKER: options.isTaker,
         API_URL: options.apiUrl,
         API_KEY: options.api?.key,
         API_SECRET: options.api?.secret,
