@@ -54,3 +54,82 @@ Each `TradingBot` instance owns its configuration, runtime state, order
 intents, cooldowns, and websocket feeds, so multiple independent bots can run
 in the same process. The current implementation creates private websocket
 connections per bot; websocket multiplexing can be added separately later.
+
+## Run multiple bots with PM2
+
+Install PM2 globally with Node.js 20 or newer:
+
+```bash
+npm install pm2@latest -g
+```
+
+The repository includes `bots.config.cjs`, which starts the bot profiles
+through the shared `trading_bot.sh` script. Each profile selects its own
+environment file, such as `.env.asset1`, `.env.asset2`, or `.env.asset3`:
+
+```bash
+pm2 start bots.config.cjs
+```
+
+Start only selected bots with `--only`:
+
+```bash
+pm2 start bots.config.cjs --only asset1-bot
+pm2 start bots.config.cjs --only asset1-bot,asset2-bot
+```
+
+Manage the bots independently by name:
+
+```bash
+pm2 list
+pm2 logs asset1-bot
+pm2 restart asset2-bot
+pm2 stop asset1-bot asset2-bot asset3-bot
+```
+
+Each bot is configured with a 30-second `kill_timeout`. When stopped with
+`pm2 stop`, PM2 sends `SIGINT`, allowing the bot to stop its coordinator,
+close its feeds, submit cancel-all requests, and verify pending orders before
+exiting. The timeout gives that cleanup enough time to complete. PM2 will
+eventually force-kill a process that does not exit within the configured
+timeout.
+
+PM2 writes each bot's output to a dedicated directory configured in
+`bots.config.cjs`:
+
+```text
+logs/maker1-bot.log
+logs/maker1-bot-error.log
+logs/taker1-bot.log
+logs/taker1-bot-error.log
+logs/maker2-bot.log
+logs/maker2-bot-error.log
+logs/taker2-bot.log
+logs/taker2-bot-error.log
+logs/maker3-bot.log
+logs/maker3-bot-error.log
+logs/taker3-bot.log
+logs/taker3-bot-error.log
+```
+
+The shell script does not redirect output itself. It forwards stdout and
+stderr to PM2, which owns these files. Install PM2's optional log-rotation
+module to rotate them daily and when they reach 100 MB:
+
+```bash
+pm2 install pm2-logrotate
+pm2 set pm2-logrotate:rotateInterval "0 0 * * *"
+pm2 set pm2-logrotate:max_size 50M
+pm2 set pm2-logrotate:retain 14
+pm2 set pm2-logrotate:compress true
+```
+
+The active log files remain in `logs/`; rotated files receive date-based
+suffixes and older compressed files are retained according to the configured
+retention count. Recreate existing PM2 processes after changing
+`bots.config.cjs` so PM2 loads the new output paths:
+
+```bash
+pm2 delete maker1-bot taker1-bot maker2-bot taker2-bot maker3-bot taker3-bot
+pm2 start bots.config.cjs
+```
