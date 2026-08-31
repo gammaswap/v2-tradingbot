@@ -7,6 +7,8 @@ import {
 import { TreeMap } from "data-structure-typed";
 import type { Side } from "../config/config.js";
 import type { BookLevel, BookSnapshot, PendingOrder } from "../utils/types.js";
+import { Logger } from "../utils/logger.js";
+const logger = new Logger("orderbookReducer");
 
 type MutablePriceLevel = {
     price: number;
@@ -89,24 +91,28 @@ export function applyMarketUpdate(
     if (state.epoch != null && update.epoch !== state.epoch) return "ignored-epoch";
 
     if (state.seqId == null || state.needsResync) {
+        logger.warn("[buffered] state.seqId:", state.seqId, "state.needsResync:",state.needsResync);
         state.buffered.push(update);
         state.needsResync = true;
         return "buffered";
     }
 
     if (update.seqId <= state.seqId) {
+        logger.warn("[buffered] update.seqId <= state.seqId >> update.seqId:", update.seqId, "state.seqId:",state.seqId);
         state.buffered.push(update);
         state.needsResync = true;
         return "buffered";
     }
 
     if (update.seqId !== state.seqId + 1n) {
+        logger.warn("[buffered] update.seqId != state.seqId + 1 >> update.seqId:", update.seqId, "state.seqId:", (state.seqId + 1n));
         state.buffered.push(update);
         state.needsResync = true;
         return "buffered";
     }
 
     if (!applyPayload(state, update)) {
+        logger.warn("[invalid] update:", update, "state:", state);
         state.buffered.push(update);
         state.needsResync = true;
         return "invalid";
