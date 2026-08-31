@@ -119,6 +119,17 @@ export async function cancelAllOpenOrdersOnShutdown(
     const maxAttempts = 5;
     const retryDelayMs = 1_000;
 
+    // Fast path: pending balance is the collateral reserved by open orders.
+    // When it is below the dust threshold, there is no reason to scan every
+    // historical epoch for orders.
+    const initialBalance = await apiGetBalance();
+    if (initialBalance.pending < CFG.DUST_BALANCE) {
+        logger.info("shutdown cancellation complete: no pending balance", {
+            pending: initialBalance.pending.toString(),
+        });
+        return;
+    }
+
     for (let epoch = startingEpoch; epoch >= 0n; epoch--) {
         let pending = await apiGetPending(STATE.account, epoch);
 
@@ -144,7 +155,20 @@ export async function cancelAllOpenOrdersOnShutdown(
                 sells: pending.sells.length,
             });
         }
+
+        // Once the exchange reports no meaningful pending balance, there is
+        // no need to inspect older epochs.
+        const balance = await apiGetBalance();
+        if (balance.pending < CFG.DUST_BALANCE) {
+            logger.info("shutdown cancellation complete", {
+                pending: balance.pending.toString(),
+                lastCheckedEpoch: epoch.toString(),
+            });
+            return;
+        }
     }
+
+    logger.error("shutdown cancellation finished with pending balance remaining");
 }
 
 export async function runAssetEpochCheck(wallet: Wallet): Promise<AssetEpochCheckResult> {

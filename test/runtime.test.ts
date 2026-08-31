@@ -126,16 +126,20 @@ describe("asset epoch lifecycle", () => {
 });
 
 describe("graceful shutdown order cancellation", () => {
-    it("does not submit cancel-all when no orders are pending", async () => {
-        apiGetPending.mockResolvedValue({ buys: [], sells: [] });
+    it("returns without scanning epochs when pending balance is below dust", async () => {
+        apiGetBalance.mockResolvedValue({ pending: 0n });
 
         await cancelAllOpenOrdersOnShutdown({} as never, 2n);
 
-        expect(apiGetPending).toHaveBeenCalledTimes(3);
+        expect(apiGetBalance).toHaveBeenCalledOnce();
+        expect(apiGetPending).not.toHaveBeenCalled();
         expect(apiCancelOrder).not.toHaveBeenCalled();
     });
 
     it("rechecks pending orders after submitting cancel-all", async () => {
+        apiGetBalance
+            .mockResolvedValueOnce({ pending: 2_000_000n })
+            .mockResolvedValueOnce({ pending: 0n });
         apiGetPending
             .mockResolvedValueOnce({ buys: [{ id: "order" }], sells: [] })
             .mockResolvedValue({ buys: [], sells: [] });
@@ -146,6 +150,7 @@ describe("graceful shutdown order cancellation", () => {
 
         expect(apiCancelOrder).toHaveBeenCalledWith(expect.anything(), 0n, expect.any(String));
         expect(apiGetPending).toHaveBeenCalledTimes(2);
+        expect(apiGetBalance).toHaveBeenCalledTimes(2);
     });
 });
 
