@@ -98,6 +98,8 @@ skew = gamma(t) * inventory * p * (1 - p)
 logitCenter = ln(p / (1 - p)) - skew
 logitBid = logitCenter - LOGIT_HALF_SPREAD
 logitAsk = logitCenter + LOGIT_HALF_SPREAD
+bid = 1 / (1 + exp(-logitBid))
+ask = 1 / (1 + exp(-logitAsk))
 ```
 
 The logits are converted back to probabilities to produce the initial bid and
@@ -106,6 +108,30 @@ encouraging the bot to reduce a long position. Negative inventory shifts the
 quotes higher, encouraging the bot to reduce a short position. The resulting
 prices are used to build passive ALO ladder levels and are clamped to the hard
 protocol price range.
+
+The ladder price formulas are:
+
+```text
+Equidistant model:
+  m = book midpoint, or referencePrice when the book has no quotes
+  bidEnd = min(referencePrice, m)
+  askEnd = max(referencePrice, m)
+  f_i = i / (LEVELS_PER_SIDE - 1)
+  bid_i = roundToTick(calculatedBid + (bidEnd - calculatedBid) * f_i)
+  ask_i = roundToTick(calculatedAsk + (askEnd - calculatedAsk) * f_i)
+
+Growth-space model:
+  center = (calculatedBid + calculatedAsk) / 2
+  distance_i = LEVEL_SPACING_NEAR * LEVEL_SPACING_GROWTH^i
+  bid_i = roundToTick(center - distance_i)
+  ask_i = roundToTick(center + distance_i)
+```
+
+The equidistant model interpolates between the calculated best prices and the
+reference/book range. The growth-space model expands each successive level
+away from the calculated center. Prices are rounded to protocol ticks,
+deduplicated, and removed if they violate hard bounds or would be marketable
+as ALO orders, so the final number of levels can be lower than requested.
 
 The ladder can be configured with:
 
@@ -186,7 +212,33 @@ INV_MAX_ABS=5000000000
   position; a negative value targets a short position.
 - `INV_MAX_ABS` is the maximum absolute signed inventory used by the quote and
   aggression risk checks. Increasing it permits more inventory; decreasing it
-  makes the bot reduce or avoid positions sooner.
+makes the bot reduce or avoid positions sooner.
+
+The complete time-dependent size formula is:
+
+```text
+t_bucket = min(T, ceil(t / TOTAL_SIZE_TIME_BUCKET_SECONDS)
+                   * TOTAL_SIZE_TIME_BUCKET_SECONDS)
+H_0 = accountBalance * MAX_CONTRACT_EXPOSURE_PCT / 100
+H(t) = H_0 * [1 - (1 - t_bucket / T)^TOTAL_SIZE_DECAY_K]
+             ^TOTAL_SIZE_DECAY_A
+bidTotal = max(0, INV_TARGET + H(t) - currentInventory)
+askTotal = max(0, currentInventory - INV_TARGET + H(t))
+```
+
+The side totals are allocated using distance-based weights:
+
+```text
+bestBid = max(bid ladder prices)
+bestAsk = min(ask ladder prices)
+d_i = abs(price_i - bestPrice)
+u_i = d_i / max(d_i)
+w_i = (1 + u_i)^QUOTE_SIZE_CONCAVITY
+size_i = totalSideSize * w_i / sum(w_i)
+```
+
+Allocation is rounded to whole protocol lots using largest-remainder
+rounding, preserving the requested side total whenever usable prices exist.
 
 The quote price risk settings are:
 
@@ -235,6 +287,17 @@ The supported values are:
 - `edge-with-fallback`: tries the fair-value edge model first and uses the
   mean-reversion model when no fair-value edge is available.
 
+The edge model calculates:
+
+```text
+buyEdge = referencePrice - bestAsk
+sellEdge = bestBid - referencePrice
+minimumEdge = FAIR_VALUE_MIN_EDGE_TICKS * protocolTickSize
+```
+
+It sends a buy for the strongest qualifying buy edge, a sell for the strongest
+qualifying sell edge, and no IOC order when neither edge reaches the minimum.
+
 The fair-value edge threshold is configured with:
 
 ```env
@@ -270,6 +333,26 @@ EXTREME_PUSH_PROB=0.10
   mean reversion plus inventory correction. A value greater than `0` and less
   than `1` introduces probabilistic outward, momentum-like trades. It applies
   to the mean-reversion fallback, not to the fair-value edge decision.
+
+The mean-reversion model calculates:
+
+```text
+x = (midPrice - CENTER_PRICE)
+    / max(1e-9, SOFT_MAX_PRICE - CENTER_PRICE)
+x = clamp(x, -2, 2)
+inventoryNorm = clamp(
+    (currentInventory - INV_TARGET) / INV_MAX_ABS,
+    -1, 1
+)
+pBuy = 0.5 - 0.5 * tanh(MEANREV_K * x)
+pBuy = pBuy - INV_SKEW_STRENGTH * inventoryNorm * 0.5
+pBuy = clamp(pBuy, 0.02, 0.98)
+```
+
+A random draw below `pBuy` selects a buy; otherwise it selects a sell. A
+positive `x` means the midpoint is above `CENTER_PRICE`, making selling more
+likely. A negative `x` makes buying more likely. `EXTREME_PUSH_PROB` can
+reverse this recommendation before the probability draw.
 
 Aggression timing and order sizing are configured with:
 
@@ -320,6 +403,19 @@ volatility makes it more decisive. `FAIR_VALUE_WEIGHT` controls how much the
 maker reference price follows the oracle value versus the book midpoint.
 Increasing it favors the oracle; decreasing it favors the book. The same fair
 value is used by the taker edge model.
+
+The oracle fair-value calculation used by the maker reference price and the
+taker edge model is:
+
+```text
+tau = expiresInSeconds / secondsPerYear
+d2 = [ln(spot / strike) - 0.5 * FAIR_VALUE_VOL^2 * tau]
+     / [FAIR_VALUE_VOL * sqrt(tau)]
+P(aboveStrike) = NormalCDF(d2)
+P(pays) = P(aboveStrike), when FAIR_VALUE_PAYS_ABOVE_STRIKE=true
+P(pays) = 1 - P(aboveStrike), otherwise
+fairValue = roundToTick(P(pays) * 1,000,000)
+```
 
 `FAIR_VALUE_PAYS_ABOVE_STRIKE` chooses whether the market pays when the
 underlying finishes above or below the strike. `REQUIRE_FRESH_FAIR_VALUE`
