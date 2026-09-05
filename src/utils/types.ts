@@ -9,6 +9,8 @@ export type BookLevel = {
 
 export type BookSnapshot = {
     assetId: bigint;
+    epoch: bigint;
+    seqId: bigint;
     ts: bigint;
     bids: BookLevel[];
     asks: BookLevel[];
@@ -23,13 +25,35 @@ export type BalanceSnapshot = {
 
 export type ApiBalancesResponse = BalanceSnapshot
 
+export interface OrderKey {
+    price: number;
+    time: number;
+    id: string;
+}
+
+export type CancelReplaceInstruction = {
+    price: number;
+    size: number;
+    side: Side;
+    cancelId: string;
+    quoteSlot?: string;
+};
+
+export type NewOrderInstruction = {
+    price: number;
+    size: number;
+    side: Side;
+    quoteSlot?: string;
+};
+
 export type PendingOrder = {
     id: string;
     price: number;
     size: number;
-    time?: number;
+    side: Side;
+    time: number;
     account: string;
-    side?: Side;
+    epoch: bigint;
 };
 
 export type Position = {
@@ -79,137 +103,51 @@ export type ApiResolutionPriceResponse = {
     isNull: boolean;
 };
 
-export type ApiBookResponse = BookSnapshot;
-
-export interface Eip712Deposit {
-    typ: bigint;
-    nonce: bigint; // must be unique in every transaction the user sends
-    salt: bigint; // this is used to generate a hash which represents the orderId
-    signer: string;
-    signatureType: bigint;
-    sender: string;
-    amount: bigint;
-    token: string;
-    ledger: string;
-    permitNonce: bigint; // must be unique for every permit (needs to be put in the hash of the contract)
-    permitSignature: string;
-}
-
-export interface SignedDepositMessage {
-    deposit: Eip712Deposit;
-    chainId: bigint;
-    orderHash: string;
-    signature: string;
-}
-
-export interface Eip712Order {
-    typ: bigint;
-    nonce: bigint;
-    salt: bigint;
-    signer: string;
-    signatureType: bigint;
-    sender: string;
-    epoch: bigint;
-    side: boolean;
-    assetId: bigint;
-    size: bigint;
-    price: bigint;
-    timeInForce: bigint;
-    approvalNonce: bigint;
-}
-
-export interface SignedOrderMessage {
-    order: Eip712Order;
-    chainId: bigint;
-    orderHash: string;
-    signature: string;
-}
-
-export interface Eip712Withdrawal {
-    typ: bigint;
-    nonce: bigint; // must be unique in every transaction the user sends
-    salt: bigint; // this is used to generate a hash which represents the orderId
-    signer: string;
-    signatureType: bigint;
-    sender: string;
-    receiver: string;
-    amount: bigint;
-    ledger: string;
-}
-
-export interface SignedWithdrawalMessage {
-    withdrawal: Eip712Withdrawal;
-    chainId: bigint;
-    orderHash: string;
-    signature: string;
-}
-
-export interface Eip712Cancel {
-    typ: bigint;
-    nonce: bigint; // must be unique in every transaction the user sends
-    salt: bigint; // this is used to generate a hash which represents the orderId
-    signer: string;
-    signatureType: bigint;
-    sender: string;
+export type ApiAssetResponse = {
     assetId: bigint;
     epoch: bigint;
-    orderHash: string;
-    approvalNonce: bigint;
-}
-
-export interface Eip712Claim {
-    typ: bigint;
-    nonce: bigint; // must be unique in every transaction the user sends
-    salt: bigint; // this is used to generate a hash which represents the orderId
-    signer: string;
-    signatureType: bigint;
-    sender: string;
-    assetId: bigint;
-    epoch: bigint;
-    approvalNonce: bigint;
-}
-
-export interface SignedClaimMessage {
-    claim: Eip712Claim;
-    chainId: bigint;
-    orderHash: string;
-    signature: string;
-}
-
-export interface SignedCancelMessage {
-    cancel: Eip712Cancel;
-    chainId: bigint;
-    orderHash: string;
-    signature: string;
-}
-
-export interface OrderStatus {
-    sender: string;
-    isFilledOrCancelled: boolean;
-    orderType: bigint;
-    remaining: bigint;
-}
-
-export interface Asset {
-    strikePrice: bigint;
-    oracle: string;
+    registered: boolean;
     expiration: bigint;
     assetType: bigint;
-    registered: boolean;
-    epoch: bigint;
-}
-
-export interface AssetEpochData {
-    expiration: bigint;
     strikePrice: bigint;
     resolutionPrice: bigint;
+    isResolved: boolean;
+    ledger: string;
+};
+
+export type ApiBookResponse = BookSnapshot;
+
+export interface Asset extends ApiAssetResponse {
+    strikePrice: bigint;
+    expiration: bigint;
 }
 
-export const OrderType = {
-    DEPOSIT: 0n,
-    WITHDRAWAL: 1n,
-    FILL: 2n,
-    CANCEL: 3n,
-    RESOLUTION: 4n,
-    CLAIM: 5n,
+export type AssetEpochCheckResult = {
+    changed: boolean;
+    resolved: boolean;
+};
+
+/**
+ * AssetId encoding/decoding utilities
+ *
+ * Matches PackedAssetId.sol (MarginExchange): LSB-first bit packing.
+ * - id: 64 bits (0-63)
+ * - marketType: 8 bits (64-71)
+ * - startTime: 32 bits (72-103)
+ * - periodLength: 32 bits (104-135)
+ * - strike: 48 bits (136-183) — strike
+ * - strike: 16 bits (184-199) — range
+ * - reserved: 56 bits (200-255)
+ *
+ * expiration (not packed) = startTime + periodLength (when the market settles).
+ */
+export interface DecodedAssetId {
+    id: number;           // uint64 — base asset id
+    marketType: number;   // uint8 — asset type (1 = up/down, etc.)
+    startTime: number;    // uint32 — market start timestamp
+    periodLength: number; // uint32 — period in seconds (e.g. 900 for 15m)
+    strike: string;       // uint48 — strike/priceChange per asset type
+    range: number;        // uint16 — range
+    reserved: string;     // uint56 — reserved
+    expiration: number;   // startTime + periodLength (convenience)
 }

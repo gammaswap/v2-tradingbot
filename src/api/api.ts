@@ -1,226 +1,388 @@
-import crypto from "crypto";
-import { CFG, type Side } from "../config/config.js";
+import { isAddress, type Wallet, ZeroAddress, ZeroHash } from "ethers";
 import {
+    createExchangeClient,
+    createInfoClient,
+    OrderSide,
+    TimeInForce,
+    type ExchangeClient,
+    type ExchangeContractsInput,
+    type FetchLike,
+    type HttpResult,
+} from "@gammaswap/v2-exchange-sdk";
+import {
+    RUNTIME_CFG as CFG,
+    RUNTIME_STATE as STATE,
+    type Side,
+} from "../runtime/context.js";
+import type {
     ApiBalancesResponse,
+    ApiAssetResponse,
     ApiBookResponse,
     ApiPendingResponse,
     ApiPositionResponse,
     ApiResolutionPriceResponse,
-    Eip712Cancel,
-    Eip712Claim,
-    Eip712Order,
-    OrderType
+    BookLevel,
+    PendingOrder,
 } from "../utils/types.js";
-import { Wallet } from "ethers";
-import {
-    hashCancelOrderJS,
-    hashClaimOrderJS,
-    hashFillOrderJS,
-    signOrderJS,
-    validateSignatureJS
-} from "../utils/eip712.js";
+import { assertProtocolOrder, assertProtocolPrice } from "../utils/protocolPrice.js";
+import { Logger } from "../utils/logger.js";
 
-function buildHeaders(body?: any): Record<string, string> {
-    const h: Record<string, string> = { "Content-Type": "application/json" };
-    if (CFG.API_KEY) h["X-API-KEY"] = CFG.API_KEY;
+const logger = new Logger("api");
 
-    // Placeholder signature scheme — replace with your real scheme if needed
-    if (CFG.API_SECRET && body != null) {
-        const payload = JSON.stringify(body);
-        const sig = crypto.createHmac("sha256", CFG.API_SECRET).update(payload).digest("hex");
-        h["X-SIGNATURE"] = sig;
+const PRICE_TENTH_CENT_SCALE = 1_000n;
+const SIZE_HUNDREDTH_SCALE = 10_000n;
+
+const sdkFetch: FetchLike = async (url, init = {}) => {
+    const headers = new Headers(init.headers);
+    if (CFG.API_KEY) headers.set("X-API-KEY", CFG.API_KEY);
+
+    if (CFG.API_SECRET && init.body != null) {
+        const body = typeof init.body === "string" ? init.body : init.body.toString();
+        const { createHmac } = await import("node:crypto");
+        headers.set("X-SIGNATURE", createHmac("sha256", CFG.API_SECRET).update(body).digest("hex"));
     }
-    return h;
+
+    return fetch(url, { ...init, headers });
+};
+
+export function getInfoClientOptions() {
+    return {
+        apiUrl: CFG.API_URL,
+        fetch: sdkFetch,
+        timeoutMs: CFG.API_TIMEOUT_MS,
+    };
 }
 
-async function httpGetJson<T>(url: string): Promise<T> {
-    const res = await fetch(url, { method: "GET", headers: buildHeaders() });
-    if (!res.ok) throw new Error(`GET ${url} failed: ${res.status} ${await res.text()}`);
-    return (await res.json()) as T;
+const infoClients = new Map<string, ReturnType<typeof createInfoClient>>();
+
+function getInfoClient() {
+    const key = `${CFG.API_URL}:${CFG.API_TIMEOUT_MS}:${CFG.API_KEY}:${CFG.API_SECRET}`;
+    const cached = infoClients.get(key);
+    if (cached) return cached;
+    const client = createInfoClient(getInfoClientOptions());
+    infoClients.set(key, client);
+    return client;
 }
 
-async function httpPostJson<T>(url: string, body: any): Promise<T> {
-    const res = await fetch(url, { method: "POST", headers: buildHeaders(body), body: JSON.stringify(body) });
-    if (!res.ok) throw new Error(`POST ${url} failed: ${res.status} ${await res.text()}`);
-    return (await res.json()) as T;
+const exchangeClients = new Map<string, ExchangeClient>();
+
+function getExchangeClient(wallet: Wallet): ExchangeClient {
+    const key = [
+        wallet.address.toLowerCase(),
+        CFG.API_URL,
+        CFG.CHAIN_ID,
+        CFG.EXCHANGE_ADDRESS,
+        CFG.LEDGER_ADDRESS,
+        CFG.SETTLEMENT_TOKEN,
+        CFG.PERMIT2_ADDRESS,
+    ].join(":");
+    const cached = exchangeClients.get(key);
+    if (cached) return cached;
+
+    const client = createExchangeClient({
+        apiUrl: CFG.API_URL,
+        wallet,
+        chainId: CFG.CHAIN_ID.toString(),
+        fetch: sdkFetch,
+        contracts: getConfiguredContracts(),
+        infoClient: getInfoClient(),
+    });
+
+    exchangeClients.set(key, client);
+    return client;
 }
 
-export async function apiGetBook(epoch: number): Promise<ApiBookResponse> {
-    return httpGetJson<ApiBookResponse>(CFG.BOOK_URL + "/" + CFG.ASSET_ID + "/" + epoch);
+function getConfiguredContracts(): ExchangeContractsInput | undefined {
+    if (!isNonZeroAddress(CFG.EXCHANGE_ADDRESS) || !isNonZeroAddress(CFG.LEDGER_ADDRESS)) {
+        return undefined;
+    }
+
+    const contracts: ExchangeContractsInput = {
+        exchange: CFG.EXCHANGE_ADDRESS,
+        ledger: CFG.LEDGER_ADDRESS,
+    };
+
+    if (isNonZeroAddress(CFG.DEPOSIT_LEDGER_ADDRESS)) contracts.depositLedger = CFG.DEPOSIT_LEDGER_ADDRESS;
+    if (isNonZeroAddress(CFG.SETTLEMENT_TOKEN)) contracts.settlementToken = CFG.SETTLEMENT_TOKEN;
+    if (isNonZeroAddress(CFG.PERMIT2_ADDRESS)) contracts.permit2 = CFG.PERMIT2_ADDRESS;
+
+    return contracts;
+}
+
+function isNonZeroAddress(value: string): boolean {
+    return isAddress(value) && value.toLowerCase() !== ZeroAddress.toLowerCase();
+}
+
+export function protocolPriceToSdkInput(price: number | bigint): string {
+    assertProtocolPrice(price);
+    const value = toProtocolBigInt(price, "price");
+    if (value % PRICE_TENTH_CENT_SCALE !== 0n) {
+        throw new Error(`price ${value.toString()} cannot be represented as SDK price input`);
+    }
+
+    const tenthsOfCents = value / PRICE_TENTH_CENT_SCALE;
+    return `${tenthsOfCents / 10n}.${tenthsOfCents % 10n}`;
+}
+
+export function protocolAmountToSdkInput(amount: number | bigint): string {
+    const value = toProtocolBigInt(amount, "amount");
+    if (value % SIZE_HUNDREDTH_SCALE !== 0n) {
+        throw new Error(`amount ${value.toString()} cannot be represented as SDK amount input`);
+    }
+
+    const hundredths = value / SIZE_HUNDREDTH_SCALE;
+    const whole = hundredths / 100n;
+    const fraction = hundredths % 100n;
+    if (fraction === 0n) return whole.toString();
+    if (fraction % 10n === 0n) return `${whole.toString()}.${(fraction / 10n).toString()}`;
+    return `${whole.toString()}.${fraction.toString().padStart(2, "0")}`;
+}
+
+function toProtocolBigInt(value: number | bigint, label: string): bigint {
+    if (typeof value === "bigint") return value;
+    if (!Number.isSafeInteger(value) || value < 0) {
+        throw new Error(`${label} must be a non-negative safe integer in protocol units`);
+    }
+    return BigInt(value);
+}
+
+function parseBigIntField(value: unknown, label: string): bigint {
+    if (typeof value === "bigint") return value;
+    if (typeof value === "number" && Number.isSafeInteger(value)) return BigInt(value);
+    if (typeof value === "string" && /^(0|[1-9]\d*)$/.test(value)) return BigInt(value);
+    throw new Error(`Invalid bigint field ${label}: ${String(value)}`);
+}
+
+function parseNumberField(value: unknown, label: string): number {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "bigint") return Number(value);
+    if (typeof value === "string" && value.trim() !== "") {
+        const n = Number(value);
+        if (Number.isFinite(n)) return n;
+    }
+    throw new Error(`Invalid number field ${label}: ${String(value)}`);
+}
+
+function normalizeBookLevel(input: any, side: Side, epoch: number): BookLevel {
+    const price = parseNumberField(input.price, "level.price");
+    return {
+        price,
+        size: parseNumberField(input.size, "level.size"),
+        orderCount: Number(input.orderCount ?? input.orders?.length ?? 0),
+        orders: normalizePendingOrders(input.orders ?? [], side, epoch, price),
+    };
+}
+
+function normalizePendingOrders(orders: any[], side: Side, epoch: number, fallbackPrice?: number): PendingOrder[] {
+    return orders.map((order) => ({
+        id: String(order.id),
+        price: parseNumberField(order.price ?? fallbackPrice, "order.price"),
+        size: parseNumberField(order.size, "order.size"),
+        side: side,
+        time: parseNumberField(order.time, "order.time"),
+        account: String(order.account ?? ""),
+        epoch: BigInt(epoch)
+    }));
+}
+
+function normalizeBook(data: any): ApiBookResponse {
+    const epoch = parseNumberField(data.epoch, "book.epoch");
+    return {
+        assetId: parseBigIntField(data.assetId ?? CFG.ASSET_ID, "book.assetId"),
+        epoch: parseBigIntField(data.epoch, "book.epoch"),
+        seqId: parseBigIntField(data.seqId, "book.seqId"),
+        ts: parseBigIntField(data.ts ?? Date.now(), "book.ts"),
+        bids: (data.bids || []).map((level: BookLevel) => normalizeBookLevel(level, "buy", epoch)),
+        asks: (data.asks || []).map((level: BookLevel) => normalizeBookLevel(level, "sell", epoch)),
+    };
+}
+
+function normalizePending(data: any, address: string, epoch: number): ApiPendingResponse {
+    return {
+        assetId: parseBigIntField(data.assetId ?? CFG.ASSET_ID, "pending.assetId"),
+        ts: parseBigIntField(data.ts ?? Date.now(), "pending.ts"),
+        epoch: parseBigIntField(data.epoch ?? epoch, "pending.epoch"),
+        buys: normalizePendingOrders(data.buys ?? [], "buy", epoch).map((order) => ({ ...order, account: order.account || address })),
+        sells: normalizePendingOrders(data.sells ?? [], "sell", epoch).map((order) => ({ ...order, account: order.account || address })),
+    };
+}
+
+function normalizeBalance(data: any): ApiBalancesResponse {
+    return {
+        account: String(data.account ?? STATE.account),
+        ts: parseNumberField(data.ts ?? Date.now(), "balance.ts"),
+        balance: parseBigIntField(data.balance, "balance.balance"),
+        pending: parseBigIntField(data.pending, "balance.pending"),
+    };
+}
+
+function normalizePosition(data: any, epoch: number): ApiPositionResponse {
+    return {
+        account: String(data.account ?? STATE.account),
+        assetId: parseBigIntField(data.assetId ?? CFG.ASSET_ID, "position.assetId"),
+        epoch: parseBigIntField(data.epoch ?? epoch, "position.epoch"),
+        ts: parseNumberField(data.ts ?? Date.now(), "position.ts"),
+        size: parseBigIntField(data.size, "position.size"),
+        margin: parseBigIntField(data.margin, "position.margin"),
+        balance: parseBigIntField(data.balance, "position.balance"),
+        pnl: parseBigIntField(data.pnl, "position.pnl"),
+        side: Boolean(data.side),
+        bSide: Boolean(data.bSide),
+        mSide: Boolean(data.mSide),
+        pSide: Boolean(data.pSide),
+    };
+}
+
+function normalizeResolutionPrice(data: any): ApiResolutionPriceResponse {
+    return {
+        assetId: parseBigIntField(data.assetId ?? CFG.ASSET_ID, "resolution.assetId"),
+        epoch: parseBigIntField(data.epoch, "resolution.epoch"),
+        price: parseBigIntField(data.price, "resolution.price"),
+        id: parseNumberField(data.id, "resolution.id"),
+        ts: parseBigIntField(data.ts, "resolution.ts"),
+        isNull: Boolean(data.isNull),
+    };
+}
+
+export function normalizeAsset(data: any): ApiAssetResponse {
+    return {
+        assetId: parseBigIntField(data.assetId, "asset.assetId"),
+        epoch: parseBigIntField(data.epoch, "asset.epoch"),
+        registered: Boolean(data.registered),
+        expiration: parseBigIntField(data.expiration, "asset.expiration"),
+        assetType: parseBigIntField(data.assetType, "asset.assetType"),
+        strikePrice: parseBigIntField(data.strikePrice, "asset.strikePrice"),
+        resolutionPrice: parseBigIntField(data.resolutionPrice, "asset.resolutionPrice"),
+        isResolved: Boolean(data.isResolved),
+        ledger: String(data.ledger),
+    };
+}
+
+function unwrapData<T>(result: HttpResult<T>): T {
+    return result.data;
+}
+
+export async function apiGetBook(epoch: bigint | number): Promise<ApiBookResponse> {
+    const data = unwrapData(await getInfoClient().getOrderBook({ assetId: CFG.ASSET_ID, epoch: epoch.toString() }));
+    return normalizeBook(data);
+}
+
+export async function apiGetAsset(): Promise<ApiAssetResponse> {
+    const data = unwrapData(await getInfoClient().getAsset(CFG.ASSET_ID));
+    return normalizeAsset(data);
+}
+
+export async function apiGetAssetAtEpoch(epoch: bigint | number): Promise<ApiAssetResponse> {
+    const data = unwrapData(await getInfoClient().getAssetAtEpoch({
+        assetId: CFG.ASSET_ID,
+        epoch: epoch.toString(),
+    }));
+    return normalizeAsset(data);
 }
 
 export async function apiGetBalance(): Promise<ApiBalancesResponse> {
-    return httpGetJson<ApiBalancesResponse>(CFG.BALANCE_URL + "/" + CFG.USER_ADDRESS);
+    const data = unwrapData(await getInfoClient().getBalance(STATE.account));
+    return normalizeBalance(data);
 }
 
-export async function apiGetPosition(epoch: number): Promise<ApiPositionResponse> {
-    return httpGetJson<ApiPositionResponse>(CFG.POSITION_URL + "/" + CFG.USER_ADDRESS + "/" + CFG.ASSET_ID + "/" + epoch);
+export async function apiGetPosition(epoch: bigint | number): Promise<ApiPositionResponse> {
+    const data = unwrapData(await getInfoClient().getPosition({
+        account: STATE.account,
+        assetId: CFG.ASSET_ID,
+        epoch: epoch.toString(),
+    }));
+    return normalizePosition(data, Number(epoch));
 }
 
-export async function apiGetPending(address: string, epoch: number): Promise<ApiPendingResponse> {
-    return httpGetJson<ApiPendingResponse>(CFG.PENDING_URL + "/" + CFG.ASSET_ID + `/${epoch}/` + address.toLowerCase());
+export async function apiGetPending(address: string, epoch: bigint | number): Promise<ApiPendingResponse> {
+    const data = unwrapData(await getInfoClient().getBookOrders({
+        assetId: CFG.ASSET_ID,
+        epoch: epoch.toString(),
+        account: address,
+    }));
+    return normalizePending(data, address, Number(epoch));
 }
 
 export async function apiLastResolutionPrice(): Promise<ApiResolutionPriceResponse> {
-    return httpGetJson<ApiResolutionPriceResponse>(CFG.RESOLUTION_URL + "/last/epoch/" + CFG.ASSET_ID);
+    const data = unwrapData(await getInfoClient().getLastResolutionPrice(CFG.ASSET_ID));
+    return normalizeResolutionPrice(data);
 }
 
-export async function apiSendOrder(wallet: Wallet, order: { epoch: number, side: Side; price: number; size: number }) {
+export async function apiSendOrder(wallet: Wallet, order: { epoch: bigint | number, side: Side; price: number; size: number; tif?: 0n | 1n | 2n | 3n; nonce?: bigint }) {
+    assertProtocolOrder(order.side, order.size, order.price);
+    const client = getExchangeClient(wallet);
+    const res = await client.placeOrder({
+        assetId: CFG.ASSET_ID,
+        epoch: order.epoch.toString(),
+        side: order.side === "buy" ? OrderSide.BUY : OrderSide.SELL,
+        price: protocolPriceToSdkInput(order.price),
+        size: protocolAmountToSdkInput(order.size),
+        timeInForce: order.tif ?? TimeInForce.GTC,
+        ...(order.nonce == null ? {} : { nonce: order.nonce }),
+    });
 
-    const eip712Order: Eip712Order = {
-        typ: OrderType.FILL,
-        nonce: BigInt(Date.now()), // must be unique in every transaction the user sends
-        salt: 1n, // this is used to generate a hash which represents the orderId
-        signer: wallet.address,
-        signatureType: 0n,
-        sender: wallet.address,
-        side: order.side != "buy",
-        assetId: BigInt(CFG.ASSET_ID),
-        epoch: BigInt(order.epoch),
-        size: BigInt(order.size),
-        price: BigInt(order.price),
-        timeInForce: 0n,
-        approvalNonce: 0n,
-    }
-
-    const chainId = BigInt(CFG.CHAIN_ID)
-
-    const orderHash = hashFillOrderJS(eip712Order);
-    console.log("orderHash:", orderHash);
-
-    const signature = signOrderJS(orderHash, wallet)
-    console.log("Signature:", signature);
-
-    const recovered = validateSignatureJS(orderHash, signature, eip712Order.sender)
-    console.log("isRecovered:", recovered);
-    console.log("signer     :", eip712Order.signer.toString());
-
-    const signedMessage = {
-        order: {
-            typ: eip712Order.typ.toString(),
-            nonce: eip712Order.nonce.toString(), // must be unique in every transaction the user sends
-            salt: eip712Order.salt.toString(), // this is used to generate a hash which represents the orderId
-            signer: eip712Order.signer,
-            signatureType: eip712Order.signatureType.toString(),
-            sender: eip712Order.sender,
-            side: eip712Order.side,
-            assetId: eip712Order.assetId.toString(),
-            epoch: eip712Order.epoch.toString(),
-            size: eip712Order.size.toString(),
-            price: eip712Order.price.toString(),
-            timeInForce: eip712Order.timeInForce.toString(),
-            approvalNonce: eip712Order.approvalNonce.toString(),
-        },
-        chainId: chainId.toString(),
-        orderHash,
-        signature,
-    };
-
-    console.log("signedOrderMessage:", signedMessage);
-    // Generic payload — adjust to match your API schema
-    return httpPostJson<any>(CFG.ORDERS_URL, signedMessage);
+    logger.debug("signedOrderMessage:", res.request);
+    return res;
 }
 
-export async function apiCancelOrder(wallet: Wallet, epoch: number, orderHash: string) {
-
-    console.log("orderId:", orderHash)
-
-    const cancel: Eip712Cancel = {
-        typ: OrderType.CANCEL,
-        nonce: BigInt(Date.now()), // must be unique in every transaction the user sends
-        salt: 1n, // this is used to generate a hash which represents the orderId
-        signer: wallet.address,
-        signatureType: 0n,
-        sender: wallet.address,
-        assetId: BigInt(CFG.ASSET_ID),
-        epoch: BigInt(epoch),
-        orderHash: orderHash,
-        approvalNonce: 0n,
-    }
-
-    const chainId = BigInt(CFG.CHAIN_ID)
-
-    const cancelHash = hashCancelOrderJS(cancel);
-    console.log("cancelHash:", cancelHash)
-
-    const signature = signOrderJS(cancelHash, wallet)
-    console.log("Signature:", signature);
-
-    const recovered = validateSignatureJS(cancelHash, signature, wallet.address)
-    console.log("isRecovered:", recovered);
-    console.log("signer     :", cancel.signer.toString());
-
-    const signedMessage = {
-        cancel: {
-            typ: cancel.typ.toString(),
-            nonce: cancel.nonce.toString(), // must be unique in every transaction the user sends
-            salt: cancel.salt.toString(), // this is used to generate a hash which represents the orderId
-            signer: wallet.address,
-            signatureType: cancel.signatureType.toString(),
-            sender: wallet.address,
-            assetId: cancel.assetId.toString(),
-            epoch: cancel.epoch.toString(),
-            orderHash: cancel.orderHash,
-            approvalNonce: cancel.approvalNonce.toString(),
-        },
-        chainId: chainId.toString(),
-        orderHash: cancelHash,
-        signature,
+export async function apiCancelOrder(wallet: Wallet, epoch: bigint | number, orderHash: string, nonce?: bigint) {
+    const client = getExchangeClient(wallet);
+    const input = {
+        assetId: CFG.ASSET_ID,
+        epoch: epoch.toString(),
     };
 
-    console.log("signedCancelMessage:", signedMessage);
-    console.log("CANCELS_URL:", CFG.CANCELS_URL);
+    const nonceInput = nonce == null ? {} : { nonce };
+    const res = orderHash.toLowerCase() === ZeroHash.toLowerCase()
+        ? await client.cancelAll({ ...input, ...nonceInput })
+        : await client.cancelOrder({ ...input, orderHash, ...nonceInput });
 
-    return httpPostJson<any>(CFG.CANCELS_URL, signedMessage);
+    logger.debug("signedCancelMessage:", res.request);
+    return res;
 }
 
-export async function apiClaim(wallet: Wallet, epoch: number) {
+export async function apiClaim(wallet: Wallet, epoch: bigint | number) {
+    const client = getExchangeClient(wallet);
+    const res = await client.claim({
+        assetId: CFG.ASSET_ID,
+        epoch: epoch.toString(),
+    });
 
-    console.log("epoch:", epoch)
+    logger.debug("signedClaimMessage:", res.request);
+    return res;
+}
 
-    const claim: Eip712Claim = {
-        typ: OrderType.CLAIM,
-        nonce: BigInt(Date.now()), // must be unique in every transaction the user sends
-        salt: 1n, // this is used to generate a hash which represents the orderId
-        signer: wallet.address,
-        signatureType: 0n,
-        sender: wallet.address,
-        assetId: BigInt(CFG.ASSET_ID),
-        epoch: BigInt(epoch),
-        approvalNonce: 0n,
-    }
+export async function apiCancelReplaceOrder(
+    wallet: Wallet,
+    input: {
+        epoch: bigint | number;
+        orderHash: string;
+        side: Side;
+        price: number;
+        size: number;
+        allOrNothing?: boolean;
+        timeInForce?: 0n | 1n | 2n | 3n;
+        nonce: bigint;
+        replacementNonce: bigint;
+    },
+) {
+    assertProtocolOrder(input.side, input.size, input.price);
+    const client = getExchangeClient(wallet);
+    const res = await client.cancelReplaceOrder({
+        assetId: CFG.ASSET_ID,
+        epoch: input.epoch.toString(),
+        cancelOrderHash: input.orderHash,
+        side: input.side === "buy" ? OrderSide.BUY : OrderSide.SELL,
+        price: protocolPriceToSdkInput(input.price),
+        size: protocolAmountToSdkInput(input.size),
+        // The installed SDK exposes GTC/FOK/IOC constants but the API also
+        // supports ALO as value 3.
+        timeInForce: input.timeInForce ?? 3n,
+        allOrNothing: input.allOrNothing ?? false,
+        nonce: input.nonce,
+        replacementNonce: input.replacementNonce,
+    });
 
-    const chainId = BigInt(CFG.CHAIN_ID)
-
-    const cancelHash = hashClaimOrderJS(claim);
-    console.log("cancelHash:", cancelHash)
-
-    const signature = signOrderJS(cancelHash, wallet)
-    console.log("Signature:", signature);
-
-    const recovered = validateSignatureJS(cancelHash, signature, wallet.address)
-    console.log("isRecovered:", recovered);
-    console.log("signer     :", claim.signer.toString());
-
-    const signedMessage = {
-        claim: {
-            typ: claim.typ.toString(),
-            nonce: claim.nonce.toString(), // must be unique in every transaction the user sends
-            salt: claim.salt.toString(), // this is used to generate a hash which represents the orderId
-            signer: wallet.address,
-            signatureType: claim.signatureType.toString(),
-            sender: wallet.address,
-            assetId: claim.assetId.toString(),
-            epoch: claim.epoch.toString(),
-            approvalNonce: claim.approvalNonce.toString(),
-        },
-        chainId: chainId.toString(),
-        orderHash: cancelHash,
-        signature,
-    };
-
-    console.log("signedClaimMessage:", signedMessage);
-    console.log("CLAIM_URL:", CFG.CLAIM_URL);
-
-    return httpPostJson<any>(CFG.CLAIM_URL, signedMessage);
+    logger.debug("signedCancelReplaceMessage:", res.request);
+    return res;
 }

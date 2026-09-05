@@ -1,5 +1,5 @@
 {
-  "name": "v2-tradingbot",
+  "name": "@gammaswap/v2-tradingbot",
   "version": "1.0.0",
   "description": "Trading bot for GammaSwap V2",
   "engines": {
@@ -16,24 +16,50 @@
   },
   "homepage": "https://github.com/0xDanr/v2-tradingbot#readme",
   "type": "module",
-  "private": true,
+  "private": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "dev": "node --env-file=./.env --loader ts-node/esm ./src/main.ts",
     "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "start": "node dist/main.js",
-    "deposit": "node --env-file=./.env --loader ts-node/esm ./src/actions/sendDeposit.ts",
-    "cancel": "node --env-file=./.env --loader ts-node/esm ./src/actions/sendCancel.ts",
-    "order": "node --env-file=./.env --loader ts-node/esm ./src/actions/sendOrder.ts",
-    "claim": "node --env-file=./.env --loader ts-node/esm ./src/actions/sendClaim.ts"
+    "asset": "node --env-file=./.env --loader ts-node/esm ./scripts/sample/getAsset.ts",
+    "balance": "node --env-file=./.env --loader ts-node/esm ./scripts/sample/getBalance.ts",
+    "book": "node --env-file=./.env --loader ts-node/esm ./scripts/sample/getBook.ts",
+    "book-top": "node --env-file=./.env --loader ts-node/esm ./scripts/sample/getBookTop.ts",
+    "book-orders": "node --env-file=./.env --loader ts-node/esm ./scripts/sample/getBookOrders.ts",
+    "deposit": "node --env-file=./.env --loader ts-node/esm ./scripts/sample/sendTestDepositLedgerDeposit.ts",
+    "cancel": "node --env-file=./.env --loader ts-node/esm ./scripts/sample/sendTestCancel.ts",
+    "order": "node --env-file=./.env --loader ts-node/esm ./scripts/sample/sendTestOrder.ts",
+    "position": "node --env-file=./.env --loader ts-node/esm ./scripts/sample/getPosition.ts",
+    "claim": "node --env-file=./.env --loader ts-node/esm ./scripts/sample/sendTestClaim.ts",
+    "withdrawal": "node --env-file=./.env --loader ts-node/esm ./scripts/sample/sendTestWithdrawal.ts",
+    "resolution": "node --env-file=./.env --loader ts-node/esm ./scripts/sample/getResolutionPrice.ts",
+    "resolution:last": "node --env-file=./.env --loader ts-node/esm ./scripts/sample/getLastResolutionPrice.ts"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "vitest": "3.2.4"
   },
   "dependencies": {
-    "@gammaswap/v2-exchange": "^0.8.1",
+    "@gammaswap/v2-exchange": "^0.12.0",
+    "@gammaswap/v2-exchange-sdk": "^0.2.1",
     "axios": "1.13.2",
+    "data-structure-typed": "^2.6.4",
     "dotenv": "^17.2.3",
     "ethers": "^6.16.0"
   }

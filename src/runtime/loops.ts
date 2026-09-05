@@ -1,34 +1,56 @@
-import { CFG } from "../config/config.js";
+import { RUNTIME_CFG as CFG, RUNTIME_STATE as STATE } from "./context.js";
 import {
     apiCancelOrder,
+    apiCancelReplaceOrder,
     apiClaim,
     apiGetBalance,
-    apiGetBook,
+    apiGetAsset,
     apiGetPending,
     apiGetPosition,
-    apiLastResolutionPrice,
     apiSendOrder
 } from "../api/api.js";
-import { STATE } from "./state.js";
-import {jitter, log, nowMs, sleep, warn, clamp, roundToTick, roundToLot} from "../utils/utils.js";
+import { jitter, nowMs, sleep, clamp, roundToTick, roundToOrderLot, getOrderKey } from "../utils/utils.js";
 import {
     midPrice,
+    referencePrice,
+    shouldPauseForFairValue,
+    shouldPauseForAggression,
     buildTargetLadderPrices,
-    buildTargetSizes,
-    nearestOrderAtPrice,
-    canPlaceBid,
-    canPlaceAsk,
+    LADDER_PRICE_MODEL,
+    distributeTotalSizeAcrossLadder,
     chooseAggressionSide,
     depthToWipe,
     canAggressBuy,
     canAggressSell,
+    capOrderSizeByMargin,
+    calculateCurrentRiskAversion,
+    calculateBidAndAsk,
+    calculateInventorySkew,
+    calculateTotalSizes,
 } from "./strategy.js";
 import { Wallet, ZeroHash } from "ethers";
-import { getPositionBalance } from "../chain/blockchain.js";
+import { markFairValueStale, updateFairValueFromOracle } from "./fairValue.js";
+import { PendingOrder, AssetEpochCheckResult } from "../utils/types.js";
+import { TimeInForce } from "@gammaswap/v2-exchange-sdk";
+import { makeQuoteSlot, planOrders } from "./orderPlanner.js";
+import { canTradeCurrentAsset } from "./tradingGuards.js";
+import { reconcileAssetEpoch } from "./assetLifecycle.js";
+import { RUNTIME_ORDER_INTENTS as ORDER_INTENTS } from "./context.js";
+import {
+    handleCancelReplaceResponse,
+    handleCancelResponse,
+    handlePlaceOrderResponse,
+} from "./intentResponses.js";
+import { RUNTIME_QUOTE_COOLDOWNS as QUOTE_COOLDOWNS } from "./context.js";
+import { protocolValueToSafeNumber } from "../utils/protocolMath.js";
+import { PROTOCOL_TICK_SIZE } from "../utils/protocolPrice.js";
+import { Logger } from "../utils/logger.js";
+
+const logger = new Logger("loops");
 
 export async function hasPendingOrders() {
     const resp = await apiGetBalance();
-    console.log("cleanUpAllOrders:cancel all orders >> pending", resp.pending);
+    logger.info("cleanUpAllOrders:cancel all orders >> pending", resp.pending);
     const hasPendingBalance = resp.pending >= CFG.DUST_BALANCE;
     await sleep(1000 * 2);
     return hasPendingBalance;
@@ -39,368 +61,688 @@ export async function cleanUpAllOrders(wallet: Wallet) {
     let tryCount = 0;
     while(!done) {
         if(await hasPendingOrders()) {
-            console.log("cleanUpAllOrders:cancel all orders >> tryCount:", tryCount);
+            logger.info("cleanUpAllOrders:cancel all orders >> tryCount:", tryCount);
             await cancelAllOrders(wallet);
             tryCount++;
         } else {
-            console.log("cleanUpAllOrders:done");
+            logger.info("cleanUpAllOrders:done");
             done = true;
         }
         if(tryCount >= 10) {
-            console.log("cleanUpAllOrders:cancel all orders >> max tryCount reached");
+            logger.info("cleanUpAllOrders:cancel all orders >> max tryCount reached");
             done = true;
         }
     }
 }
 
-export async function cancelAllOrders(wallet: Wallet) {
-    let epoch = Number(STATE.epoch);
+export async function cancelAllOrders(wallet: Wallet, startingEpoch: bigint = STATE.epoch) {
+    let epoch = startingEpoch;
     let done = false;
-    console.log("==============cancelAllOrders:start", epoch,"========================");
+    logger.info("==============cancelAllOrders:start", epoch,"========================");
     while(!done && epoch >= 0n) {
-        console.log("cancelAllOrders:epoch:", epoch);
+        logger.info("cancelAllOrders:epoch:", epoch);
         // look for pending orders
-        const pending = await apiGetPending(CFG.USER_ADDRESS, epoch);
+        const pending = await apiGetPending(STATE.account, epoch);
         if(pending.buys.length > 0 || pending.sells.length > 0) {
             // has pending orders, send cancel all
-            console.log("cancelAllOrders:cancel all orders >> pending.buys:", pending.buys.length, "pending.sells:", pending.sells.length, "epoch:", epoch);
+            logger.info("cancelAllOrders:cancel all orders >> pending.buys:", pending.buys.length, "pending.sells:", pending.sells.length, "epoch:", epoch);
             await apiCancelOrder(wallet, epoch, ZeroHash);
             epoch--;
         } else {
-            console.log("cancelAllOrders:skipping: epoch:", epoch);
+            logger.info("cancelAllOrders:skipping: epoch:", epoch);
             epoch--;
         }
         await sleep(1000 * 3);
 
         const resp = await apiGetBalance();
         if(resp.pending < CFG.DUST_BALANCE) {
-            warn("Error: Pending balance > 0, pending:", resp.pending);
+            logger.warn("Error: Pending balance > 0, pending:", resp.pending);
             done = true;
             return;
         }
 
         await sleep(1000 * 3);
     }
-    console.log("==============cancelAllOrders:end", epoch,"========================");
+    logger.info("==============cancelAllOrders:end", epoch,"========================");
 }
 
-export async function getCurrentEpoch() : Promise<bigint> {
-    let epoch = 0n;
-    const resolution = await apiLastResolutionPrice();
-    if(!resolution.isNull) {
-        epoch = BigInt(resolution.epoch) + 1n;
-    }
-    return epoch;
-}
+/**
+ * Cancels orders during graceful process shutdown without relying on the
+ * account-balance cleanup loop. A zero order hash means cancel-all for the
+ * specified asset and epoch. Pending-order snapshots are checked after each
+ * request because an accepted cancel request may still be processing.
+ */
+export async function cancelAllOpenOrdersOnShutdown(
+    wallet: Wallet,
+    startingEpoch: bigint = STATE.epoch,
+): Promise<void> {
+    const maxAttempts = 5;
+    const retryDelayMs = 1_000;
 
-export async function runAssetEpochCheck(wallet: Wallet) {
-    console.log("=============runAssetEpochCheck:start",(new Date()).toUTCString(),"============================");
-    const epoch = await getCurrentEpoch();
-    if(epoch != STATE.epoch) {
-        let pos;
-        try {
-            pos = await apiGetPosition(Number(STATE.epoch));
-        } catch(e: any) {
-           console.log("position check error:", e?.message ?? e);
-        }
-        console.log("asset epoch check >> epoch:", epoch, "STATE.epoch:", STATE.epoch, "pos:", pos);
-        try{
-            if(pos && pos.size > 0n) {
-                await apiClaim(wallet, Number(STATE.epoch));
-            }
-        } catch(e: any) {
-            console.log("claim error:", e?.message ?? e);
-        }
-        if(await hasPendingOrders()) {
-            await cancelAllOrders(wallet);
-            console.log("cancelled all orders, return false");
-            return false;
-        } else {
-            // just move to next period
-            STATE.epoch = epoch;
-            console.log("asset epoch changed:", STATE.epoch);
-        }
-    }
-    console.log("=============runAssetEpochCheck:end",(new Date()).toUTCString(),"============================");
-    return true;
-}
-
-export async function runBookRefresh() {
-    console.log("=============runBookRefresh:start",(new Date()).toUTCString(),"============================");
-    try {
-        const book = await apiGetBook(Number(STATE.epoch));
-        STATE.book = book;
-        STATE.lastMid = midPrice(book);
-        console.log("book refreshed:", STATE.lastMid, "bids:", book.bids.length, "asks:", book.asks.length, "total:", book.asks.length + book.bids.length, "time:", new Date().toUTCString());
-    } catch (e: any) {
-        warn("book refresh error:", e?.message ?? e);
-    }
-    console.log("=============runBookRefresh:end",(new Date()).toUTCString(),"============================");
-    await sleep(CFG.BOOK_REFRESH_MS);
-}
-
-export async function runPendingRefresh(wallet: Wallet) {
-    console.log("=============runPendingRefresh:start",(new Date()).toUTCString(),"============================");
-    try {
-        const pendingResp = await apiGetPending(wallet.address, Number(STATE.epoch));
-        const next = new Map<string, any>();
-        for (const o of pendingResp.buys ?? []) {
-            const order = {
-                id: String(o.id),
-                side: "buy",
-                price: Number(o.price),
-                size: Number(o.size),
-                time: o.time ? Number(o.time) : undefined,
-                account: o.account,
-                epoch: BigInt(pendingResp.epoch)
-            };
-            next.set(order.id, order);
-            if (!STATE.localOrderTs.has(order.id)) STATE.localOrderTs.set(order.id, nowMs());
-        }
-        for (const o of pendingResp.sells ?? []) {
-            const order = {
-                id: String(o.id),
-                side: "sell",
-                price: Number(o.price),
-                size: Number(o.size),
-                time: o.time ? Number(o.time) : undefined,
-                account: o.account,
-                epoch: BigInt(pendingResp.epoch)
-            };
-            next.set(order.id, order);
-            if (!STATE.localOrderTs.has(order.id)) STATE.localOrderTs.set(order.id, nowMs());
-        }
-
-        for (const id of STATE.pending.keys()) {
-            if (!next.has(id)) STATE.localOrderTs.delete(id);
-        }
-        STATE.pending = next;
-    } catch (e: any) {
-        warn("pending refresh error:", e?.message ?? e);
-    }
-    console.log("=============runPendingRefresh:end",(new Date()).toUTCString(),"============================");
-    await sleep(CFG.PENDING_REFRESH_MS);
-}
-
-export async function runQuoteMaintenance(wallet: Wallet) {
-    console.log("=============runQuoteMaintenance:start",(new Date()).toUTCString(),"============================");
-    const position = await getPositionBalance(1n, wallet.address);
-    STATE.invBase = Number(position.balance) * (position.bSide ? -1 : 1)
-    const book = STATE.book;
-    if (!book) return;
-
-    const epoch = await getCurrentEpoch();
-    if(epoch != STATE.epoch) {
-        console.log("quote maintenance skipped (epoch mismatch)", { epoch, STATE_epoch: STATE.epoch });
+    // Fast path: pending balance is the collateral reserved by open orders.
+    // When it is below the dust threshold, there is no reason to scan every
+    // historical epoch for orders.
+    const initialBalance = await apiGetBalance();
+    if (initialBalance.pending < CFG.DUST_BALANCE) {
+        logger.info("shutdown cancellation complete: no pending balance", {
+            pending: initialBalance.pending.toString(),
+        });
         return;
     }
 
-    const mid = midPrice(book);
-    console.log("book >> bids:", book.bids.length, "asks:", book.asks.length," total:", book.asks.length + book.bids.length, "mid:", mid);
-    const { bids: targetBidPrices, asks: targetAskPrices } = buildTargetLadderPrices(mid);
-    const { bidSizes, askSizes } = buildTargetSizes();
+    for (let epoch = startingEpoch; epoch >= 0n; epoch--) {
+        let pending = await apiGetPending(STATE.account, epoch);
 
-    console.log("targetBids:", targetBidPrices);
-    console.log("targetAsks:", targetAskPrices);
-    console.log("bidSizes:", bidSizes);
-    console.log("askSizes:", askSizes);
-    // inventory skew: long => bias asks; short => bias bids
-    const invNorm = clamp((STATE.invBase - CFG.INV_TARGET) / Math.max(1e-9, CFG.INV_MAX_ABS), -1, 1);
-    console.log("invNorm:", invNorm);
-    const askSkewMul = 1 + 0.30 * Math.max(0, invNorm);
-    const bidSkewMul = 1 + 0.30 * Math.max(0, -invNorm);
-    console.log("askSkewMul:", askSkewMul);
-    console.log("bidSkewMul:", bidSkewMul);
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            if (pending.buys.length === 0 && pending.sells.length === 0) break;
 
-    for (let i = 0; i < CFG.LEVELS_PER_SIDE; i++) {
-        const price = targetBidPrices[i];
-        const _nearestOrderAtPrice = nearestOrderAtPrice(STATE.pending, "buy", price);
-        if (_nearestOrderAtPrice) continue;
-        const size = roundToLot(bidSizes[i] * bidSkewMul);
-        const _canPlaceBid = canPlaceBid(size, price);
-        if (!_canPlaceBid) continue;
-        try {
-            await apiSendOrder(wallet, { epoch: Number(STATE.epoch), side: "buy", price, size });
-            log("placed bid", { price, size });
-            if (CFG.USE_LOCAL_LEDGER) STATE.baseBal -= Math.floor(size * price / 1000000); // USD
-        } catch (e: any) {
-            warn("place bid error:", e?.message ?? e);
+            logger.info("submitting shutdown cancel-all", {
+                epoch: epoch.toString(),
+                buys: pending.buys.length,
+                sells: pending.sells.length,
+                attempt,
+            });
+            await apiCancelOrder(wallet, epoch, ZeroHash);
+
+            await sleep(retryDelayMs);
+            pending = await apiGetPending(STATE.account, epoch);
+        }
+
+        if (pending.buys.length > 0 || pending.sells.length > 0) {
+            logger.error("shutdown could not confirm all orders cancelled", {
+                epoch: epoch.toString(),
+                buys: pending.buys.length,
+                sells: pending.sells.length,
+            });
+        }
+
+        // Once the exchange reports no meaningful pending balance, there is
+        // no need to inspect older epochs.
+        const balance = await apiGetBalance();
+        if (balance.pending < CFG.DUST_BALANCE) {
+            logger.info("shutdown cancellation complete", {
+                pending: balance.pending.toString(),
+                lastCheckedEpoch: epoch.toString(),
+            });
+            return;
         }
     }
 
-    for (let i = 0; i < CFG.LEVELS_PER_SIDE; i++) {
-        const price = targetAskPrices[i];
-        const _nearestOrderAtPrice = nearestOrderAtPrice(STATE.pending, "sell", price);
-        if (_nearestOrderAtPrice) continue;
-        const size = roundToLot(askSizes[i] * askSkewMul);
-        const _canPlaceAsk = canPlaceAsk(size, price);
-        if (!_canPlaceAsk) continue;
-        try {
-            await apiSendOrder(wallet, { epoch: Number(STATE.epoch), side: "sell", price, size });
-            log("placed ask", { price, size });
-            if (CFG.USE_LOCAL_LEDGER) STATE.baseBal -= Math.floor((1000000 - price) * size / 1000000); // Asset
-        } catch (e: any) {
-            warn("place ask error:", e?.message ?? e);
-        }
-
-        const _book = await apiGetBook(Number(STATE.epoch));
-        STATE.book = _book;
-        STATE.lastMid = midPrice(_book);
-        console.log("book refreshed:", STATE.lastMid, "bids:", _book.bids.length, "asks:", _book.asks.length, "total:", _book.asks.length + _book.bids.length);
-    }
-    console.log("=============runQuoteMaintenance:end",(new Date()).toUTCString(),"============================");
-    await sleep(jitter(CFG.QUOTE_LOOP_MS, CFG.QUOTE_JITTER_MS));
+    logger.error("shutdown cancellation finished with pending balance remaining");
 }
 
-export async function runCancelRebalance(wallet: Wallet) {
-    console.log("=============runCancelRebalance:start",(new Date()).toUTCString(),"============================");
-    const book = STATE.book;
-    if (!book) return;
+export async function runAssetEpochCheck(wallet: Wallet): Promise<AssetEpochCheckResult> {
+    logger.info("=============runAssetEpochCheck:start============================");
+    const currentAsset = await apiGetAsset();
+    const result = await reconcileAssetEpoch(STATE, currentAsset, wallet, {
+        getPosition: async (epoch) => apiGetPosition(epoch),
+        claim: async (claimWallet, epoch) => apiClaim(claimWallet, epoch),
+        hasPendingOrders,
+        cancelAllOrders,
+        refreshFairValue: () => {
+            if (STATE.oracle.price != null) updateFairValueFromOracle(STATE.oracle.price, STATE.oracle.ts);
+        },
+        markResolved: markFairValueStale,
+    });
+    logger.info("asset refreshed:", STATE.asset);
+    logger.info("=============runAssetEpochCheck:end============================");
+    return result;
+}
 
-    const cutoff = nowMs() - CFG.STALE_SECONDS * 1000;
-    console.log("cancel stale orders cutoff:", cutoff);
-    const toCancel: any[] = [];
+export async function refreshPrivateState(wallet: Wallet): Promise<void> {
+    const epoch = STATE.epoch;
+    logger.info("=============refreshPrivateState:start", epoch.toString(), "============================");
 
-    for (const o of STATE.pending.values()) {
-        const ts = o.time ?? STATE.localOrderTs.get(o.id) ?? nowMs();
-        if (ts < cutoff) toCancel.push(o);
+    try {
+        const [pendingResp, balance, position] = await Promise.all([
+            apiGetPending(wallet.address, epoch),
+            apiGetBalance(),
+            apiGetPosition(epoch),
+        ]);
+
+        // Do not apply a snapshot for an epoch that changed while requests were pending.
+        if (STATE.epoch !== epoch) return;
+
+        applyPendingResponse(pendingResp);
+        STATE.accountBalance = protocolValueToSafeNumber(
+            balance.balance,
+            "account balance",
+        );
+        STATE.baseBal = protocolValueToSafeNumber(
+            balance.balance - balance.pending,
+            "available base balance",
+        );
+        STATE.invBase = protocolValueToSafeNumber(
+            position.balance,
+            "position balance",
+        ) * (position.bSide ? -1 : 1);
+        logger.info("trading state refreshed:", {
+            pending: STATE.pending.size,
+            baseBal: STATE.baseBal,
+            invBase: STATE.invBase,
+        });
+    } catch (e: any) {
+        logger.warn("private state refresh error:", e?.message ?? e);
     }
-    console.log("canceling:", toCancel.length, "stale orders");
 
-    const pendingArr = Array.from(STATE.pending.values());
-    if (pendingArr.length > CFG.MAX_PENDING_ORDERS) {
-        const excess = pendingArr.length - CFG.MAX_PENDING_ORDERS;
-        const mid = midPrice(book);
-        const sorted = pendingArr
-            .slice()
-            .sort((a, b) => Math.abs(b.price - mid) - Math.abs(a.price - mid));
-        for (let i = 0; i < excess; i++) toCancel.push(sorted[i]);
-    }
-    console.log("canceling:", toCancel.length, "excess orders");
+    logger.info("=============refreshPrivateState:end============================");
+}
 
-    const uniq = new Map<string, any>();
-    for (const o of toCancel) uniq.set(o.id, o);
-    const batch = Array.from(uniq.values()).slice(0, CFG.CANCEL_BATCH_MAX);
+function applyPendingResponse(pendingResp: Awaited<ReturnType<typeof apiGetPending>>): void {
+    const next = new Map<string, PendingOrder>();
+    STATE.pendingBuys.clear();
+    STATE.pendingSells.clear();
 
-    console.log("canceling:", batch.length, "total orders");
-    for (const o of batch) {
-        try {
-            await apiCancelOrder(wallet, Number(o.epoch), o.id);
-            log("canceled", { id: o.id, side: o.side, price: o.price, size: o.size });
-            if (CFG.USE_LOCAL_LEDGER) {
-                if (o.side === "buy") STATE.baseBal += Math.floor(Number(o.size) * Number(o.price) / 1000000);
-                else STATE.baseBal += Math.floor(Number(o.size) * (1000000 - Number(o.price)) / 1000000);
-            }
-        } catch (e: any) {
-            warn("cancel error:", e?.message ?? e);
+    for (const [orders, side] of [
+        [pendingResp.buys ?? [], "buy"],
+        [pendingResp.sells ?? [], "sell"],
+    ] as const) {
+        for (const o of orders) {
+            const order = {
+                id: String(o.id),
+                side,
+                price: Number(o.price),
+                size: Number(o.size),
+                time: Number(o.time),
+                account: o.account,
+                epoch: BigInt(pendingResp.epoch),
+            } as PendingOrder;
+            const orderKey = getOrderKey(order);
+            if (side === "buy") STATE.pendingBuys.set(orderKey, order);
+            else STATE.pendingSells.set(orderKey, order);
+            next.set(order.id, order);
         }
     }
 
-    const _book = await apiGetBook(Number(STATE.epoch));
-    STATE.book = _book;
-    STATE.lastMid = midPrice(_book);
-    console.log("book refreshed:", STATE.lastMid, "bids:", _book.bids.length, "asks:", _book.asks.length, "total:", _book.asks.length + _book.bids.length);
-    console.log("=============runCancelRebalance:end",(new Date()).toUTCString(),"============================");
-    await sleep(jitter(CFG.CANCEL_LOOP_MS, CFG.CANCEL_JITTER_MS));
+    STATE.pending = next;
+}
+
+
+export async function runQuoteMaintenance(wallet: Wallet) {
+    if (CFG.IS_TAKER) {
+        logger.debug("quote maintenance skipped: bot is configured as taker");
+        return;
+    }
+    logger.info("=============runQuoteMaintenance:start============================");
+    const book = STATE.book;
+    if (!book) return;
+    if (!canTradeCurrentAsset(STATE)) {
+        logger.info("quote maintenance skipped: current asset is unavailable or resolved");
+        return;
+    }
+    if (shouldPauseForFairValue(book)) {
+        logger.warn("quote maintenance skipped: reference price is stale or unavailable");
+        return;
+    }
+
+    await reconcileCancelReplaceIntents(wallet);
+    await reconcilePlaceIntents(wallet);
+
+    const bookMid = midPrice(book);
+    const refPrice = referencePrice(book);
+    const gamma = calculateCurrentRiskAversion(STATE.asset!);
+    const inventorySkew = calculateInventorySkew(
+        gamma,
+        STATE.invBase,
+        refPrice,
+    );
+    const calculatedBidAsk = calculateBidAndAsk(
+        refPrice,
+        inventorySkew,
+        CFG.LOGIT_HALF_SPREAD,
+    );
+    const quoteCenter = clamp(
+        refPrice - inventorySkew,
+        CFG.HARD_MIN_PRICE,
+        CFG.HARD_MAX_PRICE,
+    );
+    logger.debug("book >> bids:", book.bids.length, "asks:", book.asks.length," total:",
+        book.asks.length + book.bids.length, "mid:", bookMid, "reference:", refPrice,
+        "calculatedBidAsk:", calculatedBidAsk, "quoteCenter:", quoteCenter, "gamma:", gamma,
+        "inventorySkew:", inventorySkew, "fairValue:", STATE.fairValue?.protocolPrice,
+        "oracleStale:", STATE.oracle.stale);
+    const calculatedTargets = buildTargetLadderPrices(
+        book,
+        refPrice,
+        inventorySkew,
+        calculatedBidAsk.bid,
+        calculatedBidAsk.ask,
+        CFG.LADDER_PRICE_MODEL === LADDER_PRICE_MODEL.GROWTH_SPACE
+            ? LADDER_PRICE_MODEL.GROWTH_SPACE
+            : LADDER_PRICE_MODEL.EQUIDISTANT,
+    );
+    logger.debug("calculated target ladder:", calculatedTargets);
+    const { bids: targetBidPrices, asks: targetAskPrices } = calculatedTargets;
+    const { bidSize, askSize } = calculateTotalSizes(STATE.asset!);
+    const bidSizes = distributeTotalSizeAcrossLadder(
+        bidSize,
+        targetBidPrices,
+        "buy",
+    );
+    const askSizes = distributeTotalSizeAcrossLadder(
+        askSize,
+        targetAskPrices,
+        "sell",
+    );
+    logger.debug("targetBids:",targetBidPrices,"\ntargetAsks:",targetAskPrices,"\nbidSizes:",bidSizes,"\naskSizes:",askSizes);
+    const pendingBids = Array.from(STATE.pendingBuys.values()) as PendingOrder[];
+    const pendingSells = Array.from(STATE.pendingSells.values()) as PendingOrder[];
+    const { cancelReplaces: buyCancelReplaces, cancels: buyCancels, newOrders: buyNewOrders } = planOrders(pendingBids, targetBidPrices, bidSizes, "buy");
+    const { cancelReplaces: sellCancelReplaces, cancels: sellCancels, newOrders: sellNewOrders } = planOrders(pendingSells, targetAskPrices, askSizes, "sell");
+
+    const cancelReplaces = buyCancelReplaces.concat(sellCancelReplaces);
+    for(let i = 0; i < cancelReplaces.length; i++) {
+        const instr = cancelReplaces[i];
+        const quoteSlot = instr.quoteSlot ?? makeQuoteSlot(instr.side, instr.price);
+        const existingReplacement = ORDER_INTENTS.getOutstanding("cancel-replace")
+            .find((intent) =>
+                intent.kind === "cancel-replace" &&
+                intent.epoch === STATE.epoch &&
+                intent.targetOrderHash === instr.cancelId,
+            );
+        if (existingReplacement && existingReplacement.status !== "unknown") {
+            continue;
+        }
+        if (existingReplacement && !ORDER_INTENTS.canAttempt(existingReplacement)) {
+            continue;
+        }
+        const intent = existingReplacement ?? ORDER_INTENTS.getOrCreate({
+                kind: "cancel-replace",
+                assetId: CFG.ASSET_ID,
+                epoch: STATE.epoch,
+                slot: quoteSlot,
+                side: instr.side,
+                price: instr.price,
+                size: instr.size,
+                targetOrderHash: instr.cancelId,
+            });
+        ORDER_INTENTS.markAttempted(intent);
+        try {
+            const response = await apiCancelReplaceOrder(wallet,
+                {
+                    epoch: STATE.epoch,
+                    orderHash: instr.cancelId,
+                    side: instr.side,
+                    price: instr.price,
+                    size: instr.size,
+                    allOrNothing: false,
+                    timeInForce: 3n,
+                    nonce: intent.nonce,
+                    replacementNonce: intent.replacementNonce!,
+                });
+            handleCancelReplaceResponse(intent, response);
+            logger.info(`cancel replace`, { price: instr.price, size: instr.size, side: instr.side, cancelId: instr.cancelId });
+        } catch (e: any) {
+            ORDER_INTENTS.markUnknown(intent);
+            logger.warn(`failed cancel replace cancelId: ${instr.cancelId}, price: ${instr.price}, ` +
+                `size: ${instr.size}, side: ${instr.side}, error:`, e?.message ?? e);
+        }
+    }
+
+    const cancels = buyCancels.concat(sellCancels);
+    for (const orderHash of cancels) {
+        ORDER_INTENTS.getOrCreate({
+            kind: "cancel",
+            assetId: CFG.ASSET_ID,
+            epoch: STATE.epoch,
+            slot: orderHash,
+            targetOrderHash: orderHash,
+        });
+    }
+
+    if (!(await reconcileOrderIntents(wallet))) {
+        logger.warn("quote maintenance paused: unresolved cancellations remain");
+        return;
+    }
+
+    const newOrders = buyNewOrders.concat(sellNewOrders);
+    for(let i = 0; i < newOrders.length; i++) {
+        const instr = newOrders[i];
+        const slot = instr.quoteSlot ?? makeQuoteSlot(instr.side, instr.price);
+        if (QUOTE_COOLDOWNS.isCoolingDown({
+            assetId: CFG.ASSET_ID,
+            epoch: STATE.epoch,
+            quoteSlot: slot,
+        })) {
+            continue;
+        }
+        const existingPlace = ORDER_INTENTS.getOutstanding("place")
+            .find((candidate) =>
+                candidate.kind === "place" &&
+                candidate.epoch === STATE.epoch &&
+                candidate.slot === slot,
+            );
+        if (existingPlace && (existingPlace.status !== "unknown" || !ORDER_INTENTS.canAttempt(existingPlace))) {
+            continue;
+        }
+        const intent = existingPlace ?? ORDER_INTENTS.getOrCreate({
+            kind: "place",
+            assetId: CFG.ASSET_ID,
+            epoch: STATE.epoch,
+            slot,
+            side: instr.side,
+            price: instr.price,
+            size: instr.size,
+            timeInForce: 3n,
+        });
+        if (intent.kind !== "place") continue;
+        ORDER_INTENTS.markAttempted(intent);
+        try {
+            const response = await apiSendOrder(wallet,
+                {
+                    epoch: STATE.epoch,
+                    side: intent.side,
+                    price: intent.price,
+                    size: intent.size,
+                    tif: 3n,
+                    nonce: intent.nonce,
+                });
+            handlePlaceOrderResponse(intent, response);
+            logger.info("placed order", { price: instr.price, size: instr.size, side: instr.side });
+        } catch (e: any) {
+            ORDER_INTENTS.markUnknown(intent);
+            logger.warn(`failed to place order price: ${instr.price}, size: ${instr.size}, side: ${instr.side}, error:`, e?.message ?? e);
+        }
+    }
+
+    logger.info("=============runQuoteMaintenance:end",(new Date()).toUTCString(),"============================");
+}
+
+/**
+ * Verifies that every outstanding ordinary cancellation has reached a
+ * terminal target-order state before passive orders are placed. A target that
+ * disappeared from pending orders is considered complete: it was canceled or
+ * filled before the cancellation could finish.
+ */
+export async function reconcileOrderIntents(wallet: Wallet): Promise<boolean> {
+    const cancellations = ORDER_INTENTS.getOutstanding("cancel");
+    if (cancellations.length === 0) return true;
+
+    const pendingByEpoch = new Map<string, Set<string>>();
+    for (const intent of cancellations) {
+        const epochKey = intent.epoch.toString();
+        if (pendingByEpoch.has(epochKey)) continue;
+        try {
+            const pending = await apiGetPending(wallet.address, intent.epoch);
+            pendingByEpoch.set(epochKey, new Set([
+                ...pending.buys.map((order) => order.id),
+                ...pending.sells.map((order) => order.id),
+            ]));
+        } catch (e: any) {
+            logger.warn(`unable to reconcile cancellations for epoch ${epochKey}:`, e?.message ?? e);
+            return false;
+        }
+    }
+
+    let attemptedCancellation = false;
+
+    for (const intent of cancellations) {
+        if (intent.kind !== "cancel") continue;
+        const pending = pendingByEpoch.get(intent.epoch.toString());
+        if (pending?.has(intent.targetOrderHash)) {
+            if (!ORDER_INTENTS.canAttempt(intent)) continue;
+            attemptedCancellation = true;
+            ORDER_INTENTS.markAttempted(intent);
+            try {
+                const response = await apiCancelOrder(wallet, intent.epoch, intent.targetOrderHash, intent.nonce);
+                handleCancelResponse(intent, response);
+                logger.info("cancellation submitted", { id: intent.targetOrderHash, attempt: intent.attempts });
+            } catch (e: any) {
+                ORDER_INTENTS.markUnknown(intent);
+                logger.warn(`failed to cancel id: ${intent.targetOrderHash}, error:`, e?.message ?? e);
+            }
+        } else {
+            ORDER_INTENTS.markCompleted(intent);
+        }
+    }
+
+    // Re-read pending state after submitting cancellations. This prevents new
+    // orders from being placed merely because the cancellation request was
+    // accepted while the old order was still active.
+    const remaining = ORDER_INTENTS.getOutstanding("cancel");
+    if (remaining.length === 0) return true;
+    if (!attemptedCancellation) return false;
+
+    const verificationByEpoch = new Map<string, Set<string>>();
+
+    for (const intent of remaining) {
+        if (intent.kind !== "cancel") continue;
+        const epochKey = intent.epoch.toString();
+        try {
+            let pendingIds = verificationByEpoch.get(epochKey);
+            if (!pendingIds) {
+                const result = await apiGetPending(wallet.address, intent.epoch);
+                pendingIds = new Set([
+                    ...result.buys.map(order => order.id),
+                    ...result.sells.map(order => order.id),
+                ]);
+                verificationByEpoch.set(epochKey, pendingIds);
+            }
+            const stillPending = pendingIds?.has(intent.targetOrderHash) ?? false;
+            if (!stillPending) ORDER_INTENTS.markCompleted(intent);
+        } catch (e: any) {
+            logger.warn(`unable to verify cancellation ${intent.targetOrderHash}:`, e?.message ?? e);
+        }
+    }
+
+    return ORDER_INTENTS.getOutstanding("cancel").length === 0;
+}
+
+/**
+ * Passive orders do not need to reserve a quote slot forever after the API has
+ * accepted them. Once the pending snapshot has observed the request hash, the
+ * request is no longer retryable. If an accepted order is absent, it has also
+ * reached a terminal state from the bot's perspective (filled, canceled, or
+ * otherwise removed by the relayer).
+ *
+ * Unknown requests are kept retryable when they are absent because the bot
+ * still does not know whether the original submission reached the relayer.
+ */
+export async function reconcilePlaceIntents(wallet: Wallet): Promise<void> {
+    const places = ORDER_INTENTS.getOutstanding("place")
+        .filter((intent) => intent.kind === "place" && intent.timeInForce !== TimeInForce.IOC);
+    if (places.length === 0) return;
+
+    const pendingByEpoch = new Map<string, Set<string>>();
+    for (const intent of places) {
+        const epochKey = intent.epoch.toString();
+        if (pendingByEpoch.has(epochKey)) continue;
+        try {
+            const pending = await apiGetPending(wallet.address, intent.epoch);
+            pendingByEpoch.set(epochKey, new Set([
+                ...pending.buys.map((order) => order.id),
+                ...pending.sells.map((order) => order.id),
+            ]));
+            if (intent.epoch === STATE.epoch) applyPendingResponse(pending);
+        } catch (e: any) {
+            logger.warn(`unable to reconcile passive orders for epoch ${epochKey}:`, e?.message ?? e);
+        }
+    }
+
+    for (const intent of places) {
+        if (intent.kind !== "place") continue;
+        const pending = pendingByEpoch.get(intent.epoch.toString());
+        const requestIsPending = intent.requestHash != null && pending?.has(intent.requestHash);
+        if (intent.status === "accepted" || requestIsPending) {
+            ORDER_INTENTS.markCompleted(intent);
+        }
+    }
+}
+
+/**
+ * A target order may have one unresolved cancel-replace at a time. Once the
+ * target disappears from pending orders, the cancel leg has reached a terminal
+ * state and a later quote pass may plan a new replacement if needed.
+ */
+export async function reconcileCancelReplaceIntents(wallet: Wallet): Promise<void> {
+    const replacements = ORDER_INTENTS.getOutstanding("cancel-replace");
+    const pendingByEpoch = new Map<string, Set<string>>();
+
+    for (const intent of replacements) {
+        if (intent.kind !== "cancel-replace") continue;
+        const epochKey = intent.epoch.toString();
+        if (pendingByEpoch.has(epochKey)) continue;
+        try {
+            const pending = await apiGetPending(wallet.address, intent.epoch);
+            pendingByEpoch.set(epochKey, new Set([
+                ...pending.buys.map((order) => order.id),
+                ...pending.sells.map((order) => order.id),
+            ]));
+            if (intent.epoch === STATE.epoch) applyPendingResponse(pending);
+        } catch (e: any) {
+            logger.warn(`unable to reconcile cancel-replaces for epoch ${epochKey}:`, e?.message ?? e);
+        }
+    }
+
+    for (const intent of replacements) {
+        if (intent.kind !== "cancel-replace") continue;
+        const pending = pendingByEpoch.get(intent.epoch.toString());
+        if (pending && !pending.has(intent.targetOrderHash)) {
+            ORDER_INTENTS.markCompleted(intent);
+        }
+    }
 }
 
 export async function runAggression(wallet: Wallet) {
+    if (!CFG.IS_TAKER) {
+        logger.debug("aggression skipped: bot is configured as maker");
+        return;
+    }
     const book = STATE.book;
     if (!book) return;
+    if (!canTradeCurrentAsset(STATE)) {
+        logger.info("aggression skipped: current asset is unavailable or resolved");
+        return;
+    }
+    if (shouldPauseForAggression(book)) {
+        logger.info("aggression skipped: reference price is stale or unavailable");
+        return;
+    }
 
     const currTime = nowMs();
     const tradeDelay = jitter(CFG.AGGRESS_MS, CFG.AGGRESS_JITTER_MS);
     const msSinceLastTrade = currTime - STATE.lastTradeTime;
     if(msSinceLastTrade < tradeDelay) {
-        console.log("aggression skipped (trade delay)", { msSinceLastTrade, tradeDelay });
+        logger.info("aggression skipped (trade delay)", { msSinceLastTrade, tradeDelay });
         return;
     }
     STATE.lastTradeTime = currTime;
 
-    const epoch = await getCurrentEpoch();
-    if(epoch != STATE.epoch) {
-        console.log("aggression skipped (epoch mismatch)", { epoch, STATE_epoch: STATE.epoch });
+    logger.info("========================runAggression:start==========================");
+    const bookMid = midPrice(book);
+    const refPrice = referencePrice(book);
+    logger.debug("mid:", bookMid, "reference:", refPrice, "fairValue:", STATE.fairValue?.protocolPrice);
+    let side = chooseAggressionSide(book, refPrice);
+    if (side == null) {
+        logger.info("aggression skipped (model selected no trade)", {
+            bid: book.bids[0]?.price,
+            ask: book.asks[0]?.price,
+            reference: refPrice,
+            fairValue: STATE.fairValue?.protocolPrice,
+        });
         return;
     }
-
-    console.log("========================runAggression:start",(new Date()).toUTCString(),"==========================");
-    const mid = midPrice(book);
-    console.log("mid:", mid);
-    let side = chooseAggressionSide(mid);
-    console.log("side:", side);
-    console.log("CFG.WIPE_LEVELS:", CFG.WIPE_LEVELS);
-    console.log("asksLen:", book.asks.length, "bidsLen:", book.bids.length);
+    logger.debug("side:", side);
+    logger.debug("CFG.WIPE_LEVELS:", CFG.WIPE_LEVELS);
+    logger.debug("asksLen:", book.asks.length, "bidsLen:", book.bids.length);
 
     if (side === "buy" && book.asks.length < CFG.WIPE_LEVELS) return;
     if (side === "sell" && book.bids.length < CFG.WIPE_LEVELS) return;
 
     const reqBuy = depthToWipe(book, "buy", CFG.WIPE_LEVELS).qty;
     const reqSell = depthToWipe(book, "sell", CFG.WIPE_LEVELS).qty;
-    console.log("reqBuy:", reqBuy);
-    console.log("reqSell:", reqSell);
-    let tradeQty = roundToLot((side === "buy" ? reqBuy : reqSell) * (1 + CFG.SLIP_BUFFER));
-    console.log("tradeQty1:", tradeQty);
-    tradeQty = roundToLot(Math.floor(Math.min(tradeQty, CFG.MAX_AGGRESS_QTY)));
-    console.log("tradeQty2:", tradeQty);
+    logger.debug("reqBuy:", reqBuy);
+    logger.debug("reqSell:", reqSell);
+    let tradeQty = roundToOrderLot((side === "buy" ? reqBuy : reqSell) * (1 + CFG.SLIP_BUFFER));
+    logger.debug("tradeQty1:", tradeQty);
+    tradeQty = roundToOrderLot(Math.min(tradeQty, CFG.MAX_AGGRESS_QTY));
+    tradeQty = capOrderSizeByMargin(side === "buy", tradeQty, refPrice);
+    logger.debug("tradeQty2:", tradeQty);
 
     const feasibleChosen = side === "buy"
-        ? canAggressBuy(tradeQty, mid)
-        : canAggressSell(tradeQty, mid);
-    console.log("feasibleChosen:", feasibleChosen);
+        ? canAggressBuy(tradeQty, refPrice)
+        : canAggressSell(tradeQty, refPrice);
+    logger.debug("feasibleChosen:", feasibleChosen);
 
-    if (!feasibleChosen) {
+    if (!feasibleChosen) { // we had an edge but couldn't trade. See if we can aggress in the other direction, not due to an edge
         const other = side === "buy" ? "sell" : "buy";
-        console.log("other:", other);
+        logger.debug("other:", other);
         const otherReq = other === "buy" ? reqBuy : reqSell;
-        console.log("otherReq:", otherReq);
-        let otherQty = roundToLot(Math.min(otherReq * (1 + CFG.SLIP_BUFFER), CFG.MAX_AGGRESS_QTY));
-        console.log("otherQty:", otherQty);
+        logger.debug("otherReq:", otherReq);
+        let otherQty = roundToOrderLot(Math.min(otherReq * (1 + CFG.SLIP_BUFFER), CFG.MAX_AGGRESS_QTY));
+        otherQty = capOrderSizeByMargin(other === "buy", otherQty, refPrice);
+        logger.debug("otherQty:", otherQty);
 
         const feasibleOther = other === "buy"
-            ? canAggressBuy(otherQty, mid)
-            : canAggressSell(otherQty, mid);
-        console.log("feasibleOther:", feasibleOther);
+            ? canAggressBuy(otherQty, refPrice)
+            : canAggressSell(otherQty, refPrice);
+        logger.debug("feasibleOther:", feasibleOther);
 
         if (!feasibleOther) {
-            log("aggression skipped (not feasible)", {
-                mid, chosen: side, qty: tradeQty, baseBal: STATE.baseBal, inv: STATE.invBase,
+            logger.info("aggression skipped (not feasible)", {
+                mid: bookMid, reference: refPrice, chosen: side, qty: tradeQty, baseBal: STATE.baseBal, inv: STATE.invBase,
             });
             return;
         }
         side = other;
         tradeQty = otherQty;
-        console.log("side:", side);
-        console.log("tradeQty:", tradeQty);
+        logger.debug("side:", side);
+        logger.debug("tradeQty:", tradeQty);
     }
 
-    console.log("TICK_SIZE:", CFG.TICK_SIZE);
+    logger.debug("TICK_SIZE:", PROTOCOL_TICK_SIZE);
     const aggressivePrice =
         side === "buy"
-            ? clamp(roundToTick(mid + 10 * CFG.TICK_SIZE, "sell"), CFG.HARD_MIN_PRICE, CFG.HARD_MAX_PRICE)
-            : clamp(roundToTick(mid - 10 * CFG.TICK_SIZE, "buy"), CFG.HARD_MIN_PRICE, CFG.HARD_MAX_PRICE);
+            ? clamp(roundToTick(refPrice + 10 * PROTOCOL_TICK_SIZE, "sell"), CFG.HARD_MIN_PRICE, CFG.HARD_MAX_PRICE)
+            : clamp(roundToTick(refPrice - 10 * PROTOCOL_TICK_SIZE, "buy"), CFG.HARD_MIN_PRICE, CFG.HARD_MAX_PRICE);
 
-    console.log("aggressivePrice:", aggressivePrice, "side:", side, "qty:", tradeQty, "mid:", mid);
+    logger.debug("aggressivePrice:", aggressivePrice, "side:", side, "qty:", tradeQty, "mid:", bookMid, "reference:", refPrice);
     try {
-        await apiSendOrder(wallet, { epoch: Number(STATE.epoch), side, price: aggressivePrice, size: tradeQty });
-        log("aggressed", { side, qty: tradeQty, price: aggressivePrice, mid });
+        const intent = ORDER_INTENTS.getOrCreate({
+            kind: "place",
+            assetId: CFG.ASSET_ID,
+            epoch: STATE.epoch,
+            slot: `aggression-${side}`,
+            side,
+            price: aggressivePrice,
+            size: tradeQty,
+            timeInForce: TimeInForce.IOC,
+        });
+        ORDER_INTENTS.markAttempted(intent);
+        const resp = await apiSendOrder(wallet, {
+            epoch: STATE.epoch,
+            side,
+            price: aggressivePrice,
+            size: tradeQty,
+            tif: TimeInForce.IOC,
+            nonce: intent.nonce,
+        });
+        handlePlaceOrderResponse(intent, resp);
+        logger.info("aggressed", { side, qty: tradeQty, price: aggressivePrice, mid: bookMid, reference: refPrice });
 
-        //STATE.baseBal = Number(await getLedgerBalance(wallet.address));
-        const resp = await apiGetBalance();
-        STATE.baseBal = Number(resp.balance);
-        if (CFG.USE_LOCAL_LEDGER) {
-            if (side === "buy") {
-                STATE.invBase += tradeQty;
-            } else {
-                STATE.invBase -= tradeQty;
+        const balance = await apiGetBalance();
+        STATE.baseBal = protocolValueToSafeNumber(
+            balance.balance - balance.pending,
+            "available base balance",
+        );
+        if(resp.data) {
+            // @ts-ignore
+            if(resp.data?.status == "FILLED" || resp.data?.status == "PARTIALLY_FILLED") {
+                // @ts-ignore
+                const tradeQty = protocolValueToSafeNumber(
+                    BigInt((resp.data as { filled?: string | number | bigint })?.filled ?? 0),
+                    "aggression fill",
+                );
+                if (side === "buy") {
+                    STATE.invBase += tradeQty;
+                } else {
+                    STATE.invBase -= tradeQty;
+                }
             }
         }
     } catch (e: any) {
-        warn("aggression error:", e?.message ?? e);
+        logger.warn("aggression error:", e?.message ?? e);
     }
 
-    const _book = await apiGetBook(Number(STATE.epoch));
-    STATE.book = _book;
-    STATE.lastMid = midPrice(_book);
-    console.log("book refreshed:", STATE.lastMid, "bids:", _book.bids.length, "asks:", _book.asks.length, "total:", _book.asks.length + _book.bids.length);
-    console.log("========================runAggression:end",(new Date()).toUTCString(),"==========================");
+    logger.info("========================runAggression:end==========================");
 }

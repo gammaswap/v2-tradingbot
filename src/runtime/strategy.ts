@@ -1,7 +1,20 @@
-import { CFG, type Side } from "../config/config.js";
-import type { BookSnapshot, PendingOrder } from "../utils/types.js";
-import { STATE } from "./state.js";
-import { clamp, randBetween, roundToTick, tanh } from "../utils/utils.js";
+import { RUNTIME_CFG as CFG, RUNTIME_STATE as STATE, type Side } from "./context.js";
+import type { Asset, BookSnapshot, PendingOrder } from "../utils/types.js";
+import { clamp, nowMs, roundDownToOrderLot, roundToTick, tanh } from "../utils/utils.js";
+import { protocolNotional, protocolNotionalBigInt, protocolValueToSafeNumber } from "../utils/protocolMath.js";
+import {
+    maxSizeForMargin,
+    PROTOCOL_MIN_PRICE,
+    PROTOCOL_MAX_PRICE,
+    PROTOCOL_MIN_SIZE,
+    PROTOCOL_TICK_SIZE,
+    PROTOCOL_LOT_SIZE,
+} from "../utils/protocolPrice.js";
+import { Logger } from "../utils/logger.js";
+
+const logger = new Logger("strategy");
+
+const PROTOCOL_PRICE_SCALE = 1_000_000;
 
 export function bestBidAsk(book: BookSnapshot | null): { bid: number | null; ask: number | null } {
     if (!book) return { bid: null, ask: null };
@@ -19,19 +32,339 @@ export function midPrice(book: BookSnapshot | null): number {
     return STATE.lastMid;
 }
 
+export function hasFreshFairValue(): boolean {
+    if (!CFG.USE_ORACLE_FAIR_VALUE || !STATE.fairValue || STATE.oracle.stale) return false;
+    return nowMs() - STATE.fairValue.updatedAtMs <= CFG.FAIR_VALUE_STALE_MS;
+}
+
+export function hasUsableBookPrice(book: BookSnapshot | null): boolean {
+    return Boolean(book && (book.bids.length > 0 || book.asks.length > 0));
+}
+
+export function hasFreshBook(book: BookSnapshot | null = STATE.book): boolean {
+    if (!hasUsableBookPrice(book)) return false;
+
+    return (
+        STATE.bookUpdatedAtMs > 0 &&
+        nowMs() - STATE.bookUpdatedAtMs <= CFG.BOOK_STALE_MS
+    );
+}
+
+export function shouldPauseForFairValue(
+    book: BookSnapshot | null = STATE.book,
+): boolean {
+    const freshOracleAvailable = hasFreshFairValue();
+
+    if (
+        CFG.USE_ORACLE_FAIR_VALUE &&
+        CFG.REQUIRE_FRESH_FAIR_VALUE &&
+        !freshOracleAvailable
+    ) {
+        return true;
+    }
+
+    // A fresh oracle can provide a reference even when the book is empty.
+    if (freshOracleAvailable) return false;
+
+    // Without a fresh oracle, require a recent book with at least one quote.
+    return !hasFreshBook(book);
+}
+
+export function shouldPauseForAggression(book: BookSnapshot | null = STATE.book): boolean {
+    if (CFG.AGGRESSION_MODEL === "edge") return !hasFreshFairValue();
+    if (CFG.AGGRESSION_MODEL === "mean-reversion") return !hasFreshBook(book);
+
+    // edge-with-fallback uses the oracle edge when available and requires a
+    // usable book when it must fall back to mean reversion.
+    return !hasFreshFairValue() && !hasFreshBook(book);
+}
+
+export function shouldCancelReplace(o: PendingOrder, newPrice: number, newSize: number, tolTicks: number = 1) : boolean {
+    const tol = PROTOCOL_TICK_SIZE * tolTicks + 1;//1e-12;
+    const tolSize = 10000 * 1000; // 10 USD = $0.01 x 1000
+    if (
+        Math.abs(o.price - newPrice) <= tol &&
+        Math.abs(o.size - newSize) <= tolSize
+    ) {
+        return false;
+    }
+
+    return true;
+}
+
+export function referencePrice(book: BookSnapshot | null): number {
+    const bookMid = midPrice(book);
+    if (!hasFreshFairValue()) return bookMid;
+
+    const weight = clamp(CFG.FAIR_VALUE_WEIGHT, 0, 1);
+    const fairValue = STATE.fairValue?.protocolPrice ?? bookMid;
+    const blended = weight * fairValue + (1 - weight) * bookMid;
+    return roundToNearestTick(clamp(blended, 0, 1000000));
+}
+
+/**
+ * Calculates the time-dependent risk-aversion factor using:
+ *
+ *   gamma = gamma_0 + (gamma_max - gamma_0) * (1 - t / T)^B
+ *
+ * gamma_0 is the starting risk-aversion level and the lowest level in the
+ * model. gamma_max is the maximum risk-aversion level. T is the total number
+ * of seconds in the prediction-market epoch, t is the number of seconds
+ * remaining until expiration, and B controls the curve shape. B must be at
+ * least 1. At the start of the epoch, t equals T and gamma equals gamma_0;
+ * at expiration, t equals 0 and gamma reaches gamma_max.
+ */
+export function calculateRiskAversionFactor(
+    gamma_0: number,
+    gamma_max: number,
+    t: number,
+    T: number,
+    B: number,
+): number {
+    if (!Number.isFinite(gamma_0) || gamma_0 <= 0) {
+        throw new Error(`gamma_0 must be positive: ${gamma_0}`);
+    }
+    if (!Number.isFinite(gamma_max) || gamma_max <= gamma_0) {
+        throw new Error(`gamma_max must be greater than gamma_0: ${gamma_max}`);
+    }
+    if (!Number.isFinite(T) || T <= 0) {
+        throw new Error(`T must be positive: ${T}`);
+    }
+    if (!Number.isFinite(t) || t < 0 || t > T) {
+        throw new Error(`t must be between 0 and T: ${t}`);
+    }
+    if (!Number.isFinite(B) || B < 1) {
+        throw new Error(`B must be at least 1: ${B}`);
+    }
+
+    return gamma_0 + (gamma_max - gamma_0) * Math.pow(1 - t / T, B);
+}
+
+export function calculateRemainingEpochSeconds(
+    asset: Asset,
+    timestampMs = Date.now(),
+): { periodLength: number; remainingSeconds: number } {
+    const periodLength = STATE.periodLength;
+    if (periodLength === null) {
+        throw new Error("epoch periodLength has not been initialized");
+    }
+
+    const nowSeconds = BigInt(Math.floor(timestampMs / 1000));
+    const periodLengthBigInt = BigInt(periodLength);
+    const rawRemaining = asset.expiration > nowSeconds
+        ? asset.expiration - nowSeconds
+        : 0n;
+    const boundedRemaining = rawRemaining > periodLengthBigInt
+        ? periodLengthBigInt
+        : rawRemaining;
+
+    return {
+        periodLength,
+        remainingSeconds: Number(boundedRemaining),
+    };
+}
+
+function bucketRemainingEpochSeconds(
+    remainingSeconds: number,
+    periodLength: number,
+): number {
+    const bucket = CFG.TOTAL_SIZE_TIME_BUCKET_SECONDS;
+    if (remainingSeconds <= 0) return 0;
+
+    // Round upward so the beginning of an epoch retains its full-size value,
+    // while the result changes only at the configured time buckets.
+    return Math.min(
+        periodLength,
+        Math.ceil(remainingSeconds / bucket) * bucket,
+    );
+}
+
+/**
+ * Calculates the total number of contracts allocated across all bid and ask
+ * quote slots.
+ *
+ * H(t) = H_0 * [1 - (1 - t / T)^k]^A
+ *
+ * H_0 is derived from account balance:
+ * H_0 = accountBalance * MAX_CONTRACT_EXPOSURE_PCT / 100.
+ * Both bid and ask totals are capped independently at H_0. t is the
+ * bucketed number of seconds remaining in the epoch, and T is the epoch
+ * period length. k is
+ * TOTAL_SIZE_DECAY_K; values greater than 1 determine how long the strategy
+ * stays near its initial full size. A is TOTAL_SIZE_DECAY_A; values between
+ * 0 and 1 determine how violently total size collapses near expiration.
+ *
+ * Inventory and inventory target are signed contract quantities: positive
+ * means long and negative means short. The returned quantities are always
+ * non-negative contract sizes, not margin or dollar exposure.
+ */
+export function calculateTotalSizes(
+    asset: Asset,
+    timestampMs = Date.now(),
+): { bidSize: number; askSize: number } {
+    const { periodLength, remainingSeconds } =
+        calculateRemainingEpochSeconds(asset, timestampMs);
+    const bucketedRemainingSeconds = bucketRemainingEpochSeconds(
+        remainingSeconds,
+        periodLength,
+    );
+    const tOverT = bucketedRemainingSeconds / periodLength;
+    const H_0 =
+        STATE.accountBalance * CFG.MAX_CONTRACT_EXPOSURE_PCT / 100;
+    const H_t =
+        H_0 *
+        Math.pow(
+            1 - Math.pow(1 - tOverT, CFG.TOTAL_SIZE_DECAY_K),
+            CFG.TOTAL_SIZE_DECAY_A,
+        );
+
+    const currentInventory = STATE.invBase;
+    const inventoryTarget = CFG.INV_TARGET;
+    const requestedBidSize = Math.max(
+        0,
+        inventoryTarget + H_t - currentInventory,
+    );
+    const requestedAskSize = Math.max(
+        0,
+        currentInventory - inventoryTarget + H_t,
+    );
+
+    // Keep the resulting buy/sell quantities inside the absolute inventory
+    // limit before per-order margin checks are applied later.
+    const effectiveInventoryLimit = Math.min(CFG.INV_MAX_ABS, H_0);
+    const maximumBidSize = Math.max(0, effectiveInventoryLimit - currentInventory);
+    const maximumAskSize = Math.max(0, currentInventory + effectiveInventoryLimit);
+
+    return {
+        bidSize: roundDownToOrderLot(
+            Math.min(requestedBidSize, H_0, maximumBidSize),
+        ),
+        askSize: roundDownToOrderLot(
+            Math.min(requestedAskSize, H_0, maximumAskSize),
+        ),
+    };
+}
+
+export function calculateCurrentRiskAversion(
+    asset: Asset,
+    timestampMs = Date.now(),
+): number {
+    const { periodLength, remainingSeconds } =
+        calculateRemainingEpochSeconds(asset, timestampMs);
+
+    return calculateRiskAversionFactor(
+        CFG.RISK_AVERSION_GAMMA_0,
+        CFG.RISK_AVERSION_GAMMA_MAX,
+        remainingSeconds,
+        periodLength,
+        CFG.RISK_AVERSION_B,
+    );
+}
+
+/**
+ * Calculates inventory-skewed bid and ask probabilities in logit space.
+ *
+ * The reference price is normalized to p in (0, 1), then transformed with
+ * logitP = ln(p / (1 - p)). Inventory skew shifts that logit value, and the
+ * configured half-spread is subtracted from it for the bid and added to it
+ * for the ask. The resulting logits are converted back to probabilities with
+ * the logistic function. The returned bid and ask are normalized decimals;
+ * callers must convert them to protocol price units before submitting orders.
+ */
+export function calculateBidAndAsk(
+    referencePrice: number,
+    inventorySkew: number,
+    halfSpread: number,
+): { bid: number; ask: number } {
+    if (
+        !Number.isFinite(referencePrice) ||
+        referencePrice <= 0 ||
+        referencePrice >= PROTOCOL_PRICE_SCALE
+    ) {
+        throw new Error(
+            `referencePrice must be between 0 and ${PROTOCOL_PRICE_SCALE}: ${referencePrice}`,
+        );
+    }
+    if (!Number.isFinite(inventorySkew)) {
+        throw new Error(`inventorySkew must be finite: ${inventorySkew}`);
+    }
+    if (!Number.isFinite(halfSpread) || halfSpread < 0.005 || halfSpread > 1) {
+        throw new Error(`halfSpread must be between 0.005 and 1: ${halfSpread}`);
+    }
+
+    const p = referencePrice / PROTOCOL_PRICE_SCALE;
+    const logitP = Math.log(p / (1 - p));
+    const skewedLogitP = logitP - inventorySkew;
+    const logitBid = skewedLogitP - halfSpread;
+    const logitAsk = skewedLogitP + halfSpread;
+
+    return {
+        bid: 1 / (1 + Math.exp(-logitBid)),
+        ask: 1 / (1 + Math.exp(-logitAsk)),
+    };
+}
+
+/**
+ * Calculates the inventory skew using:
+ *
+ *   skew = gamma * q * V = gamma * q * p * (1 - p)
+ *
+ * gamma is the risk-aversion factor, q is inventory (positive for long,
+ * negative for short), p is the normalized reference price, and V is the
+ * inventory variance. Because this is a binary prediction market, the
+ * settlement follows a Bernoulli distribution, whose variance is p * (1 - p).
+ */
+export function calculateInventorySkew(
+    gamma: number,
+    inventory: number,
+    referencePrice: number,
+): number {
+    if (!Number.isFinite(gamma)) {
+        throw new Error(`gamma must be finite: ${gamma}`);
+    }
+
+    if (!Number.isFinite(inventory)) {
+        throw new Error(`inventory must be finite: ${inventory}`);
+    }
+
+    if (
+        !Number.isFinite(referencePrice) ||
+        referencePrice < 0 ||
+        referencePrice > PROTOCOL_PRICE_SCALE
+    ) {
+        throw new Error(
+            `referencePrice must be between 0 and ${PROTOCOL_PRICE_SCALE}: ${referencePrice}`,
+        );
+    }
+
+    const normalizedReferencePrice = referencePrice / PROTOCOL_PRICE_SCALE;
+
+    return (
+        gamma *
+        inventory *
+        normalizedReferencePrice *
+        (1 - normalizedReferencePrice)
+    );
+}
+
 export function depthToWipe(book: BookSnapshot, side: Side, levels: number): { qty: number; notional: number } {
     const arr = side === "buy" ? book.asks : book.bids;
     let qty = 0;
-    let notional = 0;
+    let notional = 0n;
     for (let i = 0; i < Math.min(levels, arr.length); i++) {
-        qty += Number(arr[i].size);
-        notional += Math.floor(Number(arr[i].size) * Number(arr[i].price) / 1000000);
+        const size = Number(arr[i].size);
+        const price = Number(arr[i].price);
+        qty += size;
+        notional += protocolNotionalBigInt(size, price);
     }
-    return { qty, notional };
+    return {
+        qty,
+        notional: protocolValueToSafeNumber(notional, "depth notional"),
+    };
 }
 
 export function nearestOrderAtPrice(pending: Map<string, PendingOrder>, side: Side, price: number, tolTicks = 1) {
-    const tol = CFG.TICK_SIZE * tolTicks + 1;//1e-12;
+    const tol = PROTOCOL_TICK_SIZE * tolTicks + 1;//1e-12;
     for (const o of pending.values()) {
         if (o.side !== side) {
             continue;
@@ -43,78 +376,347 @@ export function nearestOrderAtPrice(pending: Map<string, PendingOrder>, side: Si
     return null;
 }
 
-export function buildTargetLadderPrices(mid: number): { bids: number[]; asks: number[] } {
-    console.log("===============buildTargetLadderPrices:start==================");
-    const bids: number[] = [];
-    const asks: number[] = [];
+export function buildGrowthSpaceLadderPrices(
+    mid: number,
+    book: BookSnapshot | null = null,
+): { bids: number[]; asks: number[] } {
+    logger.debug("===============buildTargetLadderPrices:start==================");
+    const bidPrices = new Set<number>();
+    const askPrices = new Set<number>();
+    const bestAsk = book?.asks[0]?.price ?? null;
+    const bestBid = book?.bids[0]?.price ?? null;
     let spacing = CFG.LEVEL_SPACING_NEAR;
-    console.log("mid:", mid);
-    console.log("spacing:", spacing);
+    logger.debug("mid:", mid);
+    logger.debug("spacing:", spacing);
 
     for (let i = 0; i < CFG.LEVELS_PER_SIDE; i++) {
-        console.log("level:i:",i,"spacing:",spacing)
-        const bidP = clamp(roundToTick(mid - spacing, "buy"), CFG.HARD_MIN_PRICE, CFG.HARD_MAX_PRICE);
-        const askP = clamp(roundToTick(mid + spacing, "sell"), CFG.HARD_MIN_PRICE, CFG.HARD_MAX_PRICE);
-        bids.push(bidP);
-        asks.push(askP);
+        logger.debug("level:i:",i,"spacing:",spacing)
+        const bidP = roundToTick(mid - spacing, "buy");
+        const askP = roundToTick(mid + spacing, "sell");
+
+        if (
+            bidP >= CFG.HARD_MIN_PRICE &&
+            bidP <= CFG.HARD_MAX_PRICE &&
+            bidP >= PROTOCOL_MIN_PRICE &&
+            bidP <= PROTOCOL_MAX_PRICE &&
+            (bestAsk == null || bidP < bestAsk)
+        ) {
+            bidPrices.add(bidP);
+        }
+
+        if (
+            askP >= CFG.HARD_MIN_PRICE &&
+            askP <= CFG.HARD_MAX_PRICE &&
+            askP >= PROTOCOL_MIN_PRICE &&
+            askP <= PROTOCOL_MAX_PRICE &&
+            (bestBid == null || askP > bestBid)
+        ) {
+            askPrices.add(askP);
+        }
+
         spacing *= CFG.LEVEL_SPACING_GROWTH;
     }
 
-    console.log("===============buildTargetLadderPrices:end==================");
-    return { bids, asks };
+    logger.debug("===============buildTargetLadderPrices:end==================");
+    return { bids: [...bidPrices], asks: [...askPrices] };
 }
 
-export function buildTargetSizes(): { bidSizes: number[]; askSizes: number[] } {
-    const base0 = randBetween(CFG.QUOTE_BASE_SIZE_MIN, CFG.QUOTE_BASE_SIZE_MAX);
-    const sizes: number[] = [];
-    let s = base0;
-    for (let i = 0; i < CFG.LEVELS_PER_SIDE; i++) {
-        const varMul = randBetween(CFG.VARIABILITY_MIN, CFG.VARIABILITY_MAX);
-        sizes.push(Math.floor(Math.max(0, s * varMul)));
-        s *= CFG.DEPTH_GROWTH;
+/**
+ * Builds equidistant quote slots between the calculated bid/ask and the
+ * nearer/farther side of the reference price and current book midpoint.
+ * The calculated bid/ask are normalized probabilities, so they are converted
+ * to protocol price units before interpolation with the book and reference.
+ * inventorySkew is already included in calculateBidAndAsk and is validated
+ * here only because it is part of this function's quote-calculation inputs.
+ */
+export function buildEquidistantLadderPrices(
+    book: BookSnapshot,
+    refPrice: number,
+    inventorySkew: number,
+    bid: number,
+    ask: number,
+): { bids: number[]; asks: number[] } {
+    if (!Number.isFinite(refPrice)) {
+        throw new Error(`refPrice must be finite: ${refPrice}`);
     }
-    return { bidSizes: sizes.slice(), askSizes: sizes.slice() };
+    if (!Number.isFinite(inventorySkew)) {
+        throw new Error(`inventorySkew must be finite: ${inventorySkew}`);
+    }
+    if (!Number.isFinite(bid) || !Number.isFinite(ask) || bid <= 0 || ask >= 1 || bid >= ask) {
+        throw new Error(`bid and ask must be ordered normalized prices: bid=${bid}, ask=${ask}`);
+    }
+
+    // With no current quotes, do not fall back to a stale last price. A new
+    // epoch should build both ladders toward the current reference price.
+    const hasBookQuotes = book.bids.length > 0 || book.asks.length > 0;
+    const bookMid = hasBookQuotes ? midPrice(book) : refPrice;
+    const bidEnd = Math.min(refPrice, bookMid);
+    const askEnd = Math.max(refPrice, bookMid);
+    const bidStart = bid * PROTOCOL_PRICE_SCALE;
+    const askStart = ask * PROTOCOL_PRICE_SCALE;
+    const bestAsk = book.asks[0]?.price ?? null;
+    const bestBid = book.bids[0]?.price ?? null;
+    const bidPrices = new Set<number>();
+    const askPrices = new Set<number>();
+
+    for (let i = 0; i < CFG.LEVELS_PER_SIDE; i++) {
+        const fraction = CFG.LEVELS_PER_SIDE === 1
+            ? 0
+            : i / (CFG.LEVELS_PER_SIDE - 1);
+        const bidPrice = roundToTick(
+            bidStart + (bidEnd - bidStart) * fraction,
+            "buy",
+        );
+        const askPrice = roundToTick(
+            askStart + (askEnd - askStart) * fraction,
+            "sell",
+        );
+
+        if (
+            bidPrice >= CFG.HARD_MIN_PRICE &&
+            bidPrice <= CFG.HARD_MAX_PRICE &&
+            bidPrice >= PROTOCOL_MIN_PRICE &&
+            bidPrice <= PROTOCOL_MAX_PRICE &&
+            (bestAsk == null || bidPrice < bestAsk)
+        ) {
+            bidPrices.add(bidPrice);
+        }
+        if (
+            askPrice >= CFG.HARD_MIN_PRICE &&
+            askPrice <= CFG.HARD_MAX_PRICE &&
+            askPrice >= PROTOCOL_MIN_PRICE &&
+            askPrice <= PROTOCOL_MAX_PRICE &&
+            (bestBid == null || askPrice > bestBid)
+        ) {
+            askPrices.add(askPrice);
+        }
+    }
+
+    return {
+        bids: [...bidPrices].sort((a, b) => b - a),
+        asks: [...askPrices].sort((a, b) => a - b),
+    };
+}
+
+export const LADDER_PRICE_MODEL = {
+    EQUIDISTANT: 1,
+    GROWTH_SPACE: 2,
+} as const;
+
+export type LadderPriceModel =
+    typeof LADDER_PRICE_MODEL[keyof typeof LADDER_PRICE_MODEL];
+
+/**
+ * Selects the ladder-price model used to build the target bid and ask levels.
+ * The equidistant model is the default. The growth-space model uses the
+ * midpoint of the calculated bid and ask as its center.
+ */
+export function buildTargetLadderPrices(
+    book: BookSnapshot,
+    refPrice: number,
+    inventorySkew: number,
+    bid: number,
+    ask: number,
+    model: LadderPriceModel = LADDER_PRICE_MODEL.EQUIDISTANT,
+): { bids: number[]; asks: number[] } {
+    if (model === LADDER_PRICE_MODEL.EQUIDISTANT) {
+        return buildEquidistantLadderPrices(
+            book,
+            refPrice,
+            inventorySkew,
+            bid,
+            ask,
+        );
+    }
+
+    if (model === LADDER_PRICE_MODEL.GROWTH_SPACE) {
+        const calculatedMid = ((bid + ask) / 2) * PROTOCOL_PRICE_SCALE;
+        return buildGrowthSpaceLadderPrices(calculatedMid, book);
+    }
+
+    throw new Error(`unsupported ladder price model: ${model}`);
+}
+
+/**
+ * Distributes a total contract quantity across the available ladder prices.
+ * The first/closest level receives the smallest weight, while prices farther
+ * from the best bid or ask receive progressively larger allocations.
+ *
+ * weight = (1 + normalizedDistance)^QUOTE_SIZE_CONCAVITY
+ *
+ * `normalizedDistance` is zero at the best price and one at the farthest
+ * price. QUOTE_SIZE_CONCAVITY changes the shape of the distribution: 1 is
+ * linear, values above 1 emphasize the outer levels, and values below 1 make
+ * the distribution flatter.
+ *
+ * Example with a buy ladder:
+ *   totalSize = 1,000,000 contracts, lotSize = 10,000, and prices are
+ *   [490,000, 480,000, 460,000]. The best bid is 490,000, so the distances
+ *   are [0, 10,000, 30,000]. With concavity = 1, the weights are approximately
+ *   [1.00, 1.33, 2.00]. This produces approximately [23.08, 30.77, 46.15]
+ *   lots. Largest-remainder rounding converts that to [23, 31, 46] lots,
+ *   or [230,000, 310,000, 460,000] contracts, preserving the 1,000,000 total.
+ *
+ * For asks, the lowest ask is treated as the best price and the same logic is
+ * applied outward toward higher asks. If no target prices are available,
+ * there is nowhere to allocate the quantity and an empty allocation is
+ * returned. The allocation is performed in order-size lots and uses
+ * largest-remainder rounding to preserve the total whenever possible.
+ */
+export function distributeTotalSizeAcrossLadder(
+    totalSize: number,
+    targetPrices: number[],
+    side: Side,
+): number[] {
+    // There is no allocation to make when the side has no valid target prices
+    // or when the requested total is zero/non-positive.
+    if (targetPrices.length === 0 || totalSize <= 0) {
+        return targetPrices.map(() => 0);
+    }
+    if (!Number.isFinite(totalSize)) {
+        throw new Error(`totalSize must be finite: ${totalSize}`);
+    }
+
+    // Convert the total contract quantity into exchange-compatible lots. The
+    // total-size calculator already returns lot-aligned values; flooring here
+    // keeps this helper safe for direct callers as well.
+    const lotSize = PROTOCOL_LOT_SIZE;
+    const totalLots = Math.floor(totalSize / lotSize);
+    if (totalLots <= 0) return targetPrices.map(() => 0);
+
+    // Bids become less competitive as their price decreases; asks become less
+    // competitive as their price increases. In both cases, distance starts
+    // at zero for the best price and grows toward the outside of the ladder.
+    const bestPrice = side === "buy"
+        ? Math.max(...targetPrices)
+        : Math.min(...targetPrices);
+    const distances = targetPrices.map((price) => Math.abs(price - bestPrice));
+    const farthestDistance = Math.max(...distances);
+
+    // Turn each level's distance into a relative allocation weight.
+    const weights = distances.map((distance) => {
+        const normalizedDistance = farthestDistance === 0
+            ? 0
+            : distance / farthestDistance;
+        return Math.pow(
+            1 + normalizedDistance,
+            CFG.QUOTE_SIZE_CONCAVITY,
+        );
+    });
+
+    // Calculate fractional lot allocations before rounding. This allows the
+    // largest-remainder step below to recover lots lost to integer rounding.
+    const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+    const exactLots = weights.map((weight) => totalLots * weight / totalWeight);
+    const allocatedLots = exactLots.map((lots) => Math.floor(lots));
+    let remainingLots = totalLots - allocatedLots.reduce((sum, lots) => sum + lots, 0);
+
+    // Give leftover lots to the levels with the largest fractional remainders,
+    // ensuring the final allocation sums back to the requested lot total.
+    const remainderOrder = exactLots
+        .map((lots, index) => ({
+            index,
+            remainder: lots - Math.floor(lots),
+        }))
+        .sort((a, b) => b.remainder - a.remainder);
+
+    for (let i = 0; i < remainderOrder.length && remainingLots > 0; i++) {
+        allocatedLots[remainderOrder[i].index]++;
+        remainingLots--;
+    }
+
+    // Convert exchange lots back into protocol contract quantities.
+    return allocatedLots.map((lots) => lots * lotSize);
 }
 
 // ---- solvency/inventory checks ----
 
-export function availableBase(): number {
-    return Math.max(0, STATE.baseBal - CFG.BASE_RESERVE_MIN);
+export function availableCollateral(): number {
+    const reserveLimitedCollateral = Math.max(
+        0,
+        STATE.baseBal - CFG.BASE_RESERVE_MIN,
+    );
+    const percentageLimitedCollateral =
+        Math.max(0, STATE.baseBal) * CFG.MAX_CAPITAL_EXPOSURE_PERCENT / 100;
+
+    return Math.min(
+        reserveLimitedCollateral,
+        percentageLimitedCollateral,
+    );
 }
 
-export function availableQuote(): number {
-    return Math.max(0, STATE.baseBal - CFG.BASE_RESERVE_MIN);
+export function canPlaceOrder(isBuy: boolean, size: number, price: number, collateral?: number): boolean {
+    if(isBuy) {
+        return canPlaceBid(size, price, collateral);
+    } else {
+        return canPlaceAsk(size, price, collateral);
+    }
 }
 
-export function canPlaceAsk(size: number, price: number): boolean {
-    console.log("availableBase():", availableBase(), "size:", size, "price:", price, " =>")
-    return Math.floor(size * (1000000 - price) / 1000000) <= availableBase();
+export function canPlaceAsk(size: number, price: number, collateral?: number): boolean {
+    const _collateral = collateral ?? availableCollateral();
+    logger.debug("availableCollateral():", availableCollateral(), "collateral:", collateral, " size:", size, "price:", price, " =>")
+    return protocolNotional(size, 1_000_000 - price) <= _collateral;
 }
 
-export function canPlaceBid(size: number, price: number): boolean {
-    console.log("availableQuote():", availableQuote(), "size:", size, "price:", price, " =>")
-    return Math.floor(size * price / 1000000) <= availableQuote();
+export function canPlaceBid(size: number, price: number, collateral?: number): boolean {
+    const _collateral = collateral ?? availableCollateral();
+    logger.debug("availableCollateral():", availableCollateral(), "collateral:", collateral, "size:", size, "price:", price, " =>")
+    return protocolNotional(size, price) <= _collateral;
 }
 
 export function canAggressBuy(qty: number, estPrice: number): boolean {
-    const value = Math.floor(qty * estPrice / 1000000);
-    if (value > availableQuote()) return false;
+    if (qty < PROTOCOL_MIN_SIZE) return false;
+    const value = protocolNotional(qty, estPrice);
+    if (value > availableCollateral()) return false;
     if (STATE.invBase + qty > CFG.INV_MAX_ABS) return false;
     return true;
 }
 
 export function canAggressSell(qty: number, estPrice: number): boolean {
-    const value = Math.floor(qty * (1000000 - estPrice) / 1000000);
-    if (value > availableBase()) return false;
+    if (qty < PROTOCOL_MIN_SIZE) return false;
+    const value = protocolNotional(qty, 1_000_000 - estPrice);
+    if (value > availableCollateral()) return false;
     if (STATE.invBase - qty < -CFG.INV_MAX_ABS) return false;
     return true;
 }
 
+export function capOrderSizeByMargin(
+    isBuy: boolean,
+    size: number,
+    price: number,
+    collateral: number = availableCollateral(),
+): number {
+    if (!Number.isFinite(size) || size <= 0) return 0;
+
+    // This is an exchange-solvency check, not a strategy risk limit. The
+    // strategy controls total contract exposure separately; here we only cap
+    // the order at the collateral that is actually available for it.
+    const marginBudget = Math.floor(Math.max(0, collateral));
+    if (marginBudget <= 0) return 0;
+
+    const maxSize = maxSizeForMargin(
+        isBuy ? "buy" : "sell",
+        price,
+        marginBudget,
+    );
+    const maxSizeNumber = protocolValueToSafeNumber(maxSize, "maximum order size");
+    return roundDownToOrderLot(Math.min(size, maxSizeNumber));
+}
+
 // ---- direction choice ----
 
-export function computePBuy(mid: number): number {
+/**
+ * Normalizes a market price around CENTER_PRICE for the directional models.
+ * The result is negative below the center and positive above it.
+ */
+export function normalizedCenterDeviation(mid: number): number {
     const range = Math.max(1e-9, CFG.SOFT_MAX_PRICE - CFG.CENTER_PRICE);
-    const x = (mid - CFG.CENTER_PRICE) / range;
+    return (mid - CFG.CENTER_PRICE) / range;
+}
+
+export function computePBuy(mid: number): number {
+    const x = normalizedCenterDeviation(mid);
     let pBuy = 0.5 - 0.5 * tanh(CFG.MEANREV_K * clamp(x, -2, 2));
 
     const invNorm = clamp((STATE.invBase - CFG.INV_TARGET) / Math.max(1e-9, CFG.INV_MAX_ABS), -1, 1);
@@ -123,13 +725,44 @@ export function computePBuy(mid: number): number {
     return clamp(pBuy, 0.02, 0.98);
 }
 
-export function chooseAggressionSide(mid: number): Side {
-    const range = Math.max(1e-9, CFG.SOFT_MAX_PRICE - CFG.CENTER_PRICE);
-    const x = (mid - CFG.CENTER_PRICE) / range;
+export function chooseMeanReversionAggressionSide(mid: number): Side {
+    const x = normalizedCenterDeviation(mid);
 
     const outward: Side = x >= 0 ? "buy" : "sell";
     if (Math.random() < CFG.EXTREME_PUSH_PROB) return outward;
 
     const pBuy = computePBuy(mid);
     return Math.random() < pBuy ? "buy" : "sell";
+}
+
+export function chooseFairValueEdgeSide(book: BookSnapshot, reference: number): Side | null {
+    if (!hasFreshFairValue()) return null;
+
+    // This chooses to cross the spread to buy if reference > ask by minEdge, and sell if reference < bid by minEdge.
+    const { bid, ask } = bestBidAsk(book);
+    const minEdge = CFG.FAIR_VALUE_MIN_EDGE_TICKS * PROTOCOL_TICK_SIZE;
+    const buyEdge = ask == null ? Number.NEGATIVE_INFINITY : reference - ask;
+    const sellEdge = bid == null ? Number.NEGATIVE_INFINITY : bid - reference;
+    const bestEdge = Math.max(buyEdge, sellEdge);
+
+    if (bestEdge < minEdge) return null;
+    return buyEdge >= sellEdge ? "buy" : "sell";
+}
+
+export function chooseAggressionSide(book: BookSnapshot, reference: number): Side | null {
+    switch (CFG.AGGRESSION_MODEL) {
+        case "mean-reversion":
+            return chooseMeanReversionAggressionSide(reference);
+        case "edge":
+            return chooseFairValueEdgeSide(book, reference);
+        case "edge-with-fallback":
+            return chooseFairValueEdgeSide(book, reference) ??
+                chooseMeanReversionAggressionSide(reference);
+    }
+}
+
+function roundToNearestTick(price: number): number {
+    const tick = PROTOCOL_TICK_SIZE;
+    if (tick <= 0) return Math.round(price);
+    return Math.round(price / tick) * tick;
 }
