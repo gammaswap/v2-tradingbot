@@ -35,6 +35,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "start": "node dist/main.js",
+    "bot": "node --loader ts-node/esm ./src/cli.ts",
     "asset": "node --env-file=./.env --loader ts-node/esm ./scripts/sample/getAsset.ts",
     "balance": "node --env-file=./.env --loader ts-node/esm ./scripts/sample/getBalance.ts",
     "book": "node --env-file=./.env --loader ts-node/esm ./scripts/sample/getBook.ts",

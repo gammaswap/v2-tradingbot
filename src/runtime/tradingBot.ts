@@ -24,6 +24,7 @@ import {
     RUNTIME_STATE as STATE,
     type BotContext,
 } from "./context.js";
+import { startControlServer, type ControlServer } from "./controlServer.js";
 
 const logger = new Logger("tradingBot");
 
@@ -46,6 +47,7 @@ export type TradingBotOptions = {
         timeoutMs?: number;
     };
     assetId: string;
+    controlSocketPath?: string;
     chainId: number;
     contracts: ContractAddresses;
     orderbookWsUrl?: string;
@@ -106,7 +108,27 @@ export type TradingBotOptions = {
 export type TradingBotStatus = {
     running: boolean;
     assetId: string;
-    epoch: bigint;
+    epoch: string;
+    expiration: string | null;
+    isResolved: boolean;
+    referencePrice: number | null;
+    fairValue: {
+        protocolPrice: number;
+        probability: number;
+        spot: string;
+        strike: string;
+        expiresInSec: number;
+        updatedAtMs: number;
+    } | null;
+    oracle: {
+        price: string | null;
+        ts: string | null;
+        stale: boolean;
+        connected: boolean;
+    };
+    bookMid: number | null;
+    bookUpdatedAtMs: number;
+    pendingOrders: number;
     accountBalance: number;
     inventory: number;
     oracleConnected: boolean;
@@ -190,12 +212,14 @@ function getOptionOverrides(options: TradingBotOptions): Record<string, unknown>
 export class TradingBot {
     private readonly wallet: Wallet;
     private readonly context: BotContext;
+    private readonly controlSocketPath?: string;
     private readonly abortController = new AbortController();
     private coordinatorPromise: Promise<void> | null = null;
     private shutdownPromise: Promise<void> | null = null;
     private oracleFeed: OracleFeed | null = null;
     private orderBookFeed: OrderBookFeed | null = null;
     private running = false;
+    private controlServer: ControlServer | null = null;
 
     /**
      * Creates a bot instance with isolated configuration, state, intents, and
@@ -214,6 +238,7 @@ export class TradingBot {
         }
 
         this.wallet = resolveTradingWallet(options.wallet);
+        this.controlSocketPath = options.controlSocketPath;
         this.context = createBotContext(getOptionOverrides(options) as any);
         this.context.state.account = this.wallet.address;
 
@@ -276,6 +301,12 @@ export class TradingBot {
             }
         }
 
+        if (this.controlSocketPath) {
+            this.controlServer = await startControlServer({
+                socketPath: this.controlSocketPath,
+                getStatus: () => this.getStatus(),
+            });
+        }
         this.running = true;
         this.coordinatorPromise = runRuntimeCoordinator(
             this.wallet,
@@ -323,6 +354,8 @@ export class TradingBot {
 
         this.coordinatorPromise = null;
         this.running = false;
+        await this.controlServer?.close();
+        this.controlServer = null;
         logger.info("trading bot stopped");
     }
 
@@ -331,7 +364,24 @@ export class TradingBot {
         return {
             running: this.running,
             assetId: config.ASSET_ID,
-            epoch: state.epoch,
+            epoch: state.epoch.toString(),
+            expiration: state.asset?.expiration?.toString() ?? null,
+            isResolved: state.asset?.isResolved ?? false,
+            referencePrice: state.fairValue?.protocolPrice ?? state.lastMid ?? null,
+            fairValue: state.fairValue ? {
+                ...state.fairValue,
+                spot: state.fairValue.spot.toString(),
+                strike: state.fairValue.strike.toString(),
+            } : null,
+            oracle: {
+                price: state.oracle.price?.toString() ?? null,
+                ts: state.oracle.ts?.toString() ?? null,
+                stale: state.oracle.stale,
+                connected: state.oracle.connected,
+            },
+            bookMid: state.lastMid ?? null,
+            bookUpdatedAtMs: state.bookUpdatedAtMs,
+            pendingOrders: state.pending.size,
             accountBalance: state.accountBalance,
             inventory: state.invBase,
             oracleConnected: state.oracle.connected,

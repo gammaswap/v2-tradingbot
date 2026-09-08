@@ -16,6 +16,7 @@ module.exports = {
             env: {
                 BOT_ENV_FILE: ".env.maker1",
                 BOT_NAME: "maker1-bot",
+                CONTROL_SOCKET_DIR: "/tmp",
             },
         },
         {
@@ -29,6 +30,7 @@ module.exports = {
             env: {
                 BOT_ENV_FILE: ".env.taker1",
                 BOT_NAME: "taker1-bot",
+                CONTROL_SOCKET_DIR: "/tmp",
             },
         },
         {
@@ -42,6 +44,7 @@ module.exports = {
             env: {
                 BOT_ENV_FILE: ".env.maker2",
                 BOT_NAME: "maker2-bot",
+                CONTROL_SOCKET_DIR: "/tmp",
             },
         },
         {
@@ -55,6 +58,7 @@ module.exports = {
             env: {
                 BOT_ENV_FILE: ".env.taker2",
                 BOT_NAME: "taker2-bot",
+                CONTROL_SOCKET_DIR: "/tmp",
             },
         },
         {
@@ -68,6 +72,7 @@ module.exports = {
             env: {
                 BOT_ENV_FILE: ".env.maker3",
                 BOT_NAME: "maker3-bot",
+                CONTROL_SOCKET_DIR: "/tmp",
             },
         },
         {
@@ -81,6 +86,7 @@ module.exports = {
             env: {
                 BOT_ENV_FILE: ".env.taker3",
                 BOT_NAME: "taker3-bot",
+                CONTROL_SOCKET_DIR: "/tmp",
             },
         },
     ],

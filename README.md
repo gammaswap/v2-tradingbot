@@ -55,6 +55,36 @@ intents, cooldowns, and websocket feeds, so multiple independent bots can run
 in the same process. The current implementation creates private websocket
 connections per bot; websocket multiplexing can be added separately later.
 
+## Query a running bot
+
+The executable started by `main.ts` exposes a read-only local control socket for
+its live status. With PM2, the socket name is derived from `BOT_NAME`, so these
+commands query the corresponding bot:
+
+```bash
+pnpm bot status --bot maker1
+pnpm bot fair-value --bot maker1
+pnpm bot health --bot maker1
+```
+
+The `--bot maker1` argument maps to the `maker1-bot` PM2 profile. The status
+response includes the current asset and epoch, expiration, inventory and
+balances, pending-order count, book timing, oracle connection/staleness, and
+the current fair-value estimate. Protocol integers such as oracle prices and
+epochs are returned as strings to preserve precision. `fair-value` returns the
+fair-value estimate, oracle information, and the best available reference
+price. These commands do not submit, cancel, or modify orders.
+
+By default sockets are created under `/tmp`. To use another directory, set
+`CONTROL_SOCKET_DIR` consistently in the PM2 profile and when invoking the CLI:
+
+```bash
+CONTROL_SOCKET_DIR=/var/run/gammaswap pnpm bot status --bot maker1
+```
+
+The directory must already exist and be writable by the bot process. A custom
+`CONTROL_SOCKET_PATH` can also be supplied to the process running `main.ts`.
+
 ## Strategy configuration
 
 Strategy settings are read from the selected `.env` file. A constructor option

@@ -4,6 +4,12 @@ import { Logger } from "./utils/logger.js";
 
 const logger = new Logger("main");
 
+function defaultControlSocketPath(): string {
+    const botName = (process.env.BOT_NAME || "default-bot").replace(/[^a-zA-Z0-9_-]/g, "-");
+    const directory = process.env.CONTROL_SOCKET_DIR || "/tmp";
+    return `${directory}/gammaswap-${botName.endsWith("-bot") ? botName : `${botName}-bot`}.sock`;
+}
+
 /**
  * CLI entry point and package-API example. Trading lifecycle initialization is
  * delegated to TradingBot so all users share the same startup behavior.
@@ -20,6 +26,7 @@ async function main(): Promise<void> {
         isTaker: CFG.IS_TAKER,
         apiUrl: CFG.API_URL,
         assetId: CFG.ASSET_ID,
+        controlSocketPath: process.env.CONTROL_SOCKET_PATH || defaultControlSocketPath(),
         chainId: CFG.CHAIN_ID,
         contracts: {
             exchange: CFG.EXCHANGE_ADDRESS,
