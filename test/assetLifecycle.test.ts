@@ -19,7 +19,6 @@ function asset(epoch: bigint, resolved = false): ApiAssetResponse {
 
 function dependencies() {
     return {
-        getPosition: vi.fn().mockResolvedValue({ size: 0n }),
         getClaimable: vi.fn().mockResolvedValue(0n),
         claim: vi.fn().mockResolvedValue(undefined),
         hasPendingOrders: vi.fn().mockResolvedValue(false),
@@ -40,7 +39,6 @@ describe("asset lifecycle reconciliation", () => {
 
         expect(result).toEqual({ changed: false, resolved: false });
         expect(state.asset).toBe(current);
-        expect(deps.getPosition).not.toHaveBeenCalled();
     });
 
     it("marks an unchanged resolved epoch without using resolutionPrice as the status", async () => {
@@ -60,14 +58,12 @@ describe("asset lifecycle reconciliation", () => {
         const state = createInitialState();
         state.epoch = 4n;
         const deps = dependencies();
-        deps.getPosition.mockResolvedValue({ size: 10n });
         deps.getClaimable.mockResolvedValue(1n);
         const current = asset(5n);
 
         const result = await reconcileAssetEpoch(state, current, {} as never, deps);
 
         expect(result.changed).toBe(true);
-        expect(deps.getPosition).toHaveBeenCalledWith(4n);
         expect(deps.claim).toHaveBeenCalledWith(expect.anything(), 4n);
         expect(deps.getClaimable).toHaveBeenCalledWith(4n);
         expect(state.epoch).toBe(5n);
@@ -89,12 +85,23 @@ describe("asset lifecycle reconciliation", () => {
         expect(deps.cancelAllOrders).toHaveBeenCalledOnce();
     });
 
-    it("continues when position lookup or claim fails", async () => {
+    it("skips a losing position when the claimable amount is zero", async () => {
         const state = createInitialState();
         state.epoch = 4n;
         const deps = dependencies();
-        deps.getPosition.mockRejectedValue(new Error("position unavailable"));
-        deps.claim.mockRejectedValue(new Error("claim failed"));
+
+        const result = await reconcileAssetEpoch(state, asset(5n), {} as never, deps);
+
+        expect(result.changed).toBe(true);
+        expect(state.epoch).toBe(5n);
+        expect(deps.claim).not.toHaveBeenCalled();
+    });
+
+    it("continues when claimability lookup fails", async () => {
+        const state = createInitialState();
+        state.epoch = 4n;
+        const deps = dependencies();
+        deps.getClaimable.mockRejectedValue(new Error("claimability unavailable"));
 
         const result = await reconcileAssetEpoch(state, asset(5n), {} as never, deps);
 

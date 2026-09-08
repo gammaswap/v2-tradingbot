@@ -101,7 +101,6 @@ describe("asset epoch lifecycle", () => {
             strikePrice: 700_000n,
             expiration: 1_700_005_400n,
         }));
-        apiGetPosition.mockResolvedValue({ size: 10n });
         apiGetClaimable.mockResolvedValue({ claimable: 1n });
         apiGetBalance.mockResolvedValue({ pending: 0n });
 
@@ -110,7 +109,6 @@ describe("asset epoch lifecycle", () => {
         const result = await promise;
 
         expect(result).toEqual({ changed: true, resolved: false });
-        expect(apiGetPosition).toHaveBeenCalledWith(4n);
         expect(apiClaim).toHaveBeenCalledWith(expect.anything(), 4n);
         expect(STATE.epoch).toBe(5n);
         expect(STATE.asset?.strikePrice).toBe(700_000n);

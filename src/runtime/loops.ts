@@ -176,7 +176,6 @@ export async function runAssetEpochCheck(wallet: Wallet): Promise<AssetEpochChec
     logger.info("=============runAssetEpochCheck:start============================");
     const currentAsset = await apiGetAsset();
     const result = await reconcileAssetEpoch(STATE, currentAsset, wallet, {
-        getPosition: async (epoch) => apiGetPosition(epoch),
         getClaimable: async (epoch) => (await apiGetClaimable(epoch)).claimable,
         claim: async (claimWallet, epoch) => apiClaim(claimWallet, epoch),
         hasPendingOrders,
