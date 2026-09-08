@@ -16,9 +16,9 @@ export type ControlServer = {
 };
 
 function serialize(value: unknown): string {
-  return JSON.stringify(value, (_key, nestedValue) =>
-    typeof nestedValue === "bigint" ? nestedValue.toString() : nestedValue,
-  );
+    return JSON.stringify(value, (_key: string, nestedValue: unknown): unknown =>
+        typeof nestedValue === "bigint" ? nestedValue.toString() : nestedValue,
+    ) ?? "null";
 }
 
 function responseFor(

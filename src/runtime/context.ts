@@ -32,7 +32,7 @@ export function runWithBotContext<T>(context: BotContext, fn: () => T): T {
 
 /** Creates isolated configuration/state without changing process-wide defaults. */
 export function createBotContext(overrides: Partial<typeof CFG> = {}): BotContext {
-  const config = { ...CFG, ...overrides } as typeof CFG;
+  const config = { ...CFG, ...overrides };
   return {
     config,
     state: createInitialState(config),

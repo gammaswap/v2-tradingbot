@@ -40,10 +40,10 @@ async function request(command: string, bot: string): Promise<Response> {
       try {
         resolve(JSON.parse(buffer.slice(0, newline)) as Response);
       } catch (error) {
-        reject(error);
+        reject(error instanceof Error ? error : new Error(String(error)));
       }
     });
-    socket.once("error", reject);
+        socket.once("error", (error) => reject(error instanceof Error ? error : new Error(String(error))));
     socket.write(`${JSON.stringify({ command })}\n`);
   });
 }

@@ -254,7 +254,7 @@ export class TradingBot {
 
     this.wallet = resolveTradingWallet(options.wallet);
     this.controlSocketPath = options.controlSocketPath;
-    this.context = createBotContext(getOptionOverrides(options) as any);
+    this.context = createBotContext(getOptionOverrides(options));
     this.context.state.account = this.wallet.address;
 
     const errors = [

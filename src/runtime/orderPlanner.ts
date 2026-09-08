@@ -1,4 +1,4 @@
-import { RUNTIME_CFG as CFG, type Side } from "./context.js";
+import { type Side } from "./context.js";
 import type {
   CancelReplaceInstruction,
   NewOrderInstruction,

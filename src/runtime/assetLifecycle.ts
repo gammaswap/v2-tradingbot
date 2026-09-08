@@ -46,7 +46,7 @@ export async function reconcileAssetEpoch(
         logger.info(`Claiming ${claimable} at epoch ${epoch}`);
         await deps.claim(wallet, epoch);
       }
-    } catch (e: any) {
+    } catch {
       // Claimability and claim failures do not block observing the next
       // epoch. A later reconciliation or restart can retry.
       logger.warn(`Exception while claiming epoch ${epoch}`);

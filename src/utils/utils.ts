@@ -11,6 +11,10 @@ export function nowMs() {
   return Date.now();
 }
 
+export function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export function clamp(x: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, x));
 }
@@ -76,5 +80,5 @@ export function getOrderKey(order: PendingOrder): OrderKey {
     price: order.price,
     time: order.time,
     id: order.id,
-  } as OrderKey;
+  };
 }

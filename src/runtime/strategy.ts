@@ -482,7 +482,7 @@ export function buildTargetLadderPrices(
     return buildGrowthSpaceLadderPrices(calculatedMid, book);
   }
 
-  throw new Error(`unsupported ladder price model: ${model}`);
+  throw new Error(`unsupported ladder price model: ${String(model)}`);
 }
 
 /**

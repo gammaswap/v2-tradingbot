@@ -11,6 +11,7 @@ import {
   apiSendOrder,
 } from "../api/api.js";
 import {
+  errorMessage,
   jitter,
   nowMs,
   sleep,
@@ -237,8 +238,8 @@ export async function refreshPrivateState(wallet: Wallet): Promise<void> {
       baseBal: STATE.baseBal,
       invBase: STATE.invBase,
     });
-  } catch (e: any) {
-    logger.warn("private state refresh error:", e?.message ?? e);
+  } catch (e: unknown) {
+    logger.warn("private state refresh error:", errorMessage(e));
   }
 
   logger.info("=============refreshPrivateState:end============================");
@@ -262,7 +263,7 @@ function applyPendingResponse(pendingResp: Awaited<ReturnType<typeof apiGetPendi
         time: Number(o.time),
         account: o.account,
         epoch: BigInt(pendingResp.epoch),
-      } as PendingOrder;
+      };
       const orderKey = getOrderKey(order);
       if (side === "buy") STATE.pendingBuys.set(orderKey, order);
       else STATE.pendingSells.set(orderKey, order);
@@ -420,12 +421,12 @@ export async function runQuoteMaintenance(wallet: Wallet) {
         side: instr.side,
         cancelId: instr.cancelId,
       });
-    } catch (e: any) {
+    } catch (e: unknown) {
       ORDER_INTENTS.markUnknown(intent);
       logger.warn(
         `failed cancel replace cancelId: ${instr.cancelId}, price: ${instr.price}, ` +
           `size: ${instr.size}, side: ${instr.side}, error:`,
-        e?.message ?? e,
+        errorMessage(e),
       );
     }
   }
@@ -494,11 +495,11 @@ export async function runQuoteMaintenance(wallet: Wallet) {
       });
       handlePlaceOrderResponse(intent, response);
       logger.info("placed order", { price: instr.price, size: instr.size, side: instr.side });
-    } catch (e: any) {
+    } catch (e: unknown) {
       ORDER_INTENTS.markUnknown(intent);
       logger.warn(
         `failed to place order price: ${instr.price}, size: ${instr.size}, side: ${instr.side}, error:`,
-        e?.message ?? e,
+        errorMessage(e),
       );
     }
   }
@@ -533,8 +534,8 @@ export async function reconcileOrderIntents(wallet: Wallet): Promise<boolean> {
           ...pending.sells.map((order) => order.id),
         ]),
       );
-    } catch (e: any) {
-      logger.warn(`unable to reconcile cancellations for epoch ${epochKey}:`, e?.message ?? e);
+    } catch (e: unknown) {
+      logger.warn(`unable to reconcile cancellations for epoch ${epochKey}:`, errorMessage(e));
       return false;
     }
   }
@@ -560,9 +561,9 @@ export async function reconcileOrderIntents(wallet: Wallet): Promise<boolean> {
           id: intent.targetOrderHash,
           attempt: intent.attempts,
         });
-      } catch (e: any) {
+      } catch (e: unknown) {
         ORDER_INTENTS.markUnknown(intent);
-        logger.warn(`failed to cancel id: ${intent.targetOrderHash}, error:`, e?.message ?? e);
+        logger.warn(`failed to cancel id: ${intent.targetOrderHash}, error:`, errorMessage(e));
       }
     } else {
       ORDER_INTENTS.markCompleted(intent);
@@ -593,8 +594,8 @@ export async function reconcileOrderIntents(wallet: Wallet): Promise<boolean> {
       }
       const stillPending = pendingIds?.has(intent.targetOrderHash) ?? false;
       if (!stillPending) ORDER_INTENTS.markCompleted(intent);
-    } catch (e: any) {
-      logger.warn(`unable to verify cancellation ${intent.targetOrderHash}:`, e?.message ?? e);
+    } catch (e: unknown) {
+      logger.warn(`unable to verify cancellation ${intent.targetOrderHash}:`, errorMessage(e));
     }
   }
 
@@ -631,8 +632,8 @@ export async function reconcilePlaceIntents(wallet: Wallet): Promise<void> {
         ]),
       );
       if (intent.epoch === STATE.epoch) applyPendingResponse(pending);
-    } catch (e: any) {
-      logger.warn(`unable to reconcile passive orders for epoch ${epochKey}:`, e?.message ?? e);
+    } catch (e: unknown) {
+      logger.warn(`unable to reconcile passive orders for epoch ${epochKey}:`, errorMessage(e));
     }
   }
 
@@ -669,8 +670,8 @@ export async function reconcileCancelReplaceIntents(wallet: Wallet): Promise<voi
         ]),
       );
       if (intent.epoch === STATE.epoch) applyPendingResponse(pending);
-    } catch (e: any) {
-      logger.warn(`unable to reconcile cancel-replaces for epoch ${epochKey}:`, e?.message ?? e);
+    } catch (e: unknown) {
+      logger.warn(`unable to reconcile cancel-replaces for epoch ${epochKey}:`, errorMessage(e));
     }
   }
 
@@ -842,11 +843,10 @@ export async function runAggression(wallet: Wallet) {
       "available base balance",
     );
     if (resp.data) {
-      // @ts-ignore
-      if (resp.data?.status == "FILLED" || resp.data?.status == "PARTIALLY_FILLED") {
-        // @ts-ignore
+      const responseData = resp.data as { status?: string; filled?: string | number | bigint } | undefined;
+      if (responseData?.status === "FILLED" || responseData?.status === "PARTIALLY_FILLED") {
         const tradeQty = protocolValueToSafeNumber(
-          BigInt((resp.data as { filled?: string | number | bigint })?.filled ?? 0),
+          BigInt(responseData.filled ?? 0),
           "aggression fill",
         );
         if (side === "buy") {
@@ -856,8 +856,8 @@ export async function runAggression(wallet: Wallet) {
         }
       }
     }
-  } catch (e: any) {
-    logger.warn("aggression error:", e?.message ?? e);
+  } catch (e: unknown) {
+    logger.warn("aggression error:", errorMessage(e));
   }
 
   logger.info("========================runAggression:end==========================");

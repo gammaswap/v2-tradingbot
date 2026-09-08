@@ -23,7 +23,7 @@ import {
   installBookSnapshot,
   type LocalOrderBookState,
 } from "./orderbookReducer.js";
-import { jitter, nowMs } from "../utils/utils.js";
+import { errorMessage, jitter, nowMs } from "../utils/utils.js";
 import { protocolValueToSafeNumber } from "../utils/protocolMath.js";
 import { Logger } from "../utils/logger.js";
 
@@ -111,10 +111,10 @@ export async function runCoordinatorStep(context: CoordinatorStepContext): Promi
         bookReady = await resyncBook(localBook);
         await refreshPrivateState(wallet);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       context.assetReady = false;
       bookReady = false;
-      logger.warn("asset state refresh failed; trading is paused:", error?.message ?? error);
+      logger.warn("asset state refresh failed; trading is paused:", errorMessage(error));
     }
     context.nextEpochCheck = now + EPOCH_CHECK_MS;
   }
@@ -158,8 +158,8 @@ async function resyncBook(state: LocalOrderBookState): Promise<boolean> {
       asks: STATE.book?.asks.length,
     });
     return true;
-  } catch (error: any) {
-    logger.warn("orderbook resync failed:", error?.message ?? error);
+  } catch (error: unknown) {
+    logger.warn("orderbook resync failed:", errorMessage(error));
     return false;
   }
 }

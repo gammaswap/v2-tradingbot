@@ -2,6 +2,7 @@ import { createOracleWebSocketClient, type Unsubscribe } from "@gammaswap/v2-exc
 import { RUNTIME_CFG as CFG, RUNTIME_STATE as STATE } from "./context.js";
 import { RuntimeEventQueue } from "./events.js";
 import { Logger } from "../utils/logger.js";
+import { errorMessage } from "../utils/utils.js";
 
 const logger = new Logger("oracle");
 
@@ -18,7 +19,7 @@ export async function startOracleFeed(queue: RuntimeEventQueue): Promise<OracleF
   if (!CFG.USE_ORACLE_FAIR_VALUE) {
     return {
       close: async () => {},
-      waitForFirstPrice: async () => true,
+      waitForFirstPrice: () => Promise.resolve(true),
     };
   }
 
@@ -73,8 +74,8 @@ export async function startOracleFeed(queue: RuntimeEventQueue): Promise<OracleF
       if (unsubscribe) {
         try {
           await unsubscribe();
-        } catch (e: any) {
-          logger.warn("oracle unsubscribe error:", e?.message ?? e);
+        } catch (e: unknown) {
+          logger.warn("oracle unsubscribe error:", errorMessage(e));
         }
       }
       client.close();
