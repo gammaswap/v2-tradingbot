@@ -93,7 +93,7 @@ function getExchangeClient(wallet: Wallet): ExchangeClient {
     return client;
 }
 
-function getConfiguredContracts(): ExchangeContractsInput | undefined {
+export function getConfiguredContracts(): ExchangeContractsInput | undefined {
     if (!isNonZeroAddress(CFG.EXCHANGE_ADDRESS) || !isNonZeroAddress(CFG.LEDGER_ADDRESS)) {
         return undefined;
     }

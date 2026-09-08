@@ -4,6 +4,7 @@ import {
     createExchangeClient,
     deriveAccountsFromMnemonic,
 } from "@gammaswap/v2-exchange-sdk";
+import { getConfiguredContracts } from "../../src/api/api.js";
 
 const API_URL = process.env.API_URL || "http://localhost:3000";
 const CHAIN_ID = process.env.CHAIN_ID || "31337";
@@ -45,6 +46,7 @@ async function main() {
         apiUrl: API_URL,
         wallet,
         chainId: CHAIN_ID,
+        contracts: getConfiguredContracts(),
     });
 
     const res = await client.claimAgent({
