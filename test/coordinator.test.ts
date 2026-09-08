@@ -42,7 +42,7 @@ beforeEach(() => {
   STATE.asset = asset();
   STATE.epoch = 1n;
   // @ts-ignore
-    RUNTIME_CFG.IS_TAKER = false;
+  RUNTIME_CFG.IS_TAKER = false;
   apiGetBook.mockReset();
   refreshPrivateState.mockClear();
   runAggression.mockClear();
@@ -90,7 +90,7 @@ describe("coordinator step", () => {
 
   it("runs aggression but not quote maintenance in taker mode", async () => {
     // @ts-ignore
-      RUNTIME_CFG.IS_TAKER = true;
+    RUNTIME_CFG.IS_TAKER = true;
     const takerContext = context();
     takerContext.nextQuote = 0;
     takerContext.nextAggression = 0;

@@ -8,15 +8,9 @@ importers:
 
   .:
     dependencies:
-      '@gammaswap/v2-exchange':
-        specifier: ^0.12.0
-        version: 0.12.0
       '@gammaswap/v2-exchange-sdk':
         specifier: ^0.2.1
         version: 0.2.1
-      axios:
-        specifier: 1.13.2
-        version: 1.13.2
       data-structure-typed:
         specifier: ^2.6.4
         version: 2.6.4
@@ -36,6 +30,9 @@ importers:
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
+      axios:
+        specifier: 1.13.2
+        version: 1.13.2
       eslint:
         specifier: ^9.0.0
         version: 9.39.5
@@ -65,15 +62,6 @@ packages:
 
   '@adraffy/ens-normalize@1.11.1':
     resolution: {integrity: sha512-nhCBV3quEgesuf7c7KYfperqSS14T8bYuvJ8PcLJp6znkZpFc0AuW4qBtr8eKVyPPe/8RSr7sglCWPU5eaxwKQ==}
-
-  '@chainlink/data-streams-sdk@1.2.1':
-    resolution: {integrity: sha512-fLFT2bwG31BWaZwqm3TPefzh3umiU5g10qXbsez4NfX8S1xho+GaJK1EapISCu0WXHUyM3WklQMglIq64Z2mZg==}
-    engines: {node: '>=20.0.0'}
-    peerDependencies:
-      dotenv: ^16.6.1
-    peerDependenciesMeta:
-      dotenv:
-        optional: true
 
   '@cspotcode/source-map-support@0.8.1':
     resolution: {integrity: sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==}
@@ -277,9 +265,6 @@ packages:
     resolution: {integrity: sha512-y3WMCXflOzVUP/QmeHcf2GZR5lWURZ257sFN1K/7FUvVpVVlSzJKeSSLEWT9tflEeTvrv4m+khkWleZofDRD+A==, tarball: https://npm.pkg.github.com/download/@gammaswap/v2-exchange-sdk/0.2.1/5ae38533e12e7cfc3b49865893d5fdd192777e5e}
     engines: {node: '>=20', pnpm: '>=10'}
 
-  '@gammaswap/v2-exchange@0.12.0':
-    resolution: {integrity: sha512-NIfhn3Ow6RkgvMTCs87w/fwAdf3HHgg1MZPZqTERXowHZ2OwrFDIOoi5Flo22rzcc505Y6Dwn37VdKZwspptFQ==, tarball: https://npm.pkg.github.com/download/@gammaswap/v2-exchange/0.12.0/09eda70eef0719a308b69dc9f18a0d064a7b5d1c}
-
   '@humanfs/core@0.19.2':
     resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
     engines: {node: '>=18.18.0'}
@@ -322,9 +307,6 @@ packages:
   '@noble/hashes@1.3.2':
     resolution: {integrity: sha512-MVC8EAQp7MvEcm30KWENFjgR+Mkmf+D189XJTkFIlwohU5hcBbn1ZkKq7KVTi2Hme3PMGF390DaL52beVrIihQ==}
     engines: {node: '>= 16'}
-
-  '@openzeppelin/contracts@5.6.1':
-    resolution: {integrity: sha512-Ly6SlsVJ3mj+b18W3R8gNufB7dTICT105fJhodGAGgyC2oqnBAhqSiNDJ8V8DLY05cCz81GLI0CU5vNYA1EC/w==}
 
   '@rollup/rollup-android-arm-eabi@4.62.5':
     resolution: {integrity: sha512-jfkGfTwhQpsiSckPF8r9bU3pn3vyd72NlWaO+TgEO6WPSDnUhXzrNYCHBMOYj0ACaUgjm6eERLF+XV9a6RstoA==}
@@ -706,10 +688,6 @@ packages:
     resolution: {integrity: sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==}
     engines: {node: '>=12'}
 
-  dotenv@17.4.2:
-    resolution: {integrity: sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==}
-    engines: {node: '>=12'}
-
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
     engines: {node: '>= 0.4'}
@@ -1069,9 +1047,6 @@ packages:
   siginfo@2.0.0:
     resolution: {integrity: sha512-ybx0WO1/8bSBLEWXZvEd7gMW3Sn3JFlW3TvX1nREbDLRNQNaeNN8WK0meBwPdAaOI7TtRRRJn/Es1zhrrCHu7g==}
 
-  solady@0.1.26:
-    resolution: {integrity: sha512-dhGr/ptJFdea/1KE6xgqgwEdbMhUiSfRc6A+jLeltPe16zyt9qtED3PElIBVRnzEmUO5aZTjKVAr6SlqXBBcIw==}
-
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
     engines: {node: '>=0.10.0'}
@@ -1294,16 +1269,6 @@ snapshots:
 
   '@adraffy/ens-normalize@1.11.1': {}
 
-  '@chainlink/data-streams-sdk@1.2.1(dotenv@17.4.2)':
-    dependencies:
-      ethers: 6.17.0
-      ws: 8.21.3
-    optionalDependencies:
-      dotenv: 17.4.2
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
-
   '@cspotcode/source-map-support@0.8.1':
     dependencies:
       '@jridgewell/trace-mapping': 0.3.9
@@ -1440,17 +1405,6 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@gammaswap/v2-exchange@0.12.0':
-    dependencies:
-      '@chainlink/data-streams-sdk': 1.2.1(dotenv@17.4.2)
-      '@openzeppelin/contracts': 5.6.1
-      dotenv: 17.4.2
-      ethers: 6.17.0
-      solady: 0.1.26
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
-
   '@humanfs/core@0.19.2':
     dependencies:
       '@humanfs/types': 0.15.0
@@ -1484,8 +1438,6 @@ snapshots:
       '@noble/hashes': 1.3.2
 
   '@noble/hashes@1.3.2': {}
-
-  '@openzeppelin/contracts@5.6.1': {}
 
   '@rollup/rollup-android-arm-eabi@4.62.5':
     optional: true
@@ -1841,8 +1793,6 @@ snapshots:
   diff@4.0.4: {}
 
   dotenv@16.6.1: {}
-
-  dotenv@17.4.2: {}
 
   dunder-proto@1.0.1:
     dependencies:
@@ -2230,8 +2180,6 @@ snapshots:
   shebang-regex@3.0.0: {}
 
   siginfo@2.0.0: {}
-
-  solady@0.1.26: {}
 
   source-map-js@1.2.1: {}
 
