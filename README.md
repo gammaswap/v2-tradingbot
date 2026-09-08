@@ -475,6 +475,39 @@ orders; decreasing either makes collateral checks more restrictive. These
 settings limit available collateral and are separate from the contract-count
 limit controlled by `MAX_CONTRACT_EXPOSURE_PCT`.
 
+## Example environment files
+
+Safe templates are provided in `examples/env/`:
+
+```text
+examples/env/.env.maker.example
+examples/env/.env.taker.example
+```
+
+The maker template configures passive ALO quoting with `IS_TAKER=false`. The
+taker template configures IOC aggression with `IS_TAKER=true`. They contain
+placeholders only and must be copied and customized before use:
+
+```bash
+cp examples/env/.env.maker.example .env.maker1
+cp examples/env/.env.taker.example .env.taker1
+```
+
+Edit the copied files and replace the wallet mnemonic, API credentials, asset
+ID, and contract-address placeholders:
+
+```bash
+nano .env.maker1
+nano .env.taker1
+```
+
+The PM2 profiles already map `maker1-bot` to `.env.maker1` and `taker1-bot`
+to `.env.taker1`. Create additional copies as `.env.maker2`, `.env.taker2`,
+and so on for the remaining profiles. Do not commit the copied `.env.*`
+files; they contain secrets and are ignored by Git. The templates use the
+application’s protocol units for prices and sizes, and omitted settings use
+the defaults from `src/config/config.ts`.
+
 ## Run multiple bots with PM2
 
 Install PM2 globally with Node.js 20 or newer:
