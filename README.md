@@ -67,6 +67,10 @@ pnpm bot fair-value --bot maker1
 pnpm bot health --bot maker1
 ```
 
+For example, `--bot maker1` connects to the exact socket file
+`/tmp/gammaswap-maker1-bot.sock`. The `gammaswap-` prefix and `.sock` suffix
+are part of the filename; `/tmp` is only the containing directory.
+
 The `--bot maker1` argument maps to the `maker1-bot` PM2 profile. The status
 response includes the current asset and epoch, expiration, inventory and
 balances, pending-order count, book timing, oracle connection/staleness, and
@@ -75,7 +79,8 @@ epochs are returned as strings to preserve precision. `fair-value` returns the
 fair-value estimate, oracle information, and the best available reference
 price. These commands do not submit, cancel, or modify orders.
 
-By default sockets are created under `/tmp`. To use another directory, set
+By default sockets are created under `/tmp` with this naming pattern:
+`/tmp/gammaswap-<bot-name>-bot.sock`. To use another directory, set
 `CONTROL_SOCKET_DIR` consistently in the PM2 profile and when invoking the CLI:
 
 ```bash
