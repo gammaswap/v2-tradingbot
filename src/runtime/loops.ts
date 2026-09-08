@@ -4,6 +4,7 @@ import {
     apiCancelReplaceOrder,
     apiClaim,
     apiGetBalance,
+    apiGetClaimable,
     apiGetAsset,
     apiGetPending,
     apiGetPosition,
@@ -176,6 +177,7 @@ export async function runAssetEpochCheck(wallet: Wallet): Promise<AssetEpochChec
     const currentAsset = await apiGetAsset();
     const result = await reconcileAssetEpoch(STATE, currentAsset, wallet, {
         getPosition: async (epoch) => apiGetPosition(epoch),
+        getClaimable: async (epoch) => (await apiGetClaimable(epoch)).claimable,
         claim: async (claimWallet, epoch) => apiClaim(claimWallet, epoch),
         hasPendingOrders,
         cancelAllOrders,

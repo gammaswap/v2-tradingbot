@@ -103,6 +103,13 @@ export type ApiResolutionPriceResponse = {
     isNull: boolean;
 };
 
+export type ApiClaimableResponse = {
+    account: string;
+    assetId: bigint;
+    epoch: bigint;
+    claimable: bigint;
+};
+
 export type ApiAssetResponse = {
     assetId: bigint;
     epoch: bigint;

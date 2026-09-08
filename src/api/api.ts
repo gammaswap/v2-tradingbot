@@ -18,6 +18,7 @@ import type {
     ApiBalancesResponse,
     ApiAssetResponse,
     ApiBookResponse,
+    ApiClaimableResponse,
     ApiPendingResponse,
     ApiPositionResponse,
     ApiResolutionPriceResponse,
@@ -292,6 +293,21 @@ export async function apiGetPosition(epoch: bigint | number): Promise<ApiPositio
         epoch: epoch.toString(),
     }));
     return normalizePosition(data, Number(epoch));
+}
+
+export async function apiGetClaimable(epoch: bigint | number): Promise<ApiClaimableResponse> {
+    const data = unwrapData(await getInfoClient().getClaimable({
+        account: STATE.account,
+        assetId: CFG.ASSET_ID,
+        epoch: epoch.toString(),
+    }));
+
+    return {
+        account: String(data.account ?? STATE.account),
+        assetId: parseBigIntField(data.assetId ?? CFG.ASSET_ID, "claimable.assetId"),
+        epoch: parseBigIntField(data.epoch ?? epoch, "claimable.epoch"),
+        claimable: parseBigIntField(data.claimable, "claimable.claimable"),
+    };
 }
 
 export async function apiGetPending(address: string, epoch: bigint | number): Promise<ApiPendingResponse> {

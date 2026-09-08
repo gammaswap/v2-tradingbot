@@ -5,6 +5,7 @@ const apiGetAsset = vi.fn();
 const apiGetBalance = vi.fn();
 const apiGetPending = vi.fn();
 const apiGetPosition = vi.fn();
+const apiGetClaimable = vi.fn();
 const apiClaim = vi.fn();
 const apiCancelOrder = vi.fn();
 const apiSendOrder = vi.fn();
@@ -15,6 +16,7 @@ vi.mock("../src/api/api.js", () => ({
     apiGetBalance,
     apiGetPending,
     apiGetPosition,
+    apiGetClaimable,
     apiClaim,
     apiCancelOrder,
     apiSendOrder,
@@ -64,6 +66,7 @@ beforeEach(() => {
     apiGetBalance.mockReset();
     apiGetPending.mockReset();
     apiGetPosition.mockReset();
+    apiGetClaimable.mockReset();
     apiClaim.mockReset();
     apiCancelOrder.mockReset();
     apiSendOrder.mockReset();
@@ -99,6 +102,7 @@ describe("asset epoch lifecycle", () => {
             expiration: 1_700_005_400n,
         }));
         apiGetPosition.mockResolvedValue({ size: 10n });
+        apiGetClaimable.mockResolvedValue({ claimable: 1n });
         apiGetBalance.mockResolvedValue({ pending: 0n });
 
         const promise = runAssetEpochCheck({} as never);

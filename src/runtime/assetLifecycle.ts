@@ -1,9 +1,13 @@
 import type { Wallet } from "ethers";
 import type { ApiAssetResponse, ApiPositionResponse, AssetEpochCheckResult } from "../utils/types.js";
 import { initializePeriodLength, type RuntimeState } from "./state.js";
+import { Logger } from "../utils/logger.js";
+
+const logger = new Logger("reconciliation");
 
 export type AssetLifecycleDependencies = {
     getPosition(epoch: bigint): Promise<ApiPositionResponse>;
+    getClaimable(epoch: bigint): Promise<bigint>;
     claim(wallet: Wallet, epoch: bigint): Promise<unknown>;
     hasPendingOrders(): Promise<boolean>;
     cancelAllOrders(wallet: Wallet, startingEpoch?: bigint): Promise<void>;
@@ -44,9 +48,14 @@ export async function reconcileAssetEpoch(
         }
         if (position && position.size > 0n) {
             try {
-                await deps.claim(wallet, epoch);
-            } catch {
-                // Claim failures do not block epoch reconciliation.
+                const claimable = await deps.getClaimable(epoch);
+                if (claimable > 0n) {
+                    await deps.claim(wallet, epoch);
+                }
+            } catch (e: any) {
+                // Claimability and claim failures do not block observing the
+                // next epoch. A later reconciliation or restart can retry.
+                logger.warn("Exception while claiming:", e);
             }
         }
     }

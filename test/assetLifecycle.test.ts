@@ -20,6 +20,7 @@ function asset(epoch: bigint, resolved = false): ApiAssetResponse {
 function dependencies() {
     return {
         getPosition: vi.fn().mockResolvedValue({ size: 0n }),
+        getClaimable: vi.fn().mockResolvedValue(0n),
         claim: vi.fn().mockResolvedValue(undefined),
         hasPendingOrders: vi.fn().mockResolvedValue(false),
         cancelAllOrders: vi.fn().mockResolvedValue(undefined),
@@ -60,6 +61,7 @@ describe("asset lifecycle reconciliation", () => {
         state.epoch = 4n;
         const deps = dependencies();
         deps.getPosition.mockResolvedValue({ size: 10n });
+        deps.getClaimable.mockResolvedValue(1n);
         const current = asset(5n);
 
         const result = await reconcileAssetEpoch(state, current, {} as never, deps);
@@ -67,6 +69,7 @@ describe("asset lifecycle reconciliation", () => {
         expect(result.changed).toBe(true);
         expect(deps.getPosition).toHaveBeenCalledWith(4n);
         expect(deps.claim).toHaveBeenCalledWith(expect.anything(), 4n);
+        expect(deps.getClaimable).toHaveBeenCalledWith(4n);
         expect(state.epoch).toBe(5n);
         expect(state.asset?.strikePrice).toBe(current.strikePrice);
         expect(state.asset?.expiration).toBe(current.expiration);
