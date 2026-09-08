@@ -69,7 +69,6 @@ describe("target quote ladder prices", () => {
                 asks: [{ price: 600_000, size: 1, orderCount: 1, orders: [] }],
             },
             500_000,
-            0,
             0.4,
             0.6,
         );
@@ -92,7 +91,6 @@ describe("target quote ladder prices", () => {
                 asks: [],
             },
             500_000,
-            0,
             0.4,
             0.6,
         );
@@ -115,7 +113,6 @@ describe("target quote ladder prices", () => {
                 asks: [{ price: 800_000, size: 1, orderCount: 1, orders: [] }],
             },
             500_000,
-            0,
             0.05,
             0.95,
         );
@@ -136,8 +133,8 @@ describe("target quote ladder prices", () => {
             asks: [{ price: 600_000, size: 1, orderCount: 1, orders: [] }],
         };
 
-        expect(buildTargetLadderPrices(book, 500_000, 0, 0.4, 0.6))
-            .toEqual(buildEquidistantLadderPrices(book, 500_000, 0, 0.4, 0.6));
+        expect(buildTargetLadderPrices(book, 500_000, 0.4, 0.6))
+            .toEqual(buildEquidistantLadderPrices(book, 500_000, 0.4, 0.6));
     });
 
     it("uses the calculated bid/ask midpoint for the growth-space model", () => {
@@ -154,7 +151,6 @@ describe("target quote ladder prices", () => {
         expect(buildTargetLadderPrices(
             book,
             700_000,
-            123,
             0.4,
             0.6,
             LADDER_PRICE_MODEL.GROWTH_SPACE,

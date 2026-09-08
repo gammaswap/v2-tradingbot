@@ -52,6 +52,7 @@ export type RuntimeState = {
         inventorySkew: number;
         calculatedBid: number;
         calculatedAsk: number;
+        calculatedMid: number;
         bidSize: number;
         askSize: number;
     } | null;

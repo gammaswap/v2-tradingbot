@@ -426,21 +426,17 @@ export function buildGrowthSpaceLadderPrices(
  * nearer/farther side of the reference price and current book midpoint.
  * The calculated bid/ask are normalized probabilities, so they are converted
  * to protocol price units before interpolation with the book and reference.
- * inventorySkew is already included in calculateBidAndAsk and is validated
- * here only because it is part of this function's quote-calculation inputs.
+ * Inventory skew is already included in the calculated bid and ask passed to
+ * this function, so ladder construction does not need the skew separately.
  */
 export function buildEquidistantLadderPrices(
     book: BookSnapshot,
     refPrice: number,
-    inventorySkew: number,
     bid: number,
     ask: number,
 ): { bids: number[]; asks: number[] } {
     if (!Number.isFinite(refPrice)) {
         throw new Error(`refPrice must be finite: ${refPrice}`);
-    }
-    if (!Number.isFinite(inventorySkew)) {
-        throw new Error(`inventorySkew must be finite: ${inventorySkew}`);
     }
     if (!Number.isFinite(bid) || !Number.isFinite(ask) || bid <= 0 || ask >= 1 || bid >= ask) {
         throw new Error(`bid and ask must be ordered normalized prices: bid=${bid}, ask=${ask}`);
@@ -514,7 +510,6 @@ export type LadderPriceModel =
 export function buildTargetLadderPrices(
     book: BookSnapshot,
     refPrice: number,
-    inventorySkew: number,
     bid: number,
     ask: number,
     model: LadderPriceModel = LADDER_PRICE_MODEL.EQUIDISTANT,
@@ -523,7 +518,6 @@ export function buildTargetLadderPrices(
         return buildEquidistantLadderPrices(
             book,
             refPrice,
-            inventorySkew,
             bid,
             ask,
         );

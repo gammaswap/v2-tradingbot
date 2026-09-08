@@ -292,20 +292,15 @@ export async function runQuoteMaintenance(wallet: Wallet) {
         inventorySkew,
         CFG.LOGIT_HALF_SPREAD,
     );
-    const quoteCenter = clamp(
-        refPrice - inventorySkew,
-        CFG.HARD_MIN_PRICE,
-        CFG.HARD_MAX_PRICE,
-    );
+    const calculatedMid = (calculatedBidAsk.bid + calculatedBidAsk.ask) / 2;
     logger.debug("book >> bids:", book.bids.length, "asks:", book.asks.length," total:",
         book.asks.length + book.bids.length, "mid:", bookMid, "reference:", refPrice,
-        "calculatedBidAsk:", calculatedBidAsk, "quoteCenter:", quoteCenter, "gamma:", gamma,
+        "calculatedBidAsk:", calculatedBidAsk, "calculatedMid:", calculatedMid, "gamma:", gamma,
         "inventorySkew:", inventorySkew, "fairValue:", STATE.fairValue?.protocolPrice,
         "oracleStale:", STATE.oracle.stale);
     const calculatedTargets = buildTargetLadderPrices(
         book,
         refPrice,
-        inventorySkew,
         calculatedBidAsk.bid,
         calculatedBidAsk.ask,
         CFG.LADDER_PRICE_MODEL === LADDER_PRICE_MODEL.GROWTH_SPACE
@@ -323,6 +318,7 @@ export async function runQuoteMaintenance(wallet: Wallet) {
         inventorySkew,
         calculatedBid: calculatedBidAsk.bid,
         calculatedAsk: calculatedBidAsk.ask,
+        calculatedMid,
         bidSize,
         askSize,
     };

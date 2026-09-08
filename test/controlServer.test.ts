@@ -28,6 +28,7 @@ describe("bot control server", () => {
             inventorySkew: 0.002,
             calculatedBid: 490_000,
             calculatedAsk: 530_000,
+            calculatedMid: 510_000,
             bidSize: 100_000_000,
             askSize: 80_000_000,
         };

@@ -137,6 +137,7 @@ export type TradingBotStatus = {
         inventorySkew: number;
         calculatedBid: number;
         calculatedAsk: number;
+        calculatedMid: number;
         bidSize: number;
         askSize: number;
     } | null;
