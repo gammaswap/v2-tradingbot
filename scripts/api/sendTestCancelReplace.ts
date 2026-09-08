@@ -17,7 +17,7 @@ const CHAIN_ID = process.env.CHAIN_ID || "31337";
 const MNEMONIC =
   process.env.TEST_MNEMONIC || "test test test test test test test test test test test junk";
 const CANCEL_REPLACE_ENDPOINT =
-  process.env.CANCEL_REPLACE_ENDPOINT || "http://localhost:3000/cancel-replace";
+  (process.env.API_URL || "http://localhost:3000") + "/cancel-replace";
 const WALLET_INDEX = Number(process.env.WALLET_INDEX || "0");
 const ASSET_ID = process.env.ASSET_ID || "261336857817713630688382311349658711122006440411137";
 const EPOCH = process.env.EPOCH || "0";

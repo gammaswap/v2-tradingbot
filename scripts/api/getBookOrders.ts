@@ -5,7 +5,7 @@ import { deriveAccountsFromMnemonic } from "@gammaswap/v2-exchange-sdk";
 
 const MNEMONIC =
   process.env.TEST_MNEMONIC || "test test test test test test test test test test test junk";
-const ORDERBOOK_ENDPOINT = process.env.ORDERBOOK_ENDPOINT || "http://localhost:3000/book";
+const ORDERBOOK_ENDPOINT = (process.env.API_URL || "http://localhost:3000") + "/book";
 const WALLET_INDEX = Number(process.env.WALLET_INDEX || "0");
 const ASSET_ID = process.env.ASSET_ID || "261336857817713630688382311349658711122006440411137";
 const EPOCH = process.env.EPOCH || "0";

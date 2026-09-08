@@ -14,8 +14,7 @@ import {
 const CHAIN_ID = process.env.CHAIN_ID || "31337";
 const MNEMONIC =
   process.env.TEST_MNEMONIC || "test test test test test test test test test test test junk";
-const AGENT_REVOKE_ENDPOINT =
-  process.env.AGENT_REVOKE_ENDPOINT || "http://localhost:3000/agents/revoke";
+const AGENT_REVOKE_ENDPOINT = (process.env.API_URL || "http://localhost:3000") + "/agents/revoke";
 const WALLET_INDEX = Number(process.env.WALLET_INDEX || "0");
 
 // run with "npx ts-node ./src/sendTestRevoke.ts"

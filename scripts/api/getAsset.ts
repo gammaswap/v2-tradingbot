@@ -1,7 +1,7 @@
 import "dotenv/config";
 import axios from "axios";
 
-const ASSET_ENDPOINT = process.env.ASSET_ENDPOINT || "http://localhost:3000/asset";
+const ASSET_ENDPOINT = (process.env.API_URL || "http://localhost:3000") + "/asset";
 const ASSET_ID = process.env.ASSET_ID || "261336857817713630688382311349658711122006440411137";
 
 // run with "npx ts-node ./src/getAsset.ts"

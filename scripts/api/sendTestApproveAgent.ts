@@ -16,8 +16,7 @@ import {
 const CHAIN_ID = process.env.CHAIN_ID || "31337";
 const MNEMONIC =
   process.env.TEST_MNEMONIC || "test test test test test test test test test test test junk";
-const AGENT_APPROVE_ENDPOINT =
-  process.env.AGENT_APPROVE_ENDPOINT || "http://localhost:3000/agents/approve";
+const AGENT_APPROVE_ENDPOINT = (process.env.API_URL || "http://localhost:3000") + "/agents/approve";
 const WALLET_INDEX = Number(process.env.WALLET_INDEX || "0");
 
 // run with "npx ts-node ./src/sendTestClaim.ts"

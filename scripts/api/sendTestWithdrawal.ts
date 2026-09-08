@@ -16,8 +16,7 @@ const CHAIN_ID = process.env.CHAIN_ID || "31337";
 const LEDGER_ADDRESS = process.env.LEDGER_CONTRACT || "0x0000000000000000000000000000000000000000";
 const MNEMONIC =
   process.env.TEST_MNEMONIC || "test test test test test test test test test test test junk";
-const WITHDRAWALS_ENDPOINT =
-  process.env.WITHDRAWALS_ENDPOINT || "http://localhost:3000/withdrawals";
+const WITHDRAWALS_ENDPOINT = (process.env.API_URL || "http://localhost:3000") + "/withdrawals";
 const WALLET_INDEX = Number(process.env.WALLET_INDEX || "0");
 
 // run with "npx ts-node ./src/sendTestWithdrawal.ts"

@@ -17,11 +17,11 @@ ws.on("ping", () => {
   console.log("ping received");
 });
 
-ws.on("message", (message) => {
+ws.on("message", (message: any) => {
   console.log(message.toString());
 });
 
-ws.on("error", (error) => {
+ws.on("error", (error: any) => {
   console.error(error);
 });
 

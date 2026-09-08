@@ -1,6 +1,6 @@
 {
   "name": "@gammaswap/v2-tradingbot",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Trading bot for GammaSwap V2",
   "packageManager": "pnpm@10.11.0",
   "engines": {
@@ -59,23 +59,24 @@
     "resolution:last": "node --env-file=./.env --loader ts-node/esm ./scripts/sample/getLastResolutionPrice.ts"
   },
   "devDependencies": {
+    "@eslint/js": "^9.0.0",
     "@types/node": "^20.0.0",
+    "@types/ws": "^8.18.1",
+    "eslint": "^9.0.0",
+    "prettier": "^3.0.0",
+    "tsx": "^4.20.3",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.0.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.0.0",
-    "vitest": "3.2.4"
+    "vitest": "3.2.4",
+    "ws": "^8.14.2"
   },
   "dependencies": {
-    "@eslint/js": "^9.0.0",
     "@gammaswap/v2-exchange": "^0.12.0",
     "@gammaswap/v2-exchange-sdk": "^0.2.1",
     "axios": "1.13.2",
     "data-structure-typed": "^2.6.4",
     "dotenv": "^16.6.1",
-    "ethers": "^6.16.0",
-    "eslint": "^9.0.0",
-    "prettier": "^3.0.0",
-    "tsx": "^4.20.3",
-    "typescript": "^5.9.3",
-    "typescript-eslint": "^8.0.0"
+    "ethers": "^6.16.0"
   }
 }

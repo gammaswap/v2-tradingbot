@@ -13,7 +13,7 @@ ws.on("open", () => {
   ws.send(JSON.stringify({ type: "subscribe", assetId: ASSET_ID }));
 });
 
-ws.on("message", (message) => {
+ws.on("message", (message: any) => {
   console.log(message.toString());
 });
 
@@ -21,7 +21,7 @@ ws.on("ping", () => {
   console.log("ping received");
 });
 
-ws.on("error", (error) => {
+ws.on("error", (error: any) => {
   console.error(error);
 });
 

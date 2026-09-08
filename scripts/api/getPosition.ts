@@ -9,7 +9,7 @@ const SETTLEMENT_TOKEN_ADDRESS =
   process.env.SETTLEMENT_TOKEN || "0x0000000000000000000000000000000000000000";
 const MNEMONIC =
   process.env.TEST_MNEMONIC || "test test test test test test test test test test test junk";
-const POSITION_ENDPOINT = process.env.POSITION_ENDPOINT || "http://localhost:3000/position";
+const POSITION_ENDPOINT = (process.env.API_URL || "http://localhost:3000") + "/position";
 const WALLET_INDEX = Number(process.env.WALLET_INDEX || "0");
 const ASSET_ID = process.env.ASSET_ID || "261336857817713630688382311349658711122006440411137";
 const EPOCH = process.env.EPOCH || "0";

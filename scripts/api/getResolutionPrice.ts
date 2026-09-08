@@ -1,7 +1,7 @@
 import "dotenv/config";
 import axios from "axios";
 
-const RESOLUTION_ENDPOINT = process.env.RESOLUTION_ENDPOINT || "http://localhost:3000/resolve";
+const RESOLUTION_ENDPOINT = (process.env.API_URL || "http://localhost:3000") + "/resolve";
 const ASSET_ID = process.env.ASSET_ID || "261336857817713630688382311349658711122006440411137";
 
 // run with "npx ts-node ./src/getResolutionPrice.ts"

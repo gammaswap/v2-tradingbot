@@ -17,9 +17,8 @@ const CHAIN_ID = process.env.CHAIN_ID || "31337";
 const MNEMONIC =
   process.env.TEST_MNEMONIC || "test test test test test test test test test test test junk";
 const CANCEL_REPLACE_ENDPOINT =
-  process.env.CANCEL_REPLACE_ENDPOINT || "http://localhost:3000/cancel-replace";
-const AGENT_STATUS_ENDPOINT =
-  process.env.AGENT_STATUS_ENDPOINT || "http://localhost:3000/agents/status";
+  (process.env.API_URL || "http://localhost:3000") + "/cancel-replace";
+const AGENT_STATUS_ENDPOINT = (process.env.API_URL || "http://localhost:3000") + "/agents/status";
 const WALLET_INDEX = Number(process.env.WALLET_INDEX || "0");
 const AGENT_INDEX = Number(process.env.AGENT_INDEX || "1");
 const ASSET_ID = process.env.ASSET_ID || "261336857817713630688382311349658711122006440411137";

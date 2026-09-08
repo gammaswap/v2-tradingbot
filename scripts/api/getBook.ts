@@ -1,7 +1,7 @@
 import "dotenv/config";
 import axios from "axios";
 
-const ORDERBOOK_ENDPOINT = process.env.ORDERBOOK_ENDPOINT || "http://localhost:3000/book";
+const ORDERBOOK_ENDPOINT = (process.env.API_URL || "http://localhost:3000") + "/book";
 const ASSET_ID = process.env.ASSET_ID || "261336857817713630688382311349658711122006440411137";
 const EPOCH = process.env.EPOCH || "0";
 

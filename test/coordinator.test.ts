@@ -41,7 +41,8 @@ beforeEach(() => {
   vi.setSystemTime(1_700_000_000_000);
   STATE.asset = asset();
   STATE.epoch = 1n;
-  RUNTIME_CFG.IS_TAKER = false;
+  // @ts-ignore
+    RUNTIME_CFG.IS_TAKER = false;
   apiGetBook.mockReset();
   refreshPrivateState.mockClear();
   runAggression.mockClear();
@@ -88,7 +89,8 @@ describe("coordinator step", () => {
   });
 
   it("runs aggression but not quote maintenance in taker mode", async () => {
-    RUNTIME_CFG.IS_TAKER = true;
+    // @ts-ignore
+      RUNTIME_CFG.IS_TAKER = true;
     const takerContext = context();
     takerContext.nextQuote = 0;
     takerContext.nextAggression = 0;

@@ -5,7 +5,7 @@ import { deriveAccountsFromMnemonic } from "@gammaswap/v2-exchange-sdk";
 
 const MNEMONIC =
   process.env.TEST_MNEMONIC || "test test test test test test test test test test test junk";
-const BALANCE_ENDPOINT = process.env.BALANCE_ENDPOINT || "http://localhost:3000/balance";
+const BALANCE_ENDPOINT = (process.env.API_URL || "http://localhost:3000") + "/balance";
 const WALLET_INDEX = Number(process.env.WALLET_INDEX || "0");
 
 // run with "npx ts-node ./src/getBook.ts"
