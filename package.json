@@ -2,8 +2,10 @@
   "name": "@gammaswap/v2-tradingbot",
   "version": "1.0.0",
   "description": "Trading bot for GammaSwap V2",
+  "packageManager": "pnpm@10.11.0",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=20.0.0",
+    "pnpm": ">=10"
   },
   "repository": {
     "type": "git",
@@ -27,7 +29,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "dev": "node --env-file=./.env --loader ts-node/esm ./src/main.ts",
