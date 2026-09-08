@@ -61,6 +61,7 @@ beforeEach(() => {
         asks: [],
     };
     STATE.fairValue = null;
+    STATE.quoteModel = null;
     STATE.oracle.price = null;
     apiGetAsset.mockReset();
     apiGetBalance.mockReset();

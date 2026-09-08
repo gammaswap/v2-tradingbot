@@ -315,6 +315,17 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     logger.debug("calculated target ladder:", calculatedTargets);
     const { bids: targetBidPrices, asks: targetAskPrices } = calculatedTargets;
     const { bidSize, askSize } = calculateTotalSizes(STATE.asset!);
+    STATE.quoteModel = {
+        updatedAtMs: Date.now(),
+        bookMid,
+        referencePrice: refPrice,
+        gamma,
+        inventorySkew,
+        calculatedBid: calculatedBidAsk.bid,
+        calculatedAsk: calculatedBidAsk.ask,
+        bidSize,
+        askSize,
+    };
     const bidSizes = distributeTotalSizeAcrossLadder(
         bidSize,
         targetBidPrices,

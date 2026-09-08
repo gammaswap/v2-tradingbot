@@ -18,4 +18,23 @@ describe("bot control server", () => {
             error: "unknown command: cancel-all",
         });
     });
+
+    it("returns the latest quote-model snapshot", () => {
+        const quoteModel = {
+            updatedAtMs: 123,
+            bookMid: 500_000,
+            referencePrice: 510_000,
+            gamma: 0.01,
+            inventorySkew: 0.002,
+            calculatedBid: 490_000,
+            calculatedAsk: 530_000,
+            bidSize: 100_000_000,
+            askSize: 80_000_000,
+        };
+
+        expect(handleControlRequest("quote", () => ({ quoteModel }))).toEqual({
+            ok: true,
+            data: { quoteModel },
+        });
+    });
 });

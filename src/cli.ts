@@ -7,7 +7,7 @@ type Response = {
 };
 
 function usage(): never {
-    console.error("Usage: pnpm bot <status|fair-value|health> --bot <name>");
+    console.error("Usage: pnpm bot <status|quote|fair-value|health> --bot <name>");
     process.exit(1);
 }
 
@@ -23,7 +23,7 @@ function parseArgs(): { command: string; bot: string } {
     const command = args[0] ?? "status";
     const botIndex = args.indexOf("--bot");
     const bot = botIndex >= 0 ? args[botIndex + 1] : undefined;
-    if (!bot || !["status", "fair-value", "health"].includes(command)) usage();
+    if (!bot || !["status", "quote", "fair-value", "health"].includes(command)) usage();
     return { command, bot };
 }
 

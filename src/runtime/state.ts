@@ -44,6 +44,17 @@ export type RuntimeState = {
     invBase: number;
     epoch: bigint;
     lastMid: number;
+    quoteModel: {
+        updatedAtMs: number;
+        bookMid: number;
+        referencePrice: number;
+        gamma: number;
+        inventorySkew: number;
+        calculatedBid: number;
+        calculatedAsk: number;
+        bidSize: number;
+        askSize: number;
+    } | null;
     fairValue: {
         protocolPrice: number;
         probability: number;
@@ -79,6 +90,7 @@ export function createInitialState(config = CFG): RuntimeState {
         invBase: 0,
         epoch: 0n,
         lastMid: config.CENTER_PRICE,
+        quoteModel: null,
         fairValue: null,
         oracle: {
             symbolId: "",

@@ -4,7 +4,7 @@ import { Logger } from "../utils/logger.js";
 
 const logger = new Logger("controlServer");
 
-export type ControlCommand = "status" | "fair-value" | "health";
+export type ControlCommand = "status" | "fair-value" | "health" | "quote";
 
 export type ControlServerOptions = {
     socketPath: string;
@@ -30,6 +30,9 @@ function responseFor(command: string, getStatus: () => Record<string, unknown>):
             oracle: status.oracle ?? null,
             referencePrice: status.referencePrice ?? null,
         };
+    }
+    if (command === "quote") {
+        return { quoteModel: status.quoteModel ?? null };
     }
     throw new Error(`unknown command: ${command}`);
 }

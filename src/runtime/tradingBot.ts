@@ -129,6 +129,17 @@ export type TradingBotStatus = {
     bookMid: number | null;
     bookUpdatedAtMs: number;
     pendingOrders: number;
+    quoteModel: {
+        updatedAtMs: number;
+        bookMid: number;
+        referencePrice: number;
+        gamma: number;
+        inventorySkew: number;
+        calculatedBid: number;
+        calculatedAsk: number;
+        bidSize: number;
+        askSize: number;
+    } | null;
     accountBalance: number;
     inventory: number;
     oracleConnected: boolean;
@@ -382,6 +393,7 @@ export class TradingBot {
             bookMid: state.lastMid ?? null,
             bookUpdatedAtMs: state.bookUpdatedAtMs,
             pendingOrders: state.pending.size,
+            quoteModel: state.quoteModel,
             accountBalance: state.accountBalance,
             inventory: state.invBase,
             oracleConnected: state.oracle.connected,
