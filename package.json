@@ -40,7 +40,6 @@
     "lint": "eslint \"src/**/*.ts\"",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "validate:package": "pnpm build && node scripts/validate-package.mjs",
     "clean": "rm -rf dist",
     "test:watch": "vitest",
     "start": "node dist/main.js",
