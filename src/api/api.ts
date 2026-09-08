@@ -34,9 +34,7 @@ const sdkFetch: FetchLike = async (url, init = {}) => {
   if (CFG.API_KEY) headers.set("X-API-KEY", CFG.API_KEY);
 
   if (CFG.API_SECRET && init.body != null) {
-    const body = typeof init.body === "string"
-      ? init.body
-      : await new Response(init.body).text();
+    const body = typeof init.body === "string" ? init.body : await new Response(init.body).text();
     const { createHmac } = await import("node:crypto");
     headers.set("X-SIGNATURE", createHmac("sha256", CFG.API_SECRET).update(body).digest("hex"));
   }

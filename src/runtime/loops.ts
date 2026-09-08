@@ -843,7 +843,8 @@ export async function runAggression(wallet: Wallet) {
       "available base balance",
     );
     if (resp.data) {
-      const responseData = resp.data as { status?: string; filled?: string | number | bigint } | undefined;
+      const responseData = resp.data as
+        { status?: string; filled?: string | number | bigint } | undefined;
       if (responseData?.status === "FILLED" || responseData?.status === "PARTIALLY_FILLED") {
         const tradeQty = protocolValueToSafeNumber(
           BigInt(responseData.filled ?? 0),

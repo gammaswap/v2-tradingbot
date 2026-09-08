@@ -43,7 +43,9 @@ async function request(command: string, bot: string): Promise<Response> {
         reject(error instanceof Error ? error : new Error(String(error)));
       }
     });
-        socket.once("error", (error) => reject(error instanceof Error ? error : new Error(String(error))));
+    socket.once("error", (error) =>
+      reject(error instanceof Error ? error : new Error(String(error))),
+    );
     socket.write(`${JSON.stringify({ command })}\n`);
   });
 }
