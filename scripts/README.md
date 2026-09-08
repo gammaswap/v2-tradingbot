@@ -17,11 +17,11 @@ npm install @gammaswap/v2-exchange-sdk
 
 ```ts
 import {
-    createInfoClient,
-    createExchangeClient,
-    createDepositClient,
-    createExchangeWebSocketClient,
-    createOracleWebSocketClient,
+  createInfoClient,
+  createExchangeClient,
+  createDepositClient,
+  createExchangeWebSocketClient,
+  createOracleWebSocketClient,
 } from "@gammaswap/v2-exchange-sdk";
 ```
 

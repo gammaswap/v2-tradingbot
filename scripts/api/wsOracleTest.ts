@@ -4,8 +4,7 @@ import WebSocket from "ws";
 
 const SYMBOL_ID = process.env.SYMBOL_ID || "1";
 const ORACLE_FEED_WS_URL =
-  process.env.ORACLE_FEED_WS_URL ??
-  `ws://127.0.0.1:${process.env.ORACLE_FEED_WS_PORT ?? "8082"}`;
+  process.env.ORACLE_FEED_WS_URL ?? `ws://127.0.0.1:${process.env.ORACLE_FEED_WS_PORT ?? "8082"}`;
 
 const ws = new WebSocket(ORACLE_FEED_WS_URL);
 
@@ -15,14 +14,14 @@ ws.on("open", () => {
 });
 
 ws.on("ping", () => {
-    console.log("ping received");
-})
+  console.log("ping received");
+});
 
-ws.on("message", (message) => {
+ws.on("message", (message: any) => {
   console.log(message.toString());
 });
 
-ws.on("error", (error) => {
+ws.on("error", (error: any) => {
   console.error(error);
 });
 

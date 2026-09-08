@@ -1,130 +1,137 @@
 import type { Side } from "../config/config.js";
 
 export type BookLevel = {
-    price: number;
-    size: number ;
-    orderCount: number;
-    orders: PendingOrder[];
+  price: number;
+  size: number;
+  orderCount: number;
+  orders: PendingOrder[];
 };
 
 export type BookSnapshot = {
-    assetId: bigint;
-    epoch: bigint;
-    seqId: bigint;
-    ts: bigint;
-    bids: BookLevel[];
-    asks: BookLevel[];
+  assetId: bigint;
+  epoch: bigint;
+  seqId: bigint;
+  ts: bigint;
+  bids: BookLevel[];
+  asks: BookLevel[];
 };
 
 export type BalanceSnapshot = {
-    account: string,
-    ts: number,
-    balance: bigint,
-    pending: bigint,
-}
+  account: string;
+  ts: number;
+  balance: bigint;
+  pending: bigint;
+};
 
-export type ApiBalancesResponse = BalanceSnapshot
+export type ApiBalancesResponse = BalanceSnapshot;
 
 export interface OrderKey {
-    price: number;
-    time: number;
-    id: string;
+  price: number;
+  time: number;
+  id: string;
 }
 
 export type CancelReplaceInstruction = {
-    price: number;
-    size: number;
-    side: Side;
-    cancelId: string;
-    quoteSlot?: string;
+  price: number;
+  size: number;
+  side: Side;
+  cancelId: string;
+  quoteSlot?: string;
 };
 
 export type NewOrderInstruction = {
-    price: number;
-    size: number;
-    side: Side;
-    quoteSlot?: string;
+  price: number;
+  size: number;
+  side: Side;
+  quoteSlot?: string;
 };
 
 export type PendingOrder = {
-    id: string;
-    price: number;
-    size: number;
-    side: Side;
-    time: number;
-    account: string;
-    epoch: bigint;
+  id: string;
+  price: number;
+  size: number;
+  side: Side;
+  time: number;
+  account: string;
+  epoch: bigint;
 };
 
 export type Position = {
-    txId: bigint;
-    size: bigint;
-    balance: bigint;
-    margin: bigint;
-    pnl: bigint
-    side: boolean;
-    bSide: boolean;
-    mSide: boolean;
-    pSide: boolean;
-    claimed: boolean;
+  txId: bigint;
+  size: bigint;
+  balance: bigint;
+  margin: bigint;
+  pnl: bigint;
+  side: boolean;
+  bSide: boolean;
+  mSide: boolean;
+  pSide: boolean;
+  claimed: boolean;
 };
 
 export type PositionSnapshot = {
-    account: string,
-    assetId: bigint,
-    epoch: bigint,
-    ts: number,
-    size: bigint,
-    margin: bigint,
-    balance: bigint,
-    pnl: bigint,
-    side: boolean,
-    bSide: boolean,
-    mSide: boolean,
-    pSide: boolean
-}
+  account: string;
+  assetId: bigint;
+  epoch: bigint;
+  ts: number;
+  size: bigint;
+  margin: bigint;
+  balance: bigint;
+  pnl: bigint;
+  side: boolean;
+  bSide: boolean;
+  mSide: boolean;
+  pSide: boolean;
+};
 
-export type ApiPositionResponse = PositionSnapshot
+export type ApiPositionResponse = PositionSnapshot;
 
 export type ApiPendingResponse = {
-    assetId: bigint;
-    ts: bigint;
-    epoch: bigint;
-    buys: PendingOrder[];
-    sells: PendingOrder[];
+  assetId: bigint;
+  ts: bigint;
+  epoch: bigint;
+  buys: PendingOrder[];
+  sells: PendingOrder[];
 };
 
 export type ApiResolutionPriceResponse = {
-    assetId: bigint;
-    epoch: bigint;
-    price: bigint;
-    id: number;
-    ts: bigint;
-    isNull: boolean;
+  assetId: bigint;
+  epoch: bigint;
+  price: bigint;
+  id: number;
+  ts: bigint;
+  isNull: boolean;
+};
+
+export type ApiClaimableResponse = {
+  account: string;
+  assetId: bigint;
+  epoch: bigint;
+  claimable: bigint;
 };
 
 export type ApiAssetResponse = {
-    assetId: bigint;
-    epoch: bigint;
-    registered: boolean;
-    expiration: bigint;
-    assetType: bigint;
-    strikePrice: bigint;
-    resolutionPrice: bigint;
-    isResolved: boolean;
-    ledger: string;
+  assetId: bigint;
+  epoch: bigint;
+  registered: boolean;
+  expiration: bigint;
+  assetType: bigint;
+  strikePrice: bigint;
+  resolutionPrice: bigint;
+  isResolved: boolean;
+  ledger: string;
 };
 
 export type ApiBookResponse = BookSnapshot;
 
 export interface Asset extends ApiAssetResponse {
-    strikePrice: bigint;
-    expiration: bigint;
+  strikePrice: bigint;
+  expiration: bigint;
 }
 
 export type AssetEpochCheckResult = {
-    changed: boolean;
-    resolved: boolean;
+  changed: boolean;
+  resolved: boolean;
 };
 
 /**
@@ -142,12 +149,12 @@ export type AssetEpochCheckResult = {
  * expiration (not packed) = startTime + periodLength (when the market settles).
  */
 export interface DecodedAssetId {
-    id: number;           // uint64 — base asset id
-    marketType: number;   // uint8 — asset type (1 = up/down, etc.)
-    startTime: number;    // uint32 — market start timestamp
-    periodLength: number; // uint32 — period in seconds (e.g. 900 for 15m)
-    strike: string;       // uint48 — strike/priceChange per asset type
-    range: number;        // uint16 — range
-    reserved: string;     // uint56 — reserved
-    expiration: number;   // startTime + periodLength (convenience)
+  id: number; // uint64 — base asset id
+  marketType: number; // uint8 — asset type (1 = up/down, etc.)
+  startTime: number; // uint32 — market start timestamp
+  periodLength: number; // uint32 — period in seconds (e.g. 900 for 15m)
+  strike: string; // uint48 — strike/priceChange per asset type
+  range: number; // uint16 — range
+  reserved: string; // uint56 — reserved
+  expiration: number; // startTime + periodLength (convenience)
 }

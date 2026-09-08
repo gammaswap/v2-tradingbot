@@ -1,64 +1,60 @@
 import "dotenv/config";
 import { Wallet, ZeroHash } from "ethers";
-import {
-    createExchangeClient,
-    deriveAccountsFromMnemonic,
-} from "@gammaswap/v2-exchange-sdk";
+import { createExchangeClient, deriveAccountsFromMnemonic } from "@gammaswap/v2-exchange-sdk";
+import { getConfiguredContracts } from "../../src/api/api.js";
 
 const API_URL = process.env.API_URL || "http://localhost:3000";
 const CHAIN_ID = process.env.CHAIN_ID || "31337";
 const MNEMONIC =
-    process.env.MNEMONIC ||
-    "test test test test test test test test test test test junk";
+  process.env.MNEMONIC || "test test test test test test test test test test test junk";
 const WALLET_INDEX = Number(process.env.WALLET_INDEX || "0");
-const ASSET_ID =
-    process.env.ASSET_ID ||
-    "261336857817713630688382311349658711122006440411137";
+const ASSET_ID = process.env.ASSET_ID || "261336857817713630688382311349658711122006440411137";
 const EPOCH = process.env.EPOCH || "0";
 
 async function main() {
-    console.log("CHAIN_ID:", CHAIN_ID);
+  console.log("CHAIN_ID:", CHAIN_ID);
 
-    const account = deriveAccountsFromMnemonic(MNEMONIC, WALLET_INDEX + 1)[WALLET_INDEX];
-    console.log("Using address:", account.address);
+  const account = deriveAccountsFromMnemonic(MNEMONIC, WALLET_INDEX + 1)[WALLET_INDEX];
+  console.log("Using address:", account.address);
 
-    const wallet = new Wallet(account.privateKey);
-    console.log("wallet:", wallet.address);
+  const wallet = new Wallet(account.privateKey);
+  console.log("wallet:", wallet.address);
 
-    let orderHash: string;
+  let orderHash: string;
 
-    if (process.argv.length > 2) {
-        orderHash = process.argv[2];
-    } else {
-        console.log("No orderHash provided");
-        return;
-    }
+  if (process.argv.length > 2) {
+    orderHash = process.argv[2];
+  } else {
+    console.log("No orderHash provided");
+    return;
+  }
 
-    console.log("orderId:", orderHash);
+  console.log("orderId:", orderHash);
 
-    const client = createExchangeClient({
-        apiUrl: API_URL,
-        wallet,
-        chainId: CHAIN_ID,
-    });
+  const client = createExchangeClient({
+    apiUrl: API_URL,
+    wallet,
+    chainId: CHAIN_ID,
+    contracts: getConfiguredContracts(),
+  });
 
-    const res =
-        orderHash === "all" || orderHash === ZeroHash
-            ? await client.cancelAll({
-                assetId: ASSET_ID,
-                epoch: EPOCH,
-            })
-            : await client.cancelOrder({
-                assetId: ASSET_ID,
-                epoch: EPOCH,
-                orderHash,
-            });
+  const res =
+    orderHash === "all" || orderHash === ZeroHash
+      ? await client.cancelAll({
+          assetId: ASSET_ID,
+          epoch: EPOCH,
+        })
+      : await client.cancelOrder({
+          assetId: ASSET_ID,
+          epoch: EPOCH,
+          orderHash,
+        });
 
-    console.log("signedCancelMessage:", res.request);
-    console.log("Server response:", res.status, res.data);
+  console.log("signedCancelMessage:", res.request);
+  console.log("Server response:", res.status, res.data);
 }
 
 main().catch((err) => {
-    console.error("Fatal error:", err);
-    process.exit(1);
+  console.error("Fatal error:", err);
+  process.exit(1);
 });

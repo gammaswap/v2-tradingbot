@@ -1,102 +1,100 @@
-import {
-    createOracleWebSocketClient,
-    type Unsubscribe,
-} from "@gammaswap/v2-exchange-sdk";
+import { createOracleWebSocketClient, type Unsubscribe } from "@gammaswap/v2-exchange-sdk";
 import { RUNTIME_CFG as CFG, RUNTIME_STATE as STATE } from "./context.js";
 import { RuntimeEventQueue } from "./events.js";
 import { Logger } from "../utils/logger.js";
+import { errorMessage } from "../utils/utils.js";
 
 const logger = new Logger("oracle");
 
 export type OracleFeed = {
-    close(): Promise<void>;
-    waitForFirstPrice(timeoutMs?: number): Promise<boolean>;
+  close(): Promise<void>;
+  waitForFirstPrice(timeoutMs?: number): Promise<boolean>;
 };
 
 export async function startOracleFeed(queue: RuntimeEventQueue): Promise<OracleFeed> {
-    // TradingBot starts this function for every bot so feed cleanup and the
-    // first-price lifecycle use one consistent interface. When fair value is
-    // disabled, no websocket or subscription is created; a no-op feed is
-    // returned instead.
-    if (!CFG.USE_ORACLE_FAIR_VALUE) {
-        return {
-            close: async () => {},
-            waitForFirstPrice: async () => true,
-        };
-    }
-
-    const client = createOracleWebSocketClient({
-        websocketUrl: CFG.ORACLE_FEED_WS_URL,
-        stalePriceTimeoutMs: CFG.ORACLE_STALE_PRICE_TIMEOUT_MS,
-        onError: (error) => logger.warn("oracle websocket error:", error),
-    });
-
-    let unsubscribe: Unsubscribe | null = null;
-    let firstPriceSeen = false;
-    const firstPriceWaiters = new Set<(value: boolean) => void>();
-
-    const notifyFirstPrice = () => {
-        if (firstPriceSeen) return;
-        firstPriceSeen = true;
-        for (const resolve of firstPriceWaiters) resolve(true);
-        firstPriceWaiters.clear();
-    };
-
-    const symbolId = STATE.oracle.symbolId;
-    if (!symbolId) {
-        throw new Error("cannot start oracle feed before the asset symbol ID is initialized");
-    }
-
-    unsubscribe = await client.subscribePrice(symbolId, {
-        onPrice: (update) => {
-            notifyFirstPrice();
-            logger.debug("oracle price update:", {
-                symbolId: update.symbolId.toString(),
-                price: update.price.toString(),
-                ts: update.ts.toString(),
-            });
-            queue.publish({ type: "oracle-price", update });
-        },
-        onStale: (symbolId) => {
-            logger.warn("oracle stream stale:", symbolId);
-            queue.publish({ type: "oracle-stale", symbolId });
-        },
-        onError: (error) => logger.warn("oracle subscription error:", error),
-    });
-
-    logger.info("oracle subscribed:", {
-        websocketUrl: CFG.ORACLE_FEED_WS_URL,
-        symbolId,
-    });
-
+  // TradingBot starts this function for every bot so feed cleanup and the
+  // first-price lifecycle use one consistent interface. When fair value is
+  // disabled, no websocket or subscription is created; a no-op feed is
+  // returned instead.
+  if (!CFG.USE_ORACLE_FAIR_VALUE) {
     return {
-        close: async () => {
-            for (const resolve of firstPriceWaiters) resolve(false);
-            firstPriceWaiters.clear();
-            if (unsubscribe) {
-                try {
-                    await unsubscribe();
-                } catch (e: any) {
-                    logger.warn("oracle unsubscribe error:", e?.message ?? e);
-                }
-            }
-            client.close();
-        },
-        waitForFirstPrice: async (timeoutMs = CFG.ORACLE_FIRST_PRICE_TIMEOUT_MS) => {
-            if (firstPriceSeen) return true;
-            return new Promise<boolean>((resolve) => {
-                const timer = setTimeout(() => {
-                    firstPriceWaiters.delete(done);
-                    resolve(false);
-                }, timeoutMs);
-
-                const done = (value: boolean) => {
-                    clearTimeout(timer);
-                    resolve(value);
-                };
-
-                firstPriceWaiters.add(done);
-            });
-        },
+      close: async () => {},
+      waitForFirstPrice: () => Promise.resolve(true),
     };
+  }
+
+  const client = createOracleWebSocketClient({
+    websocketUrl: CFG.ORACLE_FEED_WS_URL,
+    stalePriceTimeoutMs: CFG.ORACLE_STALE_PRICE_TIMEOUT_MS,
+    onError: (error) => logger.warn("oracle websocket error:", error),
+  });
+
+  let unsubscribe: Unsubscribe | null = null;
+  let firstPriceSeen = false;
+  const firstPriceWaiters = new Set<(value: boolean) => void>();
+
+  const notifyFirstPrice = () => {
+    if (firstPriceSeen) return;
+    firstPriceSeen = true;
+    for (const resolve of firstPriceWaiters) resolve(true);
+    firstPriceWaiters.clear();
+  };
+
+  const symbolId = STATE.oracle.symbolId;
+  if (!symbolId) {
+    throw new Error("cannot start oracle feed before the asset symbol ID is initialized");
+  }
+
+  unsubscribe = await client.subscribePrice(symbolId, {
+    onPrice: (update) => {
+      notifyFirstPrice();
+      logger.debug("oracle price update:", {
+        symbolId: update.symbolId.toString(),
+        price: update.price.toString(),
+        ts: update.ts.toString(),
+      });
+      queue.publish({ type: "oracle-price", update });
+    },
+    onStale: (symbolId) => {
+      logger.warn("oracle stream stale:", symbolId);
+      queue.publish({ type: "oracle-stale", symbolId });
+    },
+    onError: (error) => logger.warn("oracle subscription error:", error),
+  });
+
+  logger.info("oracle subscribed:", {
+    websocketUrl: CFG.ORACLE_FEED_WS_URL,
+    symbolId,
+  });
+
+  return {
+    close: async () => {
+      for (const resolve of firstPriceWaiters) resolve(false);
+      firstPriceWaiters.clear();
+      if (unsubscribe) {
+        try {
+          await unsubscribe();
+        } catch (e: unknown) {
+          logger.warn("oracle unsubscribe error:", errorMessage(e));
+        }
+      }
+      client.close();
+    },
+    waitForFirstPrice: async (timeoutMs = CFG.ORACLE_FIRST_PRICE_TIMEOUT_MS) => {
+      if (firstPriceSeen) return true;
+      return new Promise<boolean>((resolve) => {
+        const timer = setTimeout(() => {
+          firstPriceWaiters.delete(done);
+          resolve(false);
+        }, timeoutMs);
+
+        const done = (value: boolean) => {
+          clearTimeout(timer);
+          resolve(value);
+        };
+
+        firstPriceWaiters.add(done);
+      });
+    },
+  };
 }

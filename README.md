@@ -1,4 +1,5 @@
 # v2-tradingbot
+
 Trading bot for GammaSwap V2
 
 ## Use as a package
@@ -14,30 +15,30 @@ import { Wallet } from "ethers";
 import { TradingBot } from "@gammaswap/v2-tradingbot";
 
 const bot = new TradingBot({
-    wallet: new Wallet(process.env.PRIVATE_KEY!),
-    isTaker: false,
-    apiUrl: "https://exchange-api.gammaswap.com/api",
-    assetId: "261336857817713630688382311349658711122006440411137",
-    chainId: 84532,
-    contracts: {
-        exchange: "0x...",
-        ledger: "0x...",
-        settlementToken: "0x...",
-    },
-    quote: {
-        levelsPerSide: 5,
-        ladderModel: "equidistant",
-        logitHalfSpread: 0.5,
-    },
-    risk: {
-        maxContractExposurePct: 5,
-    },
+  wallet: new Wallet(process.env.PRIVATE_KEY!),
+  isTaker: false,
+  apiUrl: "https://exchange-api.gammaswap.com/api",
+  assetId: "261336857817713630688382311349658711122006440411137",
+  chainId: 84532,
+  contracts: {
+    exchange: "0x...",
+    ledger: "0x...",
+    settlementToken: "0x...",
+  },
+  quote: {
+    levelsPerSide: 5,
+    ladderModel: "equidistant",
+    logitHalfSpread: 0.5,
+  },
+  risk: {
+    maxContractExposurePct: 5,
+  },
 });
 
 await bot.start();
 
 process.on("SIGINT", async () => {
-    await bot.stop();
+  await bot.stop();
 });
 ```
 
@@ -54,6 +55,49 @@ Each `TradingBot` instance owns its configuration, runtime state, order
 intents, cooldowns, and websocket feeds, so multiple independent bots can run
 in the same process. The current implementation creates private websocket
 connections per bot; websocket multiplexing can be added separately later.
+
+## Query a running bot
+
+The executable started by `main.ts` exposes a read-only local control socket for
+its live status. With PM2, the socket name is derived from `BOT_NAME`, so these
+commands query the corresponding bot:
+
+```bash
+pnpm bot status --bot maker1
+pnpm bot quote --bot maker1
+pnpm bot fair-value --bot maker1
+pnpm bot health --bot maker1
+```
+
+For example, `--bot maker1` connects to the exact socket file
+`/tmp/gammaswap-maker1-bot.sock`. The `gammaswap-` prefix and `.sock` suffix
+are part of the filename; `/tmp` is only the containing directory.
+
+The `--bot maker1` argument maps to the `maker1-bot` PM2 profile. The status
+response includes the current asset and epoch, expiration, inventory and
+balances, pending-order count, book timing, oracle connection/staleness, and
+the current fair-value and quote-model estimates. The `quote` command prints
+the latest quoting-model snapshot, including `gamma`, `inventorySkew`, the
+calculated bid and ask, and the total `bidSize` and `askSize` before ladder
+distribution. Within `quoteModel`, `bookMid`, `referencePrice`, `bidSize`, and
+`askSize` are protocol-scale big integer values represented as JavaScript numbers
+(the same values used internally for bigint-based protocol arithmetic).
+`calculatedBid`, `calculatedAsk`, and `calculatedMid` are normalized decimal
+probabilities between 0 and 1. Protocol integers such as oracle prices and
+epochs are returned as strings to preserve precision. `fair-value` returns the
+fair-value estimate, oracle information, and the best available reference
+price. These commands do not submit, cancel, or modify orders.
+
+By default sockets are created under `/tmp` with this naming pattern:
+`/tmp/gammaswap-<bot-name>-bot.sock`. To use another directory, set
+`CONTROL_SOCKET_DIR` consistently in the PM2 profile and when invoking the CLI:
+
+```bash
+CONTROL_SOCKET_DIR=/var/run/gammaswap pnpm bot status --bot maker1
+```
+
+The directory must already exist and be writable by the bot process. A custom
+`CONTROL_SOCKET_PATH` can also be supplied to the process running `main.ts`.
 
 ## Strategy configuration
 
@@ -212,7 +256,7 @@ INV_MAX_ABS=5000000000
   position; a negative value targets a short position.
 - `INV_MAX_ABS` is the maximum absolute signed inventory used by the quote and
   aggression risk checks. Increasing it permits more inventory; decreasing it
-makes the bot reduce or avoid positions sooner.
+  makes the bot reduce or avoid positions sooner.
 
 The complete time-dependent size formula is:
 
@@ -430,6 +474,39 @@ that remains unavailable. Increasing either setting generally permits more
 orders; decreasing either makes collateral checks more restrictive. These
 settings limit available collateral and are separate from the contract-count
 limit controlled by `MAX_CONTRACT_EXPOSURE_PCT`.
+
+## Example environment files
+
+Safe templates are provided in `examples/env/`:
+
+```text
+examples/env/.env.maker.example
+examples/env/.env.taker.example
+```
+
+The maker template configures passive ALO quoting with `IS_TAKER=false`. The
+taker template configures IOC aggression with `IS_TAKER=true`. They contain
+placeholders only and must be copied and customized before use:
+
+```bash
+cp examples/env/.env.maker.example .env.maker1
+cp examples/env/.env.taker.example .env.taker1
+```
+
+Edit the copied files and replace the wallet mnemonic, API credentials, asset
+ID, and contract-address placeholders:
+
+```bash
+nano .env.maker1
+nano .env.taker1
+```
+
+The PM2 profiles already map `maker1-bot` to `.env.maker1` and `taker1-bot`
+to `.env.taker1`. Create additional copies as `.env.maker2`, `.env.taker2`,
+and so on for the remaining profiles. Do not commit the copied `.env.*`
+files; they contain secrets and are ignored by Git. The templates use the
+application’s protocol units for prices and sizes, and omitted settings use
+the defaults from `src/config/config.ts`.
 
 ## Run multiple bots with PM2
 

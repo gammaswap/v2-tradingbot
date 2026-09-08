@@ -1,0 +1,36 @@
+name: Compile/Test/Publish
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  publish-gpr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4.4.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: "pnpm"
+          registry-url: https://npm.pkg.github.com/
+          scope: "@gammaswap"
+      - run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{secrets.GS_TOKEN}}
+      - name: Run Build
+        run: pnpm run build
+      - name: Run Tests
+        run: pnpm test
+      - name: Run Typecheck
+        run: pnpm typecheck
+      - name: Run Lint
+        run: pnpm lint
+      - name: Check Formatting
+        run: pnpm format:check
