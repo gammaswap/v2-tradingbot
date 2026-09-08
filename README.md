@@ -78,7 +78,11 @@ balances, pending-order count, book timing, oracle connection/staleness, and
 the current fair-value and quote-model estimates. The `quote` command prints
 the latest quoting-model snapshot, including `gamma`, `inventorySkew`, the
 calculated bid and ask, and the total `bidSize` and `askSize` before ladder
-distribution. Protocol integers such as oracle prices and
+distribution. Within `quoteModel`, `bookMid`, `referencePrice`, `bidSize`, and
+`askSize` are protocol-scale big integer values represented as JavaScript numbers
+(the same values used internally for bigint-based protocol arithmetic).
+`calculatedBid`, `calculatedAsk`, and `calculatedMid` are normalized decimal
+probabilities between 0 and 1. Protocol integers such as oracle prices and
 epochs are returned as strings to preserve precision. `fair-value` returns the
 fair-value estimate, oracle information, and the best available reference
 price. These commands do not submit, cancel, or modify orders.
