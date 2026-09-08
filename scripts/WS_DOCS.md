@@ -1,6 +1,6 @@
 # WebSocket API
 
-The market WebSocket publishes order, trade, cancel, and resolution updates for subscribed `assetId` values. 
+The market WebSocket publishes order, trade, cancel, and resolution updates for subscribed `assetId` values.
 This document describes the direct WebSocket protocol for clients that send and receive raw JSON messages.
 
 Default local base URL:

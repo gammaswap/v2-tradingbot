@@ -1,50 +1,41 @@
 import "dotenv/config";
 import { Wallet } from "ethers";
-import {
-    createInfoClient,
-    deriveAccountsFromMnemonic,
-} from "@gammaswap/v2-exchange-sdk";
+import { createInfoClient, deriveAccountsFromMnemonic } from "@gammaswap/v2-exchange-sdk";
 
 const API_URL = process.env.API_URL || "http://localhost:3000";
 const CHAIN_ID = process.env.CHAIN_ID || "31337";
-const LEDGER_ADDRESS =
-    process.env.LEDGER_CONTRACT ||
-    "0x0000000000000000000000000000000000000000";
+const LEDGER_ADDRESS = process.env.LEDGER_CONTRACT || "0x0000000000000000000000000000000000000000";
 const SETTLEMENT_TOKEN_ADDRESS =
-    process.env.SETTLEMENT_TOKEN ||
-    "0x0000000000000000000000000000000000000000";
+  process.env.SETTLEMENT_TOKEN || "0x0000000000000000000000000000000000000000";
 const MNEMONIC =
-    process.env.MNEMONIC ||
-    "test test test test test test test test test test test junk";
+  process.env.MNEMONIC || "test test test test test test test test test test test junk";
 const WALLET_INDEX = Number(process.env.WALLET_INDEX || "0");
-const ASSET_ID =
-    process.env.ASSET_ID ||
-    "261336857817713630688382311349658711122006440411137";
+const ASSET_ID = process.env.ASSET_ID || "261336857817713630688382311349658711122006440411137";
 const EPOCH = process.env.EPOCH || "0";
 
 async function main() {
-    console.log("CHAIN_ID:", CHAIN_ID);
-    console.log("LEDGER_ADDRESS:", LEDGER_ADDRESS);
-    console.log("SETTLEMENT_TOKEN_ADDRESS:", SETTLEMENT_TOKEN_ADDRESS);
+  console.log("CHAIN_ID:", CHAIN_ID);
+  console.log("LEDGER_ADDRESS:", LEDGER_ADDRESS);
+  console.log("SETTLEMENT_TOKEN_ADDRESS:", SETTLEMENT_TOKEN_ADDRESS);
 
-    const client = createInfoClient({ apiUrl: API_URL });
+  const client = createInfoClient({ apiUrl: API_URL });
 
-    const account = deriveAccountsFromMnemonic(MNEMONIC, WALLET_INDEX + 1)[WALLET_INDEX];
-    console.log("Using address:", account.address);
+  const account = deriveAccountsFromMnemonic(MNEMONIC, WALLET_INDEX + 1)[WALLET_INDEX];
+  console.log("Using address:", account.address);
 
-    const wallet = new Wallet(account.privateKey);
-    console.log("wallet:", wallet.address);
+  const wallet = new Wallet(account.privateKey);
+  console.log("wallet:", wallet.address);
 
-    const res = await client.getPosition({
-        account: wallet.address,
-        assetId: ASSET_ID,
-        epoch: EPOCH,
-    });
+  const res = await client.getPosition({
+    account: wallet.address,
+    assetId: ASSET_ID,
+    epoch: EPOCH,
+  });
 
-    console.log("Server response:", res.status, res.data);
+  console.log("Server response:", res.status, res.data);
 }
 
 main().catch((err) => {
-    console.error("Fatal error:", err);
-    process.exit(1);
+  console.error("Fatal error:", err);
+  process.exit(1);
 });

@@ -32,7 +32,13 @@
   "scripts": {
     "dev": "node --env-file=./.env --loader ts-node/esm ./src/main.ts",
     "build": "tsc",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
+    "lint": "eslint \"src/**/*.ts\"",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "validate:package": "pnpm build && node scripts/validate-package.mjs",
+    "clean": "rm -rf dist",
     "test:watch": "vitest",
     "start": "node dist/main.js",
     "bot": "node --loader ts-node/esm ./src/cli.ts",
@@ -57,11 +63,17 @@
     "vitest": "3.2.4"
   },
   "dependencies": {
+    "@eslint/js": "^9.0.0",
     "@gammaswap/v2-exchange": "^0.12.0",
     "@gammaswap/v2-exchange-sdk": "^0.2.1",
     "axios": "1.13.2",
     "data-structure-typed": "^2.6.4",
-    "dotenv": "^17.2.3",
-    "ethers": "^6.16.0"
+    "dotenv": "^16.6.1",
+    "ethers": "^6.16.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.0.0",
+    "tsx": "^4.20.3",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.0.0"
   }
 }

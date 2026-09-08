@@ -1,4 +1,5 @@
 # v2-tradingbot
+
 Trading bot for GammaSwap V2
 
 ## Use as a package
@@ -14,30 +15,30 @@ import { Wallet } from "ethers";
 import { TradingBot } from "@gammaswap/v2-tradingbot";
 
 const bot = new TradingBot({
-    wallet: new Wallet(process.env.PRIVATE_KEY!),
-    isTaker: false,
-    apiUrl: "https://exchange-api.gammaswap.com/api",
-    assetId: "261336857817713630688382311349658711122006440411137",
-    chainId: 84532,
-    contracts: {
-        exchange: "0x...",
-        ledger: "0x...",
-        settlementToken: "0x...",
-    },
-    quote: {
-        levelsPerSide: 5,
-        ladderModel: "equidistant",
-        logitHalfSpread: 0.5,
-    },
-    risk: {
-        maxContractExposurePct: 5,
-    },
+  wallet: new Wallet(process.env.PRIVATE_KEY!),
+  isTaker: false,
+  apiUrl: "https://exchange-api.gammaswap.com/api",
+  assetId: "261336857817713630688382311349658711122006440411137",
+  chainId: 84532,
+  contracts: {
+    exchange: "0x...",
+    ledger: "0x...",
+    settlementToken: "0x...",
+  },
+  quote: {
+    levelsPerSide: 5,
+    ladderModel: "equidistant",
+    logitHalfSpread: 0.5,
+  },
+  risk: {
+    maxContractExposurePct: 5,
+  },
 });
 
 await bot.start();
 
 process.on("SIGINT", async () => {
-    await bot.stop();
+  await bot.stop();
 });
 ```
 
@@ -255,7 +256,7 @@ INV_MAX_ABS=5000000000
   position; a negative value targets a short position.
 - `INV_MAX_ABS` is the maximum absolute signed inventory used by the quote and
   aggression risk checks. Increasing it permits more inventory; decreasing it
-makes the bot reduce or avoid positions sooner.
+  makes the bot reduce or avoid positions sooner.
 
 The complete time-dependent size formula is:
 

@@ -1,0 +1,9 @@
+dist
+node_modules
+coverage
+pnpm-lock.yaml
+src/test
+.env
+.env.*
+.idea
+.npmrc
