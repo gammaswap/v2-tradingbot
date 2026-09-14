@@ -427,6 +427,13 @@ EXTREME_PUSH_PROB=0.10
   mean-reversion model operates. Increasing it makes more market prices appear
   below center and therefore increases the model's tendency to buy; decreasing
   it has the opposite effect.
+- `AGGRESSION_UPPER_ANCHOR_PRICE` defines the upper reference point used to
+  scale the midpoint's distance from `AGGRESSION_CENTER_PRICE`. It is not a
+  hard price ceiling and does not prevent trading above this value. Increasing
+  it makes a given midpoint deviation produce a smaller normalized signal;
+  decreasing it makes the same deviation produce a stronger signal. It must
+  not be lower than `AGGRESSION_CENTER_PRICE` and must remain within the
+  protocol price range.
 - `MEANREV_K` controls the strength of the response to the midpoint’s distance
   from center. Increasing it makes the buy/sell probability move more quickly
   toward its directional extreme; decreasing it makes the response weaker.
@@ -439,7 +446,9 @@ EXTREME_PUSH_PROB=0.10
   than `1` introduces probabilistic outward, momentum-like trades. It applies
   to the mean-reversion fallback, not to the fair-value edge decision.
 
-The mean-reversion model calculates:
+The mean-reversion model calculates the following normalized signal. The upper
+anchor determines the normalization range; it is a strategy scaling parameter,
+not an execution limit:
 
 ```text
 x = (midPrice - AGGRESSION_CENTER_PRICE)
@@ -459,6 +468,10 @@ positive `x` means the midpoint is above `AGGRESSION_CENTER_PRICE`, making
 selling more likely. A negative `x` makes buying more likely.
 `EXTREME_PUSH_PROB` can
 reverse this recommendation before the probability draw.
+
+Neither `AGGRESSION_CENTER_PRICE` nor `AGGRESSION_UPPER_ANCHOR_PRICE` is a
+hard execution limit. Quote and order bounds are controlled separately by
+`HARD_MIN_PRICE`, `HARD_MAX_PRICE`, and the risk settings.
 
 Aggression timing and order sizing are configured with:
 
