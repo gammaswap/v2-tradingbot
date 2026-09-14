@@ -663,12 +663,12 @@ export function capOrderSizeByMargin(
 // ---- direction choice ----
 
 /**
- * Normalizes a market price around CENTER_PRICE for the directional models.
+ * Normalizes a market price around AGGRESSION_CENTER_PRICE for the directional models.
  * The result is negative below the center and positive above it.
  */
 export function normalizedCenterDeviation(mid: number): number {
-  const range = Math.max(1e-9, CFG.SOFT_MAX_PRICE - CFG.CENTER_PRICE);
-  return (mid - CFG.CENTER_PRICE) / range;
+  const range = Math.max(1e-9, CFG.AGGRESSION_UPPER_ANCHOR_PRICE - CFG.AGGRESSION_CENTER_PRICE);
+  return (mid - CFG.AGGRESSION_CENTER_PRICE) / range;
 }
 
 export function computePBuy(mid: number): number {

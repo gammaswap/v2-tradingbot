@@ -96,7 +96,7 @@ export type TradingBotOptions = {
     aggressionJitterMs?: number;
     fairValueMinEdgeTicks?: number;
     centerPrice?: number;
-    softMaxPrice?: number;
+    upperAnchorPrice?: number;
     wipeLevels?: number;
     slipBuffer?: number;
     maxAggressQty?: number;
@@ -286,8 +286,8 @@ function getOptionOverrides(options: TradingBotOptions): Record<string, unknown>
     AGGRESS_JITTER_MS: options.aggression?.aggressionJitterMs,
     AGGRESSION_MODEL: options.aggression?.model,
     FAIR_VALUE_MIN_EDGE_TICKS: options.aggression?.fairValueMinEdgeTicks,
-    CENTER_PRICE: options.aggression?.centerPrice,
-    SOFT_MAX_PRICE: options.aggression?.softMaxPrice,
+    AGGRESSION_CENTER_PRICE: options.aggression?.centerPrice,
+    AGGRESSION_UPPER_ANCHOR_PRICE: options.aggression?.upperAnchorPrice,
     WIPE_LEVELS: options.aggression?.wipeLevels,
     SLIP_BUFFER: options.aggression?.slipBuffer,
     MAX_AGGRESS_QTY: options.aggression?.maxAggressQty,

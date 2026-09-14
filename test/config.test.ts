@@ -71,8 +71,8 @@ describe("price configuration validation", () => {
     const errors = validatePriceConfiguration({
       HARD_MIN_PRICE: 999,
       HARD_MAX_PRICE: 1_000_000,
-      SOFT_MAX_PRICE: 998_000,
-      CENTER_PRICE: 500_000,
+      AGGRESSION_UPPER_ANCHOR_PRICE: 998_000,
+      AGGRESSION_CENTER_PRICE: 500_000,
     } as never);
 
     expect(errors).toEqual(
@@ -87,11 +87,13 @@ describe("price configuration validation", () => {
     const errors = validatePriceConfiguration({
       HARD_MIN_PRICE: 100_000,
       HARD_MAX_PRICE: 900_000,
-      SOFT_MAX_PRICE: 700_000,
-      CENTER_PRICE: 800_000,
+      AGGRESSION_UPPER_ANCHOR_PRICE: 700_000,
+      AGGRESSION_CENTER_PRICE: 800_000,
     } as never);
 
-    expect(errors).toContain("CENTER_PRICE must not exceed SOFT_MAX_PRICE");
+    expect(errors).toContain(
+      "AGGRESSION_CENTER_PRICE must not exceed AGGRESSION_UPPER_ANCHOR_PRICE",
+    );
   });
 
   it("rejects order sizes outside the protocol limits", () => {

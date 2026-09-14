@@ -383,7 +383,8 @@ The supported values are:
   fair value is sufficiently above the best ask and sells when it is
   sufficiently below the best bid. If there is no qualifying edge, it does
   nothing.
-- `mean-reversion`: uses the order-book midpoint relative to `CENTER_PRICE`.
+- `mean-reversion`: uses the order-book midpoint relative to
+  `AGGRESSION_CENTER_PRICE`.
   It buys more often below the center and sells more often above the center.
   Inventory skew adjusts the probability to discourage increasing an existing
   position.
@@ -415,16 +416,17 @@ change the maker fair-value calculation.
 The mean-reversion settings are:
 
 ```env
-CENTER_PRICE=500000
+AGGRESSION_CENTER_PRICE=500000
+AGGRESSION_UPPER_ANCHOR_PRICE=700000
 MEANREV_K=2
 INV_SKEW_STRENGTH=0.35
 EXTREME_PUSH_PROB=0.10
 ```
 
-- `CENTER_PRICE` is the protocol price around which the mean-reversion model
-  operates. Increasing it makes more market prices appear below center and
-  therefore increases the model's tendency to buy; decreasing it has the
-  opposite effect.
+- `AGGRESSION_CENTER_PRICE` is the protocol price around which the
+  mean-reversion model operates. Increasing it makes more market prices appear
+  below center and therefore increases the model's tendency to buy; decreasing
+  it has the opposite effect.
 - `MEANREV_K` controls the strength of the response to the midpoint’s distance
   from center. Increasing it makes the buy/sell probability move more quickly
   toward its directional extreme; decreasing it makes the response weaker.
@@ -440,8 +442,8 @@ EXTREME_PUSH_PROB=0.10
 The mean-reversion model calculates:
 
 ```text
-x = (midPrice - CENTER_PRICE)
-    / max(1e-9, SOFT_MAX_PRICE - CENTER_PRICE)
+x = (midPrice - AGGRESSION_CENTER_PRICE)
+    / max(1e-9, AGGRESSION_UPPER_ANCHOR_PRICE - AGGRESSION_CENTER_PRICE)
 x = clamp(x, -2, 2)
 inventoryNorm = clamp(
     (currentInventory - INV_TARGET) / INV_MAX_ABS,
@@ -453,8 +455,9 @@ pBuy = clamp(pBuy, 0.02, 0.98)
 ```
 
 A random draw below `pBuy` selects a buy; otherwise it selects a sell. A
-positive `x` means the midpoint is above `CENTER_PRICE`, making selling more
-likely. A negative `x` makes buying more likely. `EXTREME_PUSH_PROB` can
+positive `x` means the midpoint is above `AGGRESSION_CENTER_PRICE`, making
+selling more likely. A negative `x` makes buying more likely.
+`EXTREME_PUSH_PROB` can
 reverse this recommendation before the probability draw.
 
 Aggression timing and order sizing are configured with:

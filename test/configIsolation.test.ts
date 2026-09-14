@@ -10,13 +10,13 @@ describe("library configuration isolation", () => {
     const config = createConfigFromEnvironment({
       API_URL: "https://example.com/api",
       IS_TAKER: "true",
-      CENTER_PRICE: "400000",
+      AGGRESSION_CENTER_PRICE: "400000",
     });
 
     expect(config.API_URL).toBe("https://example.com/api");
     expect(config.IS_TAKER).toBe(true);
-    expect(config.CENTER_PRICE).toBe(400_000);
-    expect(DEFAULT_CFG.CENTER_PRICE).toBe(500_000);
+    expect(config.AGGRESSION_CENTER_PRICE).toBe(400_000);
+    expect(DEFAULT_CFG.AGGRESSION_CENTER_PRICE).toBe(500_000);
   });
 
   it("validates the environment being supplied, rather than process-level config", () => {

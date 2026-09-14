@@ -95,8 +95,8 @@ export function validatePriceConfiguration(config = CFG): string[] {
   const prices = [
     ["HARD_MIN_PRICE", config.HARD_MIN_PRICE],
     ["HARD_MAX_PRICE", config.HARD_MAX_PRICE],
-    ["SOFT_MAX_PRICE", config.SOFT_MAX_PRICE],
-    ["CENTER_PRICE", config.CENTER_PRICE],
+    ["AGGRESSION_UPPER_ANCHOR_PRICE", config.AGGRESSION_UPPER_ANCHOR_PRICE],
+    ["AGGRESSION_CENTER_PRICE", config.AGGRESSION_CENTER_PRICE],
   ] as const;
 
   for (const [name, value] of prices) {
@@ -112,11 +112,11 @@ export function validatePriceConfiguration(config = CFG): string[] {
   if (config.HARD_MIN_PRICE > config.HARD_MAX_PRICE) {
     errors.push("HARD_MIN_PRICE must not exceed HARD_MAX_PRICE");
   }
-  if (config.SOFT_MAX_PRICE > config.HARD_MAX_PRICE) {
-    errors.push("SOFT_MAX_PRICE must not exceed HARD_MAX_PRICE");
+  if (config.AGGRESSION_UPPER_ANCHOR_PRICE > config.HARD_MAX_PRICE) {
+    errors.push("AGGRESSION_UPPER_ANCHOR_PRICE must not exceed HARD_MAX_PRICE");
   }
-  if (config.CENTER_PRICE > config.SOFT_MAX_PRICE) {
-    errors.push("CENTER_PRICE must not exceed SOFT_MAX_PRICE");
+  if (config.AGGRESSION_CENTER_PRICE > config.AGGRESSION_UPPER_ANCHOR_PRICE) {
+    errors.push("AGGRESSION_CENTER_PRICE must not exceed AGGRESSION_UPPER_ANCHOR_PRICE");
   }
 
   return errors;
@@ -346,7 +346,7 @@ function buildConfig() {
     // used only when IS_TAKER=true; IS_TAKER=false disables aggression and
     // runs passive quote maintenance instead.
     //   edge                trades only on a fresh fair-value edge;
-    //   mean-reversion      uses the CENTER_PRICE/inventory model;
+    //   mean-reversion      uses the AGGRESSION_CENTER_PRICE/inventory model;
     //   edge-with-fallback  tries a fair-value edge, then mean reversion.
     AGGRESSION_MODEL: envStr("AGGRESSION_MODEL", "edge-with-fallback") as AggressionModel,
     // Base delay, in milliseconds, between attempts to run the aggression
@@ -377,12 +377,12 @@ function buildConfig() {
     // Mean reversion aggression model parameters.
     // The mean-reversion fallback used by chooseAggressionSide() when
     // AGGRESSION_MODEL selects it chooses a buy or sell direction:
-    //   x = (midPrice - CENTER_PRICE) /
-    //       max(1e-9, SOFT_MAX_PRICE - CENTER_PRICE)
+    //   x = (midPrice - AGGRESSION_CENTER_PRICE) /
+    //       max(1e-9, AGGRESSION_UPPER_ANCHOR_PRICE - AGGRESSION_CENTER_PRICE)
     //   pBuy = 0.5 - 0.5 * tanh(MEANREV_K * x)
-    // A positive x means the market is above CENTER_PRICE, so pBuy falls as
+    // A positive x means the market is above AGGRESSION_CENTER_PRICE, so pBuy falls as
     // x rises and selling becomes more likely. A negative x means the market
-    // is below CENTER_PRICE, so pBuy rises and buying becomes more likely.
+    // is below AGGRESSION_CENTER_PRICE, so pBuy rises and buying becomes more likely.
     // Inventory then adjusts pBuy to discourage increasing an existing
     // position: long inventory lowers pBuy, while short inventory raises it.
     // With probability EXTREME_PUSH_PROB, the model instead chooses the
@@ -390,10 +390,10 @@ function buildConfig() {
     // intentional countertrend exception to the mean-reversion signal.
     // When a fresh oracle fair value is available, aggression uses the
     // fair-value edge against the best bid/ask instead of this fallback model.
-    CENTER_PRICE: envNum("CENTER_PRICE", 500000), // 50.0 cents ($0.50)
-    SOFT_MAX_PRICE: envNum("SOFT_MAX_PRICE", 700000), // 70.0 cents ($0.70)
+    AGGRESSION_CENTER_PRICE: envNum("AGGRESSION_CENTER_PRICE", 500000), // 50.0 cents ($0.50)
+    AGGRESSION_UPPER_ANCHOR_PRICE: envNum("AGGRESSION_UPPER_ANCHOR_PRICE", 700000), // 70.0 cents ($0.70)
     // Controls mean-reversion strength: higher values make pBuy move more
-    // quickly toward buying below CENTER_PRICE and selling above it; lower
+    // quickly toward buying below AGGRESSION_CENTER_PRICE and selling above it; lower
     // values make the response weaker. At zero, price has no effect.
     MEANREV_K: envNum("MEANREV_K", 2.0),
     // Controls inventory correction: higher values more strongly favor selling
@@ -403,7 +403,7 @@ function buildConfig() {
     // A value of 0 disables the outward reversal, so direction comes only
     // from the mean-reversion and inventory-skew model. Values greater than 0
     // and less than 1 probabilistically reverse that recommendation: above
-    // CENTER_PRICE the reversal buys instead of sells, and below CENTER_PRICE
+    // AGGRESSION_CENTER_PRICE the reversal buys instead of sells, and below AGGRESSION_CENTER_PRICE
     // it sells instead of buys. This applies only when no fresh oracle fair
     // value is available; oracle-edge aggression does not use this field.
     EXTREME_PUSH_PROB: envNum("EXTREME_PUSH_PROB", 0.1),
