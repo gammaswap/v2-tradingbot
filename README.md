@@ -593,7 +593,7 @@ cp examples/env/.env.maker.example .env.maker1
 cp examples/env/.env.taker.example .env.taker1
 ```
 
-Edit the copied files and replace the wallet mnemonic, API credentials, asset
+Edit the copied files and replace the wallet credential, API credentials, asset
 ID, and contract-address placeholders:
 
 ```bash
@@ -607,6 +607,26 @@ and so on for the remaining profiles. Do not commit the copied `.env.*`
 files; they contain secrets and are ignored by Git. The templates use the
 application’s protocol units for prices and sizes, and omitted settings use
 the defaults from `src/config/config.ts`.
+
+### Standalone wallet credentials
+
+The repository runner accepts either `PRIVATE_KEY` or `MNEMONIC`. When both
+are present, `PRIVATE_KEY` takes precedence and the mnemonic settings are
+ignored. When only `MNEMONIC` is present, `WALLET_INDEX` selects its derived
+account and defaults to `0` when omitted:
+
+```env
+# Private key takes precedence when both variables are set.
+PRIVATE_KEY=
+MNEMONIC=replace-with-wallet-mnemonic
+WALLET_INDEX=0
+```
+
+Keep exactly one credential in a production environment whenever possible.
+Store private keys and mnemonics only in a secrets manager or protected
+environment injection; never commit them to source control. This applies only
+to the repository’s standalone runner. Applications using the npm library pass
+an ethers `Wallet` directly in `TradingBotOptions`.
 
 ## Run this repository's standalone bot processes with PM2
 

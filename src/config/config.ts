@@ -75,8 +75,13 @@ export function validateProductionConfig(env: NodeJS.ProcessEnv = process.env): 
   );
   if (!enabled) return errors;
 
-  if (!env.MNEMONIC || env.MNEMONIC === DEFAULT_TEST_MNEMONIC) {
-    errors.push("MNEMONIC must be explicitly configured and cannot use the test mnemonic");
+  if (
+    !env.PRIVATE_KEY?.trim() &&
+    (!env.MNEMONIC?.trim() || env.MNEMONIC === DEFAULT_TEST_MNEMONIC)
+  ) {
+    errors.push(
+      "PRIVATE_KEY or MNEMONIC must be explicitly configured for production; MNEMONIC cannot use the test mnemonic",
+    );
   }
   if (!env.API_URL) {
     errors.push("API_URL must be explicitly configured for production");
@@ -271,10 +276,16 @@ function buildConfig() {
     // Maximum time, in milliseconds, that an SDK/API request may wait before
     // timing out.
     API_TIMEOUT_MS: envNum("API_TIMEOUT_MS", 30_000),
-    // Wallet seed phrase used by the repository's standalone runner. Use a
-    // securely managed production secret rather than the development default.
+    // Private key used by the repository's standalone runner when configured.
+    // It takes precedence over MNEMONIC and should be managed as a production
+    // secret rather than committed to source control.
+    PRIVATE_KEY: envStr("PRIVATE_KEY", ""),
+    // Wallet seed phrase used by the repository's standalone runner when no
+    // PRIVATE_KEY is configured. Use a securely managed production secret
+    // rather than the development default.
     MNEMONIC: envStr("MNEMONIC", DEFAULT_TEST_MNEMONIC),
-    // Derivation index selecting which account is created from MNEMONIC.
+    // Derivation index selecting which account is created from MNEMONIC. It
+    // defaults to zero and is ignored when PRIVATE_KEY is configured.
     WALLET_INDEX: envNum("WALLET_INDEX", 0),
     CHAIN_ID: envNum("CHAIN_ID", 84532), // baseSepolia
     PERMIT2_ADDRESS: envStr("PERMIT2_ADDRESS", "0x000000000022D473030F116dDEE9F6B43aC78BA3"),

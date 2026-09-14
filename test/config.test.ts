@@ -50,9 +50,24 @@ describe("production configuration validation", () => {
 
     expect(errors).toEqual(
       expect.arrayContaining([
-        expect.stringContaining("MNEMONIC"),
+        expect.stringContaining("PRIVATE_KEY or MNEMONIC"),
         expect.stringContaining("API_URL"),
       ]),
+    );
+  });
+
+  it("accepts PRIVATE_KEY without a mnemonic in production mode", () => {
+    const errors = validateProductionConfig({
+      PRODUCTION_MODE: "true",
+      PRIVATE_KEY: "configured-private-key",
+      API_URL: "https://example.com/api",
+      CHAIN_ID: "1",
+      EXCHANGE_ADDRESS: "0x1111111111111111111111111111111111111111",
+      LEDGER_ADDRESS: "0x2222222222222222222222222222222222222222",
+    });
+
+    expect(errors).not.toContain(
+      "PRIVATE_KEY or MNEMONIC must be explicitly configured for production; MNEMONIC cannot use the test mnemonic",
     );
   });
 
