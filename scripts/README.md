@@ -622,16 +622,14 @@ pnpm test
 pnpm validate:package
 ```
 
-`pnpm validate:package` inspects the package contents with the available pack
-dry-run command (`pnpm pack --dry-run`, or `npm pack --dry-run` when the
-installed pnpm version does not support that option), creates the actual
-publishable tarball with pnpm, installs it into a temporary consumer project,
-and tests the package root and public subpath imports from that packed
+`pnpm validate:package` creates the publishable tarball with pnpm, verifies its
+allowlisted contents, installs it into a temporary consumer project, and tests
+the package-root runtime import and TypeScript declarations from that packed
 artifact.
 
 ### Release validation
 
 CI runs the build, tests, typecheck, lint, formatting check, and packed-package
 validation. The packed-package check installs the generated tarball into a
-temporary consumer project and verifies the package root and public subpath
-imports before publishing.
+temporary consumer project and verifies the package-root import and TypeScript
+declarations before publishing.

@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@gammaswap/v2-exchange-sdk':
-        specifier: ^0.2.1
-        version: 0.2.1
+        specifier: ^0.2.3
+        version: 0.2.3(ethers@6.17.0)
       data-structure-typed:
         specifier: ^2.6.4
         version: 2.6.4
@@ -261,9 +261,11 @@ packages:
     resolution: {integrity: sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  '@gammaswap/v2-exchange-sdk@0.2.1':
-    resolution: {integrity: sha512-y3WMCXflOzVUP/QmeHcf2GZR5lWURZ257sFN1K/7FUvVpVVlSzJKeSSLEWT9tflEeTvrv4m+khkWleZofDRD+A==, tarball: https://npm.pkg.github.com/download/@gammaswap/v2-exchange-sdk/0.2.1/5ae38533e12e7cfc3b49865893d5fdd192777e5e}
-    engines: {node: '>=20', pnpm: '>=10'}
+  '@gammaswap/v2-exchange-sdk@0.2.3':
+    resolution: {integrity: sha512-aSJg0I2bC79kvZWR18YoPM5V6pG4QOoTFf6iNkOjsV1Qbc6ZXDbhRbHjq5vZdndBTgxHXs9MPazpiYbF5DQ5wA==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      ethers: ^6.17.0
 
   '@humanfs/core@0.19.2':
     resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
@@ -1397,7 +1399,7 @@ snapshots:
       '@eslint/core': 0.17.0
       levn: 0.4.1
 
-  '@gammaswap/v2-exchange-sdk@0.2.1':
+  '@gammaswap/v2-exchange-sdk@0.2.3(ethers@6.17.0)':
     dependencies:
       ethers: 6.17.0
       ws: 8.21.3

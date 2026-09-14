@@ -1,29 +1,31 @@
-name: Compile/Test/Publish
+name: Verify package
 
 on:
   push:
     branches:
       - main
   pull_request:
-    branches:
-      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  publish-gpr:
+  verify:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
     steps:
       - uses: actions/checkout@v6
       - name: Install pnpm
         uses: pnpm/action-setup@v4.4.0
       - uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: ${{ matrix.node }}
           cache: "pnpm"
-          registry-url: https://npm.pkg.github.com/
-          scope: "@gammaswap"
       - run: pnpm install --frozen-lockfile
-        env:
-          NODE_AUTH_TOKEN: ${{secrets.GS_TOKEN}}
       - name: Run Build
         run: pnpm run build
       - name: Run Tests
@@ -34,3 +36,5 @@ jobs:
         run: pnpm lint
       - name: Check Formatting
         run: pnpm format:check
+      - name: Validate packed package
+        run: pnpm validate:package

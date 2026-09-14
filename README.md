@@ -1,23 +1,39 @@
-# v2-tradingbot
+# @gammaswap/v2-tradingbot
 
-Trading bot for GammaSwap V2
+An ESM Node.js library for running GammaSwap V2 maker or taker trading bots.
+It manages market-data feeds, order lifecycle reconciliation, risk checks, and
+graceful shutdown; your application supplies the wallet and strategy settings.
 
-## Use as a package
+## Install and create a bot
 
-Install the package and construct a bot with a wallet and runtime options:
+Node.js 20 or newer is required. This package is ESM-only.
 
 ```bash
-npm install @gammaswap/v2-tradingbot
+npm install @gammaswap/v2-tradingbot ethers
 ```
+
+Pass a wallet and all trading-critical settings explicitly. Do not place a
+mnemonic or private key in source control.
 
 ```ts
 import { Wallet } from "ethers";
-import { TradingBot } from "@gammaswap/v2-tradingbot";
+import {
+  TradingBot,
+  validateTradingBotOptions,
+  type TradingBotOptions,
+} from "@gammaswap/v2-tradingbot";
 
-const bot = new TradingBot({
-  wallet: new Wallet(process.env.PRIVATE_KEY!),
-  isTaker: false,
+if (!process.env.PRIVATE_KEY) throw new Error("PRIVATE_KEY is required");
+
+const options: TradingBotOptions = {
+  wallet: new Wallet(process.env.PRIVATE_KEY),
+  isTaker: false, // maker mode: passive ALO quote maintenance
   apiUrl: "https://exchange-api.gammaswap.com/api",
+  // Omit `api` only when the target exchange endpoint does not require it.
+  api: {
+    key: process.env.GAMMASWAP_API_KEY ?? "",
+    secret: process.env.GAMMASWAP_API_SECRET ?? "",
+  },
   assetId: "261336857817713630688382311349658711122006440411137",
   chainId: 84532,
   contracts: {
@@ -32,15 +48,47 @@ const bot = new TradingBot({
   },
   risk: {
     maxContractExposurePct: 5,
+    maxCapitalExposurePct: 10,
+    inventoryMaxAbs: 100 * 1_000_000,
   },
-});
+};
+
+const configurationErrors = validateTradingBotOptions(options);
+if (configurationErrors.length > 0) {
+  throw new Error(configurationErrors.join("; "));
+}
+
+const bot = new TradingBot(options);
+
+async function shutdown() {
+  await bot.stop();
+}
+
+process.once("SIGINT", () => void shutdown());
+process.once("SIGTERM", () => void shutdown());
 
 await bot.start();
-
-process.on("SIGINT", async () => {
-  await bot.stop();
-});
 ```
+
+`start()` subscribes to market-data feeds and begins the runtime coordinator.
+`stop()` stops new work, closes feeds, and attempts to cancel open orders. Wrap
+both in your application's error reporting and process supervisor.
+
+The package root intentionally exports only the supported application API:
+`TradingBot`, `validateTradingBotOptions`, `TradingBotOptions`,
+`TradingBotStatus`, `ContractAddresses`, `LogLevel`, `AggressionModel`, and
+`Side`. Runtime internals are not public API.
+
+Constructor options override environment-derived defaults. For repeatable
+deployments, supply every trading-critical option explicitly and use a secrets
+manager or your deployment platform's protected environment injection for the
+wallet and API credentials.
+
+### Prices, sizes, and modes
+
+Prices use GammaSwap protocol units: `1,000` is $0.001 and `999,000` is
+$0.999. Contract sizes use one million protocol units per contract. The bot
+does not convert ordinary dollar amounts for you.
 
 The bot operates in one of two mutually exclusive modes. `isTaker: false`
 (the default) runs maker mode: passive ALO quote maintenance only. Setting

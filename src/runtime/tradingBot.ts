@@ -1,8 +1,7 @@
-import { Wallet, isAddress } from "ethers";
+import { Wallet, ZeroAddress, isAddress } from "ethers";
 import {
   validateOrderSizeConfiguration,
   validatePriceConfiguration,
-  validateProductionConfig,
   validateRiskConfiguration,
   type AggressionModel,
 } from "../config/config.js";
@@ -147,6 +146,74 @@ export type TradingBotStatus = {
   bookConnected: boolean;
 };
 
+/**
+ * Validates the caller-supplied portion of a bot configuration without
+ * reading environment variables or opening a network connection.
+ *
+ * This is useful for applications that want to validate their configuration
+ * during their own startup sequence before constructing a TradingBot.
+ */
+export function validateTradingBotOptions(options: TradingBotOptions): string[] {
+  const errors: string[] = [];
+
+  if (!options.apiUrl?.trim()) {
+    errors.push("apiUrl is required");
+  } else {
+    try {
+      const url = new URL(options.apiUrl);
+      if (url.protocol !== "https:" && url.protocol !== "http:") {
+        errors.push("apiUrl must use http or https");
+      }
+    } catch {
+      errors.push("apiUrl must be a valid URL");
+    }
+  }
+
+  if (!isBigIntString(options.assetId)) errors.push("assetId must be an integer string");
+  if (!Number.isSafeInteger(options.chainId) || options.chainId <= 0) {
+    errors.push("chainId must be a positive safe integer");
+  }
+
+  for (const name of ["exchange", "ledger", "settlementToken"] as const) {
+    const address = options.contracts?.[name];
+    if (!isAddress(address) || address.toLowerCase() === ZeroAddress.toLowerCase()) {
+      errors.push(`${name} must be a non-zero valid address`);
+    }
+  }
+  for (const name of ["permit2", "depositLedger"] as const) {
+    const address = options.contracts?.[name];
+    if (
+      address !== undefined &&
+      (!isAddress(address) || address.toLowerCase() === ZeroAddress.toLowerCase())
+    ) {
+      errors.push(`${name} must be a non-zero valid address when configured`);
+    }
+  }
+
+  const apiKeyProvided = Boolean(options.api?.key?.trim());
+  const apiSecretProvided = Boolean(options.api?.secret?.trim());
+  if (apiKeyProvided !== apiSecretProvided) {
+    errors.push("api.key and api.secret must be configured together");
+  }
+
+  for (const [name, value] of [
+    ["orderbookWsUrl", options.orderbookWsUrl],
+    ["fairValue.oracleFeedWsUrl", options.fairValue?.oracleFeedWsUrl],
+  ] as const) {
+    if (value == null || value.trim() === "") continue;
+    try {
+      const url = new URL(value);
+      if (url.protocol !== "ws:" && url.protocol !== "wss:") {
+        errors.push(`${name} must use ws or wss`);
+      }
+    } catch {
+      errors.push(`${name} must be a valid URL`);
+    }
+  }
+
+  return errors;
+}
+
 /*
  * The options above intentionally group timing controls with the subsystem
  * whose behavior they affect. Keep this mapping centralized so constructor
@@ -241,15 +308,9 @@ export class TradingBot {
    * cooldowns. Websocket feeds remain owned by this instance.
    */
   constructor(options: TradingBotOptions) {
-    if (!options.apiUrl.trim()) throw new Error("apiUrl is required");
-    if (!isBigIntString(options.assetId)) throw new Error("assetId must be an integer string");
-    if (!Number.isSafeInteger(options.chainId) || options.chainId <= 0) {
-      throw new Error("chainId must be a positive safe integer");
-    }
-    for (const [name, address] of Object.entries(options.contracts)) {
-      if (address !== undefined && !isAddress(address)) {
-        throw new Error(`${name} must be a valid address`);
-      }
+    const optionErrors = validateTradingBotOptions(options);
+    if (optionErrors.length > 0) {
+      throw new Error(`invalid trading bot options: ${optionErrors.join("; ")}`);
     }
 
     this.wallet = resolveTradingWallet(options.wallet);
@@ -261,7 +322,6 @@ export class TradingBot {
       ...validatePriceConfiguration(this.context.config),
       ...validateOrderSizeConfiguration(this.context.config),
       ...validateRiskConfiguration(this.context.config),
-      ...validateProductionConfig({}),
     ];
     if (errors.length > 0) {
       throw new Error(`invalid trading bot configuration: ${errors.join("; ")}`);
