@@ -1,18 +1,14 @@
-name: Compile/Test
+name: Compile/Test (branches)
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
-    branches:
-      - main
+
+permissions:
+  contents: read
 
 jobs:
   compile-test:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v6
       - name: Install pnpm
