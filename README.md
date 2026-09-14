@@ -157,6 +157,31 @@ CONTROL_SOCKET_DIR=/var/run/gammaswap pnpm bot status --bot maker1
 The directory must already exist and be writable by the bot process. A custom
 `CONTROL_SOCKET_PATH` can also be supplied to the process running `main.ts`.
 
+### Control socket security and platform support
+
+The control endpoint is a local Unix domain socket, not a TCP or HTTP service.
+It is created only when `controlSocketPath` is supplied to `TradingBot` (the
+repository runner supplies it through `CONTROL_SOCKET_PATH` or derives it from
+`BOT_NAME`). The repository CLI is one client; any local program with access to
+the socket can send the same newline-delimited JSON requests directly, for
+example:
+
+```json
+{ "command": "status" }
+```
+
+The socket is created with `0600` permissions. Normally, only the bot's
+operating-system user and root can connect, but any process running as that
+same user can query it. There is currently no application-level authentication.
+The supported commands are read-only: `status`, `health`, `fair-value`, and
+`quote`. They do not submit, cancel, or modify orders.
+
+This control-socket and standalone-runner setup is currently supported on
+Linux, macOS, and other POSIX-style systems. The default `/tmp` path, shell
+runner, PM2 configuration, and Unix permission model do not constitute Windows
+support. Windows would require a separate named-pipe implementation and
+Windows-specific runner and permission handling.
+
 ## Standalone runner strategy configuration
 
 The repository runner reads strategy settings from the selected `.env` file
