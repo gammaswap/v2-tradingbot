@@ -3,14 +3,13 @@ import { Wallet } from "ethers";
 import { CFG } from "../config/config.js";
 
 /**
- * Uses the caller's wallet when provided; otherwise derives the configured
- * wallet from MNEMONIC and WALLET_INDEX for CLI/local usage.
+ * Derives the wallet used by the repository's environment-driven standalone
+ * runner from MNEMONIC and WALLET_INDEX. Package consumers supply a Wallet
+ * directly to TradingBot instead.
  */
-export function resolveTradingWallet(wallet?: Wallet): Wallet {
-  if (wallet) return wallet;
-
+export function resolveTradingWallet(): Wallet {
   if (!CFG.MNEMONIC.trim()) {
-    throw new Error("wallet was not provided and MNEMONIC is not configured");
+    throw new Error("MNEMONIC is not configured");
   }
   if (!Number.isInteger(CFG.WALLET_INDEX) || CFG.WALLET_INDEX < 0) {
     throw new Error("WALLET_INDEX must be a non-negative integer");

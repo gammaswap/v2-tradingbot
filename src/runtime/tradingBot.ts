@@ -14,7 +14,6 @@ import { startOrderBookFeed, type OrderBookFeed } from "./orderbook.js";
 import { runRuntimeCoordinator } from "./coordinator.js";
 import { protocolValueToSafeNumber } from "../utils/protocolMath.js";
 import { clamp, isBigIntString, sleep } from "../utils/utils.js";
-import { resolveTradingWallet } from "./wallet.js";
 import { Logger, type LogLevel } from "../utils/logger.js";
 import {
   createBotContext,
@@ -36,7 +35,8 @@ export type ContractAddresses = {
 };
 
 export type TradingBotOptions = {
-  wallet?: Wallet;
+  /** Wallet controlled by the host application. */
+  wallet: Wallet;
   logLevel?: LogLevel;
   isTaker?: boolean;
   apiUrl: string;
@@ -95,6 +95,8 @@ export type TradingBotOptions = {
     aggressionMs?: number;
     aggressionJitterMs?: number;
     fairValueMinEdgeTicks?: number;
+    centerPrice?: number;
+    softMaxPrice?: number;
     wipeLevels?: number;
     slipBuffer?: number;
     maxAggressQty?: number;
@@ -155,6 +157,10 @@ export type TradingBotStatus = {
  */
 export function validateTradingBotOptions(options: TradingBotOptions): string[] {
   const errors: string[] = [];
+
+  if (!options.wallet || !isAddress(options.wallet.address)) {
+    errors.push("wallet must have a valid address");
+  }
 
   if (!options.apiUrl?.trim()) {
     errors.push("apiUrl is required");
@@ -280,6 +286,8 @@ function getOptionOverrides(options: TradingBotOptions): Record<string, unknown>
     AGGRESS_JITTER_MS: options.aggression?.aggressionJitterMs,
     AGGRESSION_MODEL: options.aggression?.model,
     FAIR_VALUE_MIN_EDGE_TICKS: options.aggression?.fairValueMinEdgeTicks,
+    CENTER_PRICE: options.aggression?.centerPrice,
+    SOFT_MAX_PRICE: options.aggression?.softMaxPrice,
     WIPE_LEVELS: options.aggression?.wipeLevels,
     SLIP_BUFFER: options.aggression?.slipBuffer,
     MAX_AGGRESS_QTY: options.aggression?.maxAggressQty,
@@ -313,7 +321,7 @@ export class TradingBot {
       throw new Error(`invalid trading bot options: ${optionErrors.join("; ")}`);
     }
 
-    this.wallet = resolveTradingWallet(options.wallet);
+    this.wallet = options.wallet;
     this.controlSocketPath = options.controlSocketPath;
     this.context = createBotContext(getOptionOverrides(options));
     this.context.state.account = this.wallet.address;

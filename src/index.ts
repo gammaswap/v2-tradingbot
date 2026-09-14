@@ -1,3 +1,9 @@
+/**
+ * Public API for @gammaswap/v2-tradingbot.
+ *
+ * Runtime, API, order-planning, and environment-loader internals are not part
+ * of this semver-supported package boundary.
+ */
 export {
   TradingBot,
   validateTradingBotOptions,

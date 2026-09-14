@@ -68,7 +68,13 @@ try {
   ]) {
     assert(packedFiles.includes(requiredFile), `packed tarball is missing ${requiredFile}`);
   }
-  for (const forbiddenPrefix of ["package/.env", "package/src/", "package/test/"]) {
+  for (const forbiddenPrefix of [
+    "package/.env",
+    "package/src/",
+    "package/test/",
+    "package/dist/main.",
+    "package/dist/cli.",
+  ]) {
     assert(
       !packedFiles.some((file) => file.startsWith(forbiddenPrefix)),
       `packed tarball includes ${forbiddenPrefix}`,
@@ -107,6 +113,7 @@ assert.equal(typeof TradingBot, "function");
 assert.equal(typeof validateTradingBotOptions, "function");
 assert.deepEqual(
   validateTradingBotOptions({
+    wallet: { address: "0x1111111111111111111111111111111111111111" },
     apiUrl: "https://example.com/api",
     assetId: "1",
     chainId: 1,

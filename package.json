@@ -46,7 +46,9 @@
   ],
   "scripts": {
     "dev": "node --env-file=./.env --loader ts-node/esm ./src/main.ts",
-    "build": "pnpm clean && tsc -p tsconfig.build.json",
+    "build": "pnpm clean && pnpm build:library && pnpm build:app",
+    "build:library": "tsc -p tsconfig.library.json",
+    "build:app": "tsc -p tsconfig.app.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "lint": "eslint \"src/**/*.ts\"",
@@ -54,9 +56,9 @@
     "format:check": "prettier --check .",
     "prepack": "pnpm build",
     "validate:package": "pnpm build && node scripts/validate-package.mjs",
-    "clean": "rm -rf dist",
+    "clean": "rm -rf dist dist-app",
     "test:watch": "vitest",
-    "start": "node dist/main.js",
+    "start": "node dist-app/main.js",
     "bot": "node --loader ts-node/esm ./src/cli.ts",
     "asset": "node --env-file=./.env --loader ts-node/esm ./scripts/sample/getAsset.ts",
     "balance": "node --env-file=./.env --loader ts-node/esm ./scripts/sample/getBalance.ts",
@@ -90,6 +92,6 @@
     "@gammaswap/v2-exchange-sdk": "^0.2.3",
     "data-structure-typed": "^2.6.4",
     "dotenv": "^16.6.1",
-    "ethers": "^6.16.0"
+    "ethers": "^6.17.0"
   }
 }

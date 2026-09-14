@@ -24,6 +24,7 @@ describe("public package API", () => {
     expect(
       validateTradingBotOptions({
         ...validOptions,
+        wallet: undefined as unknown as Wallet,
         apiUrl: "not-a-url",
         api: { key: "only-a-key" },
         contracts: {
@@ -33,6 +34,7 @@ describe("public package API", () => {
       }),
     ).toEqual(
       expect.arrayContaining([
+        "wallet must have a valid address",
         "apiUrl must be a valid URL",
         "api.key and api.secret must be configured together",
         "exchange must be a non-zero valid address",

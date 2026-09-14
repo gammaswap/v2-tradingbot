@@ -70,6 +70,10 @@ process.once("SIGTERM", () => void shutdown());
 await bot.start();
 ```
 
+The complete source template is in
+[`examples/library/create-bot.ts`](examples/library/create-bot.ts); replace its
+asset and contract placeholders before connecting to an exchange.
+
 `start()` subscribes to market-data feeds and begins the runtime coordinator.
 `stop()` stops new work, closes feeds, and attempts to cancel open orders. Wrap
 both in your application's error reporting and process supervisor.
@@ -79,10 +83,16 @@ The package root intentionally exports only the supported application API:
 `TradingBotStatus`, `ContractAddresses`, `LogLevel`, `AggressionModel`, and
 `Side`. Runtime internals are not public API.
 
-Constructor options override environment-derived defaults. For repeatable
-deployments, supply every trading-critical option explicitly and use a secrets
-manager or your deployment platform's protected environment injection for the
-wallet and API credentials.
+Installing this package does not install or start a command-line bot process.
+`src/main.ts`, `trading_bot.sh`, and `bots.config.cjs` are repository deployment
+tools. Import `TradingBot` from the package root when embedding a bot in your
+own application.
+
+Imported `TradingBot` instances use stable library defaults for omitted optional
+settings; they do not inherit strategy settings from the host process
+environment. For repeatable deployments, supply every trading-critical option
+explicitly and use a secrets manager or your deployment platform's protected
+environment injection for the wallet and API credentials.
 
 ### Prices, sizes, and modes
 
@@ -93,10 +103,10 @@ does not convert ordinary dollar amounts for you.
 The bot operates in one of two mutually exclusive modes. `isTaker: false`
 (the default) runs maker mode: passive ALO quote maintenance only. Setting
 `isTaker: true` runs taker mode: the configured aggression strategy and IOC
-orders only; passive quote maintenance is disabled. The `IS_TAKER` environment
-variable is used when `isTaker` is not supplied. Maker and taker bots should
-normally use separate accounts so their balances, inventories, and risk
-limits remain independent. `AGGRESSION_MODEL` selects the taker strategy and
+orders only; passive quote maintenance is disabled. The standalone repository
+runner maps `IS_TAKER` from its environment to this option. Maker and taker
+bots should normally use separate accounts so their balances, inventories, and
+risk limits remain independent. `aggression.model` selects the taker strategy and
 supports `edge`, `mean-reversion`, and `edge-with-fallback`.
 
 Each `TradingBot` instance owns its configuration, runtime state, order
@@ -104,7 +114,7 @@ intents, cooldowns, and websocket feeds, so multiple independent bots can run
 in the same process. The current implementation creates private websocket
 connections per bot; websocket multiplexing can be added separately later.
 
-## Query a running bot
+## Query a repository-run bot
 
 The executable started by `main.ts` exposes a read-only local control socket for
 its live status. With PM2, the socket name is derived from `BOT_NAME`, so these
@@ -147,11 +157,12 @@ CONTROL_SOCKET_DIR=/var/run/gammaswap pnpm bot status --bot maker1
 The directory must already exist and be writable by the bot process. A custom
 `CONTROL_SOCKET_PATH` can also be supplied to the process running `main.ts`.
 
-## Strategy configuration
+## Standalone runner strategy configuration
 
-Strategy settings are read from the selected `.env` file. A constructor option
-overrides the corresponding environment setting when the bot is used as a
-package. Prices are represented internally in protocol price units, where
+The repository runner reads strategy settings from the selected `.env` file
+and maps them into `TradingBotOptions` before constructing the bot. Package
+consumers set the same values directly in their options object. Prices are
+represented internally in protocol price units, where
 `1,000` is `0.1` cents (`$0.001`) and `999,000` is `99.9` cents (`$0.999`).
 Sizes and inventories are represented internally in protocol size units; one
 contract is `1,000,000` units. The descriptions below refer to the current
@@ -556,7 +567,7 @@ files; they contain secrets and are ignored by Git. The templates use the
 application’s protocol units for prices and sizes, and omitted settings use
 the defaults from `src/config/config.ts`.
 
-## Run multiple bots with PM2
+## Run this repository's standalone bot processes with PM2
 
 Install PM2 globally with Node.js 20 or newer:
 
