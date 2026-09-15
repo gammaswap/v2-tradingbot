@@ -88,7 +88,10 @@ try {
         name: "v2-tradingbot-package-consumer",
         private: true,
         type: "module",
-        dependencies: { [packageName]: `file:${tarballPath}` },
+        dependencies: {
+          [packageName]: `file:${tarballPath}`,
+          ethers: packageManifest.dependencies.ethers,
+        },
       },
       null,
       2,
