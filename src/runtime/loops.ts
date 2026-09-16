@@ -294,8 +294,9 @@ export async function runQuoteMaintenance(wallet: Wallet) {
   await reconcileCancelReplaceIntents(wallet);
   await reconcilePlaceIntents(wallet);
 
-  const bookMid = midPrice(book);
-  const refPrice = referencePrice(book);
+  const ownOrderIds = new Set(STATE.pending.keys());
+  const bookMid = midPrice(book, ownOrderIds);
+  const refPrice = referencePrice(book, ownOrderIds);
   const gamma = calculateCurrentRiskAversion(STATE.asset!);
   const inventorySkew = calculateInventorySkew(gamma, STATE.invBase, refPrice);
   const calculatedBidAsk = calculateBidAndAsk(refPrice, inventorySkew, CFG.LOGIT_HALF_SPREAD);
@@ -332,6 +333,7 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     CFG.LADDER_PRICE_MODEL === LADDER_PRICE_MODEL.GROWTH_SPACE
       ? LADDER_PRICE_MODEL.GROWTH_SPACE
       : LADDER_PRICE_MODEL.EQUIDISTANT,
+    ownOrderIds,
   );
   logger.debug("calculated target ladder:", calculatedTargets);
   const { bids: targetBidPrices, asks: targetAskPrices } = calculatedTargets;

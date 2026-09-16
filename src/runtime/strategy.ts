@@ -1,5 +1,5 @@
 import { RUNTIME_CFG as CFG, RUNTIME_STATE as STATE, type Side } from "./context.js";
-import type { Asset, BookSnapshot, PendingOrder } from "../utils/types.js";
+import type { Asset, BookLevel, BookSnapshot, PendingOrder } from "../utils/types.js";
 import { clamp, nowMs, roundDownToOrderLot, roundToTick, tanh } from "../utils/utils.js";
 import {
   protocolNotional,
@@ -20,20 +20,44 @@ const logger = new Logger("strategy");
 
 const PROTOCOL_PRICE_SCALE = 1_000_000;
 
-export function bestBidAsk(book: BookSnapshot | null): { bid: number | null; ask: number | null } {
+export function bestBidAsk(
+  book: BookSnapshot | null,
+  ownOrderIds?: ReadonlySet<string>,
+): { bid: number | null; ask: number | null } {
   if (!book) return { bid: null, ask: null };
   return {
-    bid: book.bids?.length ? Number(book.bids[0].price) : null,
-    ask: book.asks?.length ? Number(book.asks[0].price) : null,
+    bid: bestBookPrice(book.bids, ownOrderIds),
+    ask: bestBookPrice(book.asks, ownOrderIds),
   };
 }
 
-export function midPrice(book: BookSnapshot | null): number {
-  const { bid, ask } = bestBidAsk(book);
+export function midPrice(book: BookSnapshot | null, ownOrderIds?: ReadonlySet<string>): number {
+  const { bid, ask } = bestBidAsk(book, ownOrderIds);
   if (bid != null && ask != null) return (bid + ask) / 2;
   if (bid != null) return bid;
   if (ask != null) return ask;
   return STATE.lastMid;
+}
+
+/**
+ * Returns the first price level with external liquidity. When own order IDs
+ * are not supplied, this retains raw top-of-book behavior.
+ */
+function bestBookPrice(
+  levels: BookLevel[] | undefined,
+  ownOrderIds?: ReadonlySet<string>,
+): number | null {
+  if (!levels?.length) return null;
+  if (!ownOrderIds) return Number(levels[0].price);
+
+  for (const level of levels) {
+    // Keep a price level when any other maker is also resting at that price.
+    if (level.orders.some((order) => !ownOrderIds.has(order.id))) {
+      return Number(level.price);
+    }
+  }
+
+  return null;
 }
 
 export function hasFreshFairValue(): boolean {
@@ -89,8 +113,11 @@ export function shouldCancelReplace(
   return true;
 }
 
-export function referencePrice(book: BookSnapshot | null): number {
-  const bookMid = midPrice(book);
+export function referencePrice(
+  book: BookSnapshot | null,
+  ownOrderIds?: ReadonlySet<string>,
+): number {
+  const bookMid = midPrice(book, ownOrderIds);
   if (!hasFreshFairValue()) return bookMid;
 
   const weight = clamp(CFG.FAIR_VALUE_WEIGHT, 0, 1);
@@ -402,6 +429,7 @@ export function buildEquidistantLadderPrices(
   refPrice: number,
   bid: number,
   ask: number,
+  ownOrderIds?: ReadonlySet<string>,
 ): { bids: number[]; asks: number[] } {
   if (!Number.isFinite(refPrice)) {
     throw new Error(`refPrice must be finite: ${refPrice}`);
@@ -412,8 +440,9 @@ export function buildEquidistantLadderPrices(
 
   // With no current quotes, do not fall back to a stale last price. A new
   // epoch should build both ladders toward the current reference price.
-  const hasBookQuotes = book.bids.length > 0 || book.asks.length > 0;
-  const bookMid = hasBookQuotes ? midPrice(book) : refPrice;
+  const { bid: externalBestBid, ask: externalBestAsk } = bestBidAsk(book, ownOrderIds);
+  const hasBookQuotes = externalBestBid != null || externalBestAsk != null;
+  const bookMid = hasBookQuotes ? midPrice(book, ownOrderIds) : refPrice;
   const bidEnd = Math.min(refPrice, bookMid);
   const askEnd = Math.max(refPrice, bookMid);
   const bidStart = bid * PROTOCOL_PRICE_SCALE;
@@ -472,9 +501,10 @@ export function buildTargetLadderPrices(
   bid: number,
   ask: number,
   model: LadderPriceModel = LADDER_PRICE_MODEL.EQUIDISTANT,
+  ownOrderIds?: ReadonlySet<string>,
 ): { bids: number[]; asks: number[] } {
   if (model === LADDER_PRICE_MODEL.EQUIDISTANT) {
-    return buildEquidistantLadderPrices(book, refPrice, bid, ask);
+    return buildEquidistantLadderPrices(book, refPrice, bid, ask, ownOrderIds);
   }
 
   if (model === LADDER_PRICE_MODEL.GROWTH_SPACE) {
