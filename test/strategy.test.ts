@@ -17,6 +17,7 @@ import {
   distributeTotalSizeAcrossLadder,
   hasFreshBook,
   hasUsableBookPrice,
+  midPrice,
   calculateRemainingEpochSeconds,
   calculateRiskAversionFactor,
 } from "../src/runtime/strategy.js";
@@ -220,6 +221,154 @@ describe("reference source freshness", () => {
 
     STATE.bookUpdatedAtMs = Date.now() - CFG.BOOK_STALE_MS - 1;
     expect(hasFreshBook(quotedBook)).toBe(false);
+  });
+});
+
+describe("quote midpoint excluding own orders", () => {
+  it("skips a best level owned only by this bot", () => {
+    const ownOrderIds = new Set(["our-bid", "our-ask"]);
+    const book = {
+      assetId: 1n,
+      epoch: 1n,
+      seqId: 1n,
+      ts: 1n,
+      bids: [
+        {
+          price: 500_000,
+          size: 1,
+          orderCount: 1,
+          orders: [
+            {
+              id: "our-bid",
+              price: 500_000,
+              size: 1,
+              side: "buy" as const,
+              time: 1,
+              account: "",
+              epoch: 1n,
+            },
+          ],
+        },
+        {
+          price: 490_000,
+          size: 1,
+          orderCount: 1,
+          orders: [
+            {
+              id: "external-bid",
+              price: 490_000,
+              size: 1,
+              side: "buy" as const,
+              time: 1,
+              account: "",
+              epoch: 1n,
+            },
+          ],
+        },
+      ],
+      asks: [
+        {
+          price: 510_000,
+          size: 1,
+          orderCount: 1,
+          orders: [
+            {
+              id: "our-ask",
+              price: 510_000,
+              size: 1,
+              side: "sell" as const,
+              time: 1,
+              account: "",
+              epoch: 1n,
+            },
+          ],
+        },
+        {
+          price: 520_000,
+          size: 1,
+          orderCount: 1,
+          orders: [
+            {
+              id: "external-ask",
+              price: 520_000,
+              size: 1,
+              side: "sell" as const,
+              time: 1,
+              account: "",
+              epoch: 1n,
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(midPrice(book, ownOrderIds)).toBe(505_000);
+  });
+
+  it("keeps a best level shared with an external maker", () => {
+    const ownOrderIds = new Set(["our-bid", "our-ask"]);
+    const book = {
+      assetId: 1n,
+      epoch: 1n,
+      seqId: 1n,
+      ts: 1n,
+      bids: [
+        {
+          price: 500_000,
+          size: 2,
+          orderCount: 2,
+          orders: [
+            {
+              id: "our-bid",
+              price: 500_000,
+              size: 1,
+              side: "buy" as const,
+              time: 1,
+              account: "",
+              epoch: 1n,
+            },
+            {
+              id: "external-bid",
+              price: 500_000,
+              size: 1,
+              side: "buy" as const,
+              time: 2,
+              account: "",
+              epoch: 1n,
+            },
+          ],
+        },
+      ],
+      asks: [
+        {
+          price: 510_000,
+          size: 2,
+          orderCount: 2,
+          orders: [
+            {
+              id: "our-ask",
+              price: 510_000,
+              size: 1,
+              side: "sell" as const,
+              time: 1,
+              account: "",
+              epoch: 1n,
+            },
+            {
+              id: "external-ask",
+              price: 510_000,
+              size: 1,
+              side: "sell" as const,
+              time: 2,
+              account: "",
+              epoch: 1n,
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(midPrice(book, ownOrderIds)).toBe(505_000);
   });
 });
 

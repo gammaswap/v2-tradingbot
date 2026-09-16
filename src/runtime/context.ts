@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { CFG, type Side } from "../config/config.js";
+import { CFG, DEFAULT_CFG, type Side } from "../config/config.js";
 import { createInitialState, STATE, type RuntimeState } from "./state.js";
 import { ORDER_INTENTS, OrderIntentManager } from "./orderIntent.js";
 import { QUOTE_COOLDOWNS, QuoteCooldownManager } from "./quoteCooldown.js";
@@ -32,7 +32,7 @@ export function runWithBotContext<T>(context: BotContext, fn: () => T): T {
 
 /** Creates isolated configuration/state without changing process-wide defaults. */
 export function createBotContext(overrides: Partial<typeof CFG> = {}): BotContext {
-  const config = { ...CFG, ...overrides };
+  const config = { ...DEFAULT_CFG, ...overrides };
   return {
     config,
     state: createInitialState(config),

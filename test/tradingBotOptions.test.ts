@@ -128,4 +128,21 @@ describe("TradingBot options", () => {
     expect((createBot(-0.5) as any).context.config.FAIR_VALUE_WEIGHT).toBe(0);
     expect((createBot(1.5) as any).context.config.FAIR_VALUE_WEIGHT).toBe(1);
   });
+
+  it("uses the wallet supplied by the host application", () => {
+    const wallet = Wallet.createRandom() as unknown as Wallet;
+    const bot = new TradingBot({
+      wallet,
+      apiUrl: "https://example.com/api",
+      assetId: "1",
+      chainId: 1,
+      contracts: {
+        exchange: "0x1111111111111111111111111111111111111111",
+        ledger: "0x2222222222222222222222222222222222222222",
+        settlementToken: "0x3333333333333333333333333333333333333333",
+      },
+    });
+
+    expect((bot as any).wallet).toBe(wallet);
+  });
 });

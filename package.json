@@ -1,11 +1,18 @@
 {
   "name": "@gammaswap/v2-tradingbot",
   "version": "0.1.0",
-  "description": "Trading bot for GammaSwap V2",
+  "description": "Configurable GammaSwap V2 maker and taker trading bot for Node.js",
+  "keywords": [
+    "gammaswap",
+    "trading",
+    "trading-bot",
+    "market-making",
+    "ethereum",
+    "base"
+  ],
   "packageManager": "pnpm@10.11.0",
   "engines": {
-    "node": ">=20.0.0",
-    "pnpm": ">=10"
+    "node": ">=20.0.0"
   },
   "repository": {
     "type": "git",
@@ -19,6 +26,10 @@
   "homepage": "https://github.com/0xDanr/v2-tradingbot#readme",
   "type": "module",
   "private": false,
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -30,19 +41,24 @@
   "files": [
     "dist",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {
     "dev": "node --env-file=./.env --loader ts-node/esm ./src/main.ts",
-    "build": "tsc",
+    "build": "pnpm clean && pnpm build:library && pnpm build:app",
+    "build:library": "tsc -p tsconfig.library.json",
+    "build:app": "tsc -p tsconfig.app.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "lint": "eslint \"src/**/*.ts\"",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "clean": "rm -rf dist",
+    "prepack": "pnpm build",
+    "validate:package": "pnpm build && node scripts/validate-package.mjs",
+    "clean": "rm -rf dist dist-app",
     "test:watch": "vitest",
-    "start": "node dist/main.js",
+    "start": "node dist-app/main.js",
     "bot": "node --loader ts-node/esm ./src/cli.ts",
     "asset": "node --env-file=./.env --loader ts-node/esm ./scripts/sample/getAsset.ts",
     "balance": "node --env-file=./.env --loader ts-node/esm ./scripts/sample/getBalance.ts",
@@ -63,7 +79,7 @@
     "@types/node": "^20.0.0",
     "@types/ws": "^8.18.1",
     "axios": "1.13.2",
-    "eslint": "^9.0.0",
+    "eslint": "^10.0.0",
     "prettier": "^3.0.0",
     "ts-node": "^10.9.2",
     "tsx": "^4.20.3",
@@ -73,9 +89,9 @@
     "ws": "^8.14.2"
   },
   "dependencies": {
-    "@gammaswap/v2-exchange-sdk": "^0.2.1",
+    "@gammaswap/v2-exchange-sdk": "^0.2.3",
     "data-structure-typed": "^2.6.4",
     "dotenv": "^16.6.1",
-    "ethers": "^6.16.0"
+    "ethers": "^6.17.0"
   }
 }

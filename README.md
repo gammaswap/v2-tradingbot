@@ -1,23 +1,39 @@
-# v2-tradingbot
+# @gammaswap/v2-tradingbot
 
-Trading bot for GammaSwap V2
+An ESM Node.js library for running GammaSwap V2 maker or taker trading bots.
+It manages market-data feeds, order lifecycle reconciliation, risk checks, and
+graceful shutdown; your application supplies the wallet and strategy settings.
 
-## Use as a package
+## Install and create a bot
 
-Install the package and construct a bot with a wallet and runtime options:
+Node.js 20 or newer is required. This package is ESM-only.
 
 ```bash
-npm install @gammaswap/v2-tradingbot
+npm install @gammaswap/v2-tradingbot ethers
 ```
+
+Pass a wallet and all trading-critical settings explicitly. Do not place a
+mnemonic or private key in source control.
 
 ```ts
 import { Wallet } from "ethers";
-import { TradingBot } from "@gammaswap/v2-tradingbot";
+import {
+  TradingBot,
+  validateTradingBotOptions,
+  type TradingBotOptions,
+} from "@gammaswap/v2-tradingbot";
 
-const bot = new TradingBot({
-  wallet: new Wallet(process.env.PRIVATE_KEY!),
-  isTaker: false,
+if (!process.env.PRIVATE_KEY) throw new Error("PRIVATE_KEY is required");
+
+const options: TradingBotOptions = {
+  wallet: new Wallet(process.env.PRIVATE_KEY),
+  isTaker: false, // maker mode: passive ALO quote maintenance
   apiUrl: "https://exchange-api.gammaswap.com/api",
+  // Omit `api` only when the target exchange endpoint does not require it.
+  api: {
+    key: process.env.GAMMASWAP_API_KEY ?? "",
+    secret: process.env.GAMMASWAP_API_SECRET ?? "",
+  },
   assetId: "261336857817713630688382311349658711122006440411137",
   chainId: 84532,
   contracts: {
@@ -32,23 +48,65 @@ const bot = new TradingBot({
   },
   risk: {
     maxContractExposurePct: 5,
+    maxCapitalExposurePct: 10,
+    inventoryMaxAbs: 100 * 1_000_000,
   },
-});
+};
+
+const configurationErrors = validateTradingBotOptions(options);
+if (configurationErrors.length > 0) {
+  throw new Error(configurationErrors.join("; "));
+}
+
+const bot = new TradingBot(options);
+
+async function shutdown() {
+  await bot.stop();
+}
+
+process.once("SIGINT", () => void shutdown());
+process.once("SIGTERM", () => void shutdown());
 
 await bot.start();
-
-process.on("SIGINT", async () => {
-  await bot.stop();
-});
 ```
+
+The complete source template is in
+[`examples/library/create-bot.ts`](examples/library/create-bot.ts); replace its
+asset and contract placeholders before connecting to an exchange.
+
+`start()` subscribes to market-data feeds and begins the runtime coordinator.
+`stop()` stops new work, closes feeds, and attempts to cancel open orders. Wrap
+both in your application's error reporting and process supervisor.
+
+The package root intentionally exports only the supported application API:
+`TradingBot`, `validateTradingBotOptions`, `TradingBotOptions`,
+`TradingBotStatus`, `ContractAddresses`, `LogLevel`, `AggressionModel`, and
+`Side`. Runtime internals are not public API.
+
+Installing this package does not install or start a command-line bot process.
+`src/main.ts`, `trading_bot.sh`, and `bots.config.cjs` are repository deployment
+tools. Import `TradingBot` from the package root when embedding a bot in your
+own application.
+
+Imported `TradingBot` instances use stable library defaults for omitted optional
+settings; they do not inherit strategy settings from the host process
+environment. For repeatable deployments, supply every trading-critical option
+explicitly and use a secrets manager or your deployment platform's protected
+environment injection for the wallet and API credentials.
+
+### Prices, sizes, and modes
+
+Prices use GammaSwap protocol units: `1,000` is $0.001 and `999,000` is
+$0.999. Contract sizes use one million protocol units per contract. The bot
+does not convert ordinary dollar amounts for you.
 
 The bot operates in one of two mutually exclusive modes. `isTaker: false`
 (the default) runs maker mode: passive ALO quote maintenance only. Setting
 `isTaker: true` runs taker mode: the configured aggression strategy and IOC
-orders only; passive quote maintenance is disabled. The `IS_TAKER` environment
-variable is used when `isTaker` is not supplied. Maker and taker bots should
-normally use separate accounts so their balances, inventories, and risk
-limits remain independent. `AGGRESSION_MODEL` selects the taker strategy and
+orders only; passive quote maintenance is disabled. The standalone repository
+runner maps `IS_TAKER` from its environment to this option. Maker and taker
+bots should normally use separate accounts so their balances, inventories, and
+risk limits remain independent. `aggression.model` selects the taker strategy and
 supports `edge`, `mean-reversion`, and `edge-with-fallback`.
 
 Each `TradingBot` instance owns its configuration, runtime state, order
@@ -56,7 +114,7 @@ intents, cooldowns, and websocket feeds, so multiple independent bots can run
 in the same process. The current implementation creates private websocket
 connections per bot; websocket multiplexing can be added separately later.
 
-## Query a running bot
+## Query a repository-run bot
 
 The executable started by `main.ts` exposes a read-only local control socket for
 its live status. With PM2, the socket name is derived from `BOT_NAME`, so these
@@ -99,11 +157,37 @@ CONTROL_SOCKET_DIR=/var/run/gammaswap pnpm bot status --bot maker1
 The directory must already exist and be writable by the bot process. A custom
 `CONTROL_SOCKET_PATH` can also be supplied to the process running `main.ts`.
 
-## Strategy configuration
+### Control socket security and platform support
 
-Strategy settings are read from the selected `.env` file. A constructor option
-overrides the corresponding environment setting when the bot is used as a
-package. Prices are represented internally in protocol price units, where
+The control endpoint is a local Unix domain socket, not a TCP or HTTP service.
+It is created only when `controlSocketPath` is supplied to `TradingBot` (the
+repository runner supplies it through `CONTROL_SOCKET_PATH` or derives it from
+`BOT_NAME`). The repository CLI is one client; any local program with access to
+the socket can send the same newline-delimited JSON requests directly, for
+example:
+
+```json
+{ "command": "status" }
+```
+
+The socket is created with `0600` permissions. Normally, only the bot's
+operating-system user and root can connect, but any process running as that
+same user can query it. There is currently no application-level authentication.
+The supported commands are read-only: `status`, `health`, `fair-value`, and
+`quote`. They do not submit, cancel, or modify orders.
+
+This control-socket and standalone-runner setup is currently supported on
+Linux, macOS, and other POSIX-style systems. The default `/tmp` path, shell
+runner, PM2 configuration, and Unix permission model do not constitute Windows
+support. Windows would require a separate named-pipe implementation and
+Windows-specific runner and permission handling.
+
+## Standalone runner strategy configuration
+
+The repository runner reads strategy settings from the selected `.env` file
+and maps them into `TradingBotOptions` before constructing the bot. Package
+consumers set the same values directly in their options object. Prices are
+represented internally in protocol price units, where
 `1,000` is `0.1` cents (`$0.001`) and `999,000` is `99.9` cents (`$0.999`).
 Sizes and inventories are represented internally in protocol size units; one
 contract is `1,000,000` units. The descriptions below refer to the current
@@ -324,7 +408,8 @@ The supported values are:
   fair value is sufficiently above the best ask and sells when it is
   sufficiently below the best bid. If there is no qualifying edge, it does
   nothing.
-- `mean-reversion`: uses the order-book midpoint relative to `CENTER_PRICE`.
+- `mean-reversion`: uses the order-book midpoint relative to
+  `AGGRESSION_CENTER_PRICE`.
   It buys more often below the center and sells more often above the center.
   Inventory skew adjusts the probability to discourage increasing an existing
   position.
@@ -356,16 +441,24 @@ change the maker fair-value calculation.
 The mean-reversion settings are:
 
 ```env
-CENTER_PRICE=500000
+AGGRESSION_CENTER_PRICE=500000
+AGGRESSION_UPPER_ANCHOR_PRICE=700000
 MEANREV_K=2
 INV_SKEW_STRENGTH=0.35
 EXTREME_PUSH_PROB=0.10
 ```
 
-- `CENTER_PRICE` is the protocol price around which the mean-reversion model
-  operates. Increasing it makes more market prices appear below center and
-  therefore increases the model's tendency to buy; decreasing it has the
-  opposite effect.
+- `AGGRESSION_CENTER_PRICE` is the protocol price around which the
+  mean-reversion model operates. Increasing it makes more market prices appear
+  below center and therefore increases the model's tendency to buy; decreasing
+  it has the opposite effect.
+- `AGGRESSION_UPPER_ANCHOR_PRICE` defines the upper reference point used to
+  scale the midpoint's distance from `AGGRESSION_CENTER_PRICE`. It is not a
+  hard price ceiling and does not prevent trading above this value. Increasing
+  it makes a given midpoint deviation produce a smaller normalized signal;
+  decreasing it makes the same deviation produce a stronger signal. It must
+  not be lower than `AGGRESSION_CENTER_PRICE` and must remain within the
+  protocol price range.
 - `MEANREV_K` controls the strength of the response to the midpoint’s distance
   from center. Increasing it makes the buy/sell probability move more quickly
   toward its directional extreme; decreasing it makes the response weaker.
@@ -378,11 +471,13 @@ EXTREME_PUSH_PROB=0.10
   than `1` introduces probabilistic outward, momentum-like trades. It applies
   to the mean-reversion fallback, not to the fair-value edge decision.
 
-The mean-reversion model calculates:
+The mean-reversion model calculates the following normalized signal. The upper
+anchor determines the normalization range; it is a strategy scaling parameter,
+not an execution limit:
 
 ```text
-x = (midPrice - CENTER_PRICE)
-    / max(1e-9, SOFT_MAX_PRICE - CENTER_PRICE)
+x = (midPrice - AGGRESSION_CENTER_PRICE)
+    / max(1e-9, AGGRESSION_UPPER_ANCHOR_PRICE - AGGRESSION_CENTER_PRICE)
 x = clamp(x, -2, 2)
 inventoryNorm = clamp(
     (currentInventory - INV_TARGET) / INV_MAX_ABS,
@@ -394,9 +489,14 @@ pBuy = clamp(pBuy, 0.02, 0.98)
 ```
 
 A random draw below `pBuy` selects a buy; otherwise it selects a sell. A
-positive `x` means the midpoint is above `CENTER_PRICE`, making selling more
-likely. A negative `x` makes buying more likely. `EXTREME_PUSH_PROB` can
+positive `x` means the midpoint is above `AGGRESSION_CENTER_PRICE`, making
+selling more likely. A negative `x` makes buying more likely.
+`EXTREME_PUSH_PROB` can
 reverse this recommendation before the probability draw.
+
+Neither `AGGRESSION_CENTER_PRICE` nor `AGGRESSION_UPPER_ANCHOR_PRICE` is a
+hard execution limit. Quote and order bounds are controlled separately by
+`HARD_MIN_PRICE`, `HARD_MAX_PRICE`, and the risk settings.
 
 Aggression timing and order sizing are configured with:
 
@@ -493,7 +593,7 @@ cp examples/env/.env.maker.example .env.maker1
 cp examples/env/.env.taker.example .env.taker1
 ```
 
-Edit the copied files and replace the wallet mnemonic, API credentials, asset
+Edit the copied files and replace the wallet credential, API credentials, asset
 ID, and contract-address placeholders:
 
 ```bash
@@ -508,7 +608,27 @@ files; they contain secrets and are ignored by Git. The templates use the
 application’s protocol units for prices and sizes, and omitted settings use
 the defaults from `src/config/config.ts`.
 
-## Run multiple bots with PM2
+### Standalone wallet credentials
+
+The repository runner accepts either `PRIVATE_KEY` or `MNEMONIC`. When both
+are present, `PRIVATE_KEY` takes precedence and the mnemonic settings are
+ignored. When only `MNEMONIC` is present, `WALLET_INDEX` selects its derived
+account and defaults to `0` when omitted:
+
+```env
+# Private key takes precedence when both variables are set.
+PRIVATE_KEY=
+MNEMONIC=replace-with-wallet-mnemonic
+WALLET_INDEX=0
+```
+
+Keep exactly one credential in a production environment whenever possible.
+Store private keys and mnemonics only in a secrets manager or protected
+environment injection; never commit them to source control. This applies only
+to the repository’s standalone runner. Applications using the npm library pass
+an ethers `Wallet` directly in `TradingBotOptions`.
+
+## Run this repository's standalone bot processes with PM2
 
 Install PM2 globally with Node.js 20 or newer:
 
