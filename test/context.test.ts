@@ -3,8 +3,8 @@ import { createBotContext, getBotContext, runWithBotContext } from "../src/runti
 
 describe("bot context", () => {
   it("keeps state and configuration isolated between bot instances", async () => {
-    const first = createBotContext({ ASSET_ID: "101", CENTER_PRICE: 400_000 });
-    const second = createBotContext({ ASSET_ID: "202", CENTER_PRICE: 600_000 });
+    const first = createBotContext({ ASSET_ID: "101", AGGRESSION_CENTER_PRICE: 400_000 });
+    const second = createBotContext({ ASSET_ID: "202", AGGRESSION_CENTER_PRICE: 600_000 });
 
     await runWithBotContext(first, async () => {
       getBotContext().state.epoch = 11n;

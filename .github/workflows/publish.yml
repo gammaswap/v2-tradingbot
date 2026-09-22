@@ -1,0 +1,82 @@
+name: Publish package
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      registry:
+        description: Registry to publish to
+        required: true
+        type: choice
+        default: npm
+        options:
+          - npm
+          - github
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+    environment: ${{ (github.event_name == 'push' || inputs.registry == 'npm') && 'npm' || 'github-packages' }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4.4.0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: "pnpm"
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Verify tag version
+        if: github.event_name == 'push'
+        run: |
+          test "${GITHUB_REF_NAME#v}" = "$(node -p "require('./package.json').version")"
+
+      - name: Validate package
+        run: pnpm validate:package
+
+      - name: Configure npm registry
+        if: github.event_name == 'push' || inputs.registry == 'npm'
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Install npm staged publishing CLI
+        if: github.event_name == 'push' || inputs.registry == 'npm'
+        run: npm install --global npm@11.15.0
+
+      - name: Verify npm CLI
+        if: github.event_name == 'push' || inputs.registry == 'npm'
+        run: npm --version
+
+      - name: Stage package on npm
+        if: github.event_name == 'push' || inputs.registry == 'npm'
+        run: npm stage publish --registry=https://registry.npmjs.org
+
+      - name: Configure GitHub Packages registry
+        if: github.event_name == 'workflow_dispatch' && inputs.registry == 'github'
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://npm.pkg.github.com
+          scope: "@gammaswap"
+
+      - name: Publish to GitHub Packages
+        if: github.event_name == 'workflow_dispatch' && inputs.registry == 'github'
+        run: npm publish --registry=https://npm.pkg.github.com
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

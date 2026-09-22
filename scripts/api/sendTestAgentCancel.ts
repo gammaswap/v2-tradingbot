@@ -14,7 +14,7 @@ import {
 const CHAIN_ID = process.env.CHAIN_ID || "31337";
 const MNEMONIC =
   process.env.TEST_MNEMONIC || "test test test test test test test test test test test junk";
-const CANCELS_ENDPOINT = process.env.CANCELS_ENDPOINT || "http://localhost:3000/cancels";
+const CANCELS_ENDPOINT = (process.env.API_URL || "http://localhost:3000") + "/cancels";
 const AGENT_STATUS_ENDPOINT = (process.env.API_URL || "http://localhost:3000") + "/agents/status";
 const WALLET_INDEX = Number(process.env.WALLET_INDEX || "0");
 const AGENT_INDEX = Number(process.env.AGENT_INDEX || "1");

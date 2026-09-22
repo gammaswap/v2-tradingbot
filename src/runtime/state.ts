@@ -90,7 +90,7 @@ export function createInitialState(config = CFG): RuntimeState {
     baseBal: 0,
     invBase: 0,
     epoch: 0n,
-    lastMid: config.CENTER_PRICE,
+    lastMid: config.AGGRESSION_CENTER_PRICE,
     quoteModel: null,
     fairValue: null,
     oracle: {
