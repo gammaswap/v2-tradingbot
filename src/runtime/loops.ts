@@ -274,6 +274,24 @@ function applyPendingResponse(pendingResp: Awaited<ReturnType<typeof apiGetPendi
   STATE.pending = next;
 }
 
+/**
+ * Pausing alone leaves existing quotes resting at prices derived from the last
+ * reference price. Cancel them once per stale episode; a failed cancel is
+ * retried on the next call.
+ */
+export async function cancelQuotesWhileStale(wallet: Wallet) {
+  if (STATE.staleCancelEpoch === STATE.epoch) return;
+  try {
+    await apiCancelOrder(wallet, STATE.epoch, ZeroHash);
+    STATE.staleCancelEpoch = STATE.epoch;
+    logger.warn("reference price stale: cancelled resting quotes", {
+      epoch: STATE.epoch.toString(),
+    });
+  } catch (e: unknown) {
+    logger.warn("reference price stale: cancel-all failed, will retry", errorMessage(e));
+  }
+}
+
 export async function runQuoteMaintenance(wallet: Wallet) {
   if (CFG.IS_TAKER) {
     logger.debug("quote maintenance skipped: bot is configured as taker");
@@ -288,8 +306,10 @@ export async function runQuoteMaintenance(wallet: Wallet) {
   }
   if (shouldPauseForFairValue(book)) {
     logger.warn("quote maintenance skipped: reference price is stale or unavailable");
+    await cancelQuotesWhileStale(wallet);
     return;
   }
+  STATE.staleCancelEpoch = null;
 
   await reconcileCancelReplaceIntents(wallet);
   await reconcilePlaceIntents(wallet);

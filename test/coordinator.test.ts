@@ -11,7 +11,9 @@ const refreshPrivateState = vi.fn().mockResolvedValue(undefined);
 const runAggression = vi.fn().mockResolvedValue(undefined);
 const runAssetEpochCheck = vi.fn().mockResolvedValue({ changed: false, resolved: false });
 const runQuoteMaintenance = vi.fn().mockResolvedValue(undefined);
+const cancelQuotesWhileStale = vi.fn().mockResolvedValue(undefined);
 vi.mock("../src/runtime/loops.js", () => ({
+  cancelQuotesWhileStale,
   refreshPrivateState,
   runAggression,
   runAssetEpochCheck,
@@ -48,6 +50,8 @@ beforeEach(() => {
   runAggression.mockClear();
   runAssetEpochCheck.mockClear();
   runQuoteMaintenance.mockClear();
+  cancelQuotesWhileStale.mockClear();
+  STATE.fairValue = null;
 });
 
 afterEach(() => {
@@ -75,6 +79,32 @@ describe("coordinator step", () => {
 
     expect(runQuoteMaintenance).toHaveBeenCalledOnce();
     expect(runAggression).not.toHaveBeenCalled();
+  });
+
+  it("cancels resting quotes while the reference price is stale", async () => {
+    const promise = runCoordinatorStep(context());
+    await vi.advanceTimersByTimeAsync(0);
+    await promise;
+
+    expect(cancelQuotesWhileStale).toHaveBeenCalledOnce();
+  });
+
+  it("leaves quotes alone while the reference price is fresh", async () => {
+    STATE.oracle.stale = false;
+    STATE.fairValue = {
+      protocolPrice: 500_000,
+      probability: 0.5,
+      spot: 1n,
+      strike: 1n,
+      expiresInSec: 60,
+      updatedAtMs: Date.now(),
+    };
+
+    const promise = runCoordinatorStep(context());
+    await vi.advanceTimersByTimeAsync(0);
+    await promise;
+
+    expect(cancelQuotesWhileStale).not.toHaveBeenCalled();
   });
 
   it("does not run trading loops for a resolved asset", async () => {
