@@ -58,12 +58,17 @@ import { Logger } from "../utils/logger.js";
 
 const logger = new Logger("loops");
 
-export async function hasPendingOrders() {
-  const resp = await apiGetBalance();
-  logger.info("cleanUpAllOrders:cancel all orders >> pending", resp.pending);
-  const hasPendingBalance = resp.pending >= CFG.DUST_BALANCE;
+/**
+ * Whether this bot's asset has resting orders in `epoch`. The account's
+ * pending balance is not used because it includes orders from every asset
+ * traded on the account.
+ */
+export async function hasPendingOrders(epoch: bigint = STATE.epoch) {
+  const pending = await apiGetPending(STATE.account, epoch);
+  const count = pending.buys.length + pending.sells.length;
+  logger.info("cleanUpAllOrders:resting orders", { epoch: epoch.toString(), count });
   await sleep(1000 * 2);
-  return hasPendingBalance;
+  return count > 0;
 }
 
 export async function cleanUpAllOrders(wallet: Wallet) {
