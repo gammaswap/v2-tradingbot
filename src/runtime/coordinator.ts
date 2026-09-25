@@ -9,13 +9,14 @@ import {
 import { apiGetBook } from "../api/api.js";
 import { markFairValueStale, updateFairValueFromOracle } from "./fairValue.js";
 import {
+  cancelQuotesWhileStale,
   refreshPrivateState,
   runAggression,
   runAssetEpochCheck,
   runQuoteMaintenance,
 } from "./loops.js";
 import type { RuntimeEvent, RuntimeEventQueue } from "./events.js";
-import { midPrice } from "./strategy.js";
+import { midPrice, shouldPauseForFairValue } from "./strategy.js";
 import {
   applyMarketUpdate,
   buildBookSnapshot,
@@ -89,6 +90,12 @@ export async function runCoordinatorStep(context: CoordinatorStepContext): Promi
 
   const events = queue.drain();
   const actions = processEvents(localBook, events);
+
+  // Checked every step rather than on the quote interval so quotes come off
+  // the book as soon as the reference price goes stale.
+  if (!CFG.IS_TAKER && shouldPauseForFairValue(STATE.book)) {
+    await cancelQuotesWhileStale(wallet);
+  }
   let bookReady = context.bookReady && !localBook.needsResync;
 
   if (actions.needsResync) {

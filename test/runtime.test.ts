@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ZeroHash } from "ethers";
 import type { ApiAssetResponse } from "../src/utils/types.js";
 
 const apiGetAsset = vi.fn();
@@ -26,6 +27,7 @@ vi.mock("../src/api/api.js", () => ({
 const { STATE } = await import("../src/runtime/state.js");
 const {
   cancelAllOpenOrdersOnShutdown,
+  cancelQuotesWhileStale,
   reconcileOrderIntents,
   runAssetEpochCheck,
   runAggression,
@@ -63,6 +65,7 @@ beforeEach(() => {
   STATE.fairValue = null;
   STATE.quoteModel = null;
   STATE.oracle.price = null;
+  STATE.staleCancelEpoch = null;
   apiGetAsset.mockReset();
   apiGetBalance.mockReset();
   apiGetPending.mockReset();
@@ -158,6 +161,38 @@ describe("graceful shutdown order cancellation", () => {
     expect(apiCancelOrder).toHaveBeenCalledWith(expect.anything(), 0n, expect.any(String));
     expect(apiGetPending).toHaveBeenCalledTimes(2);
     expect(apiGetBalance).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("stale reference price", () => {
+  it("cancels resting quotes when quote maintenance pauses", async () => {
+    await runQuoteMaintenance({} as never);
+
+    expect(apiCancelOrder).toHaveBeenCalledOnce();
+    expect(apiCancelOrder).toHaveBeenCalledWith(expect.anything(), 4n, ZeroHash);
+    expect(apiSendOrder).not.toHaveBeenCalled();
+  });
+
+  it("cancels once per stale episode and again after the epoch rolls", async () => {
+    await cancelQuotesWhileStale({} as never);
+    await cancelQuotesWhileStale({} as never);
+    expect(apiCancelOrder).toHaveBeenCalledOnce();
+
+    STATE.epoch = 5n;
+    await cancelQuotesWhileStale({} as never);
+    expect(apiCancelOrder).toHaveBeenCalledTimes(2);
+    expect(apiCancelOrder).toHaveBeenLastCalledWith(expect.anything(), 5n, ZeroHash);
+  });
+
+  it("retries a failed cancel on the next call", async () => {
+    apiCancelOrder.mockRejectedValueOnce(new Error("network")).mockResolvedValue(undefined);
+
+    await cancelQuotesWhileStale({} as never);
+    await cancelQuotesWhileStale({} as never);
+    await cancelQuotesWhileStale({} as never);
+
+    expect(apiCancelOrder).toHaveBeenCalledTimes(2);
+    expect(STATE.staleCancelEpoch).toBe(4n);
   });
 });
 
