@@ -25,6 +25,7 @@ vi.mock("../src/api/api.js", () => ({
 
 const { STATE } = await import("../src/runtime/state.js");
 const {
+  cancelAllOrders,
   cancelAllOpenOrdersOnShutdown,
   reconcileOrderIntents,
   runAssetEpochCheck,
@@ -158,6 +159,48 @@ describe("graceful shutdown order cancellation", () => {
     expect(apiCancelOrder).toHaveBeenCalledWith(expect.anything(), 0n, expect.any(String));
     expect(apiGetPending).toHaveBeenCalledTimes(2);
     expect(apiGetBalance).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("cancel scan bounds", () => {
+  const scannedEpochs = () => apiGetPending.mock.calls.map(([, epoch]) => epoch);
+
+  it("stops the shutdown scan at the lookback when account pending never clears", async () => {
+    STATE.epoch = 100n;
+    apiGetBalance.mockResolvedValue({ pending: 50_000_000n });
+    apiGetPending.mockResolvedValue({ buys: [], sells: [] });
+
+    const promise = cancelAllOpenOrdersOnShutdown({} as never, 100n);
+    await vi.runAllTimersAsync();
+    await promise;
+
+    expect(scannedEpochs()).toEqual([100n, 99n, 98n, 97n]);
+  });
+
+  it("stops cancelAllOrders at the lookback when account pending never clears", async () => {
+    STATE.epoch = 100n;
+    apiGetBalance.mockResolvedValue({ pending: 50_000_000n });
+    apiGetPending.mockResolvedValue({ buys: [], sells: [] });
+
+    const promise = cancelAllOrders({} as never);
+    await vi.runAllTimersAsync();
+    await promise;
+
+    expect(scannedEpochs()).toEqual([100n, 99n, 98n, 97n]);
+  });
+
+  it("still reaches the bot's own epoch when starting from a newer one", async () => {
+    STATE.epoch = 90n;
+    apiGetBalance.mockResolvedValue({ pending: 50_000_000n });
+    apiGetPending.mockResolvedValue({ buys: [], sells: [] });
+
+    const promise = cancelAllOrders({} as never, 100n);
+    await vi.runAllTimersAsync();
+    await promise;
+
+    expect(scannedEpochs()[0]).toBe(100n);
+    expect(scannedEpochs().at(-1)).toBe(87n);
+    expect(scannedEpochs()).toContain(90n);
   });
 });
 

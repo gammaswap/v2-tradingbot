@@ -85,11 +85,23 @@ export async function cleanUpAllOrders(wallet: Wallet) {
   }
 }
 
+// Orders are only placed at STATE.epoch, so resting orders can only be in the
+// bot's recent epochs. The scans below otherwise stop only when the account's
+// pending balance clears, which never happens while another asset on the same
+// account is quoting.
+const CANCEL_SCAN_LOOKBACK_EPOCHS = 3n;
+
+function cancelScanFloor(startingEpoch: bigint): bigint {
+  const lowest = STATE.epoch < startingEpoch ? STATE.epoch : startingEpoch;
+  return lowest > CANCEL_SCAN_LOOKBACK_EPOCHS ? lowest - CANCEL_SCAN_LOOKBACK_EPOCHS : 0n;
+}
+
 export async function cancelAllOrders(wallet: Wallet, startingEpoch: bigint = STATE.epoch) {
   let epoch = startingEpoch;
+  const floor = cancelScanFloor(startingEpoch);
   let done = false;
   logger.info("==============cancelAllOrders:start", epoch, "========================");
-  while (!done && epoch >= 0n) {
+  while (!done && epoch >= floor) {
     logger.info("cancelAllOrders:epoch:", epoch);
     // look for pending orders
     const pending = await apiGetPending(STATE.account, epoch);
@@ -147,7 +159,8 @@ export async function cancelAllOpenOrdersOnShutdown(
     return;
   }
 
-  for (let epoch = startingEpoch; epoch >= 0n; epoch--) {
+  const floor = cancelScanFloor(startingEpoch);
+  for (let epoch = startingEpoch; epoch >= floor; epoch--) {
     let pending = await apiGetPending(STATE.account, epoch);
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
