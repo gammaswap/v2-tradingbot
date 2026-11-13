@@ -1,9 +1,9 @@
 export const PROTOCOL_MIN_PRICE = 1_000;
 export const PROTOCOL_MAX_PRICE = 999_000;
 export const PROTOCOL_TICK_SIZE = 1_000;
-export const PROTOCOL_MIN_SIZE = 10_000;
+export const PROTOCOL_MIN_SIZE = 1_000_000;
 export const PROTOCOL_MAX_SIZE = 100_000_000_000;
-export const PROTOCOL_LOT_SIZE = 10_000;
+export const PROTOCOL_LOT_SIZE = 1_000_000;
 export const PROTOCOL_MIN_ORDER_MARGIN = 10n;
 const PROTOCOL_SCALE = 1_000_000n;
 
