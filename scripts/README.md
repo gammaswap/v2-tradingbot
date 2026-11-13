@@ -98,7 +98,12 @@ decimal strings at JSON boundaries.
 
 Order and transfer inputs use human decimal strings:
 
-- `size` and `amount` allow up to two decimal places.
+- Order `size` must be a whole-unit string, such as `"1"` or `"100"`. The
+  exchange minimum and lot increment are both one unit (`1,000,000` protocol
+  units). The installed SDK can represent two decimal places, but fractional
+  order sizes are no longer accepted by the exchange. Sample order and
+  cancel-replace scripts pass sizes directly to the SDK; use whole sizes.
+- Transfer `amount` allows up to two decimal places.
 - `price` allows one decimal place and is interpreted as cents. For example,
   `99.9` becomes `999000n` in protocol units.
 - Invalid precision, zero amounts, out-of-range values, invalid nonces, and
@@ -339,7 +344,7 @@ the configured wallet address as `sender`.
 | `epoch`            | Market epoch.                                                                                  |
 | `side`             | `false` for buy, `true` for sell.                                                              |
 | `price`            | Human decimal limit price string. One decimal place is allowed and interpreted as cents.       |
-| `size`             | Human decimal order size string. Up to two decimal places.                                     |
+| `size`             | Whole-unit order size string, such as `"1"` or `"100"`. Minimum and increment: one unit.       |
 | `amount`           | Human decimal withdrawal amount string. Up to two decimal places.                              |
 | `timeInForce`      | Optional time-in-force value. Defaults to `TimeInForce.GTC`.                                   |
 | `nonce`            | Optional action nonce. Defaults to `nonceManager.next()`.                                      |

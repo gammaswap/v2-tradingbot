@@ -67,9 +67,24 @@ describe("order planning", () => {
     ]);
   });
 
-  it("rounds planned sizes to lot size", () => {
+  it("rounds planned sizes up to whole-unit lots", () => {
     const result = planOrders([], [400_000], [1_234_567], "buy", 10_000_000);
 
-    expect(result.newOrders[0]?.size).toBe(1_240_000);
+    expect(result.newOrders[0]?.size).toBe(2_000_000);
   });
+
+  it.each(["buy", "sell"] as const)("rounds %s sizes down to affordable whole units", (side) => {
+    const result = planOrders([], [500_000], [2_000_000], side, 750_000);
+
+    expect(result.newOrders[0]?.size).toBe(1_000_000);
+  });
+
+  it.each(["buy", "sell"] as const)(
+    "skips %s orders when collateral cannot fund one unit",
+    (side) => {
+      const result = planOrders([], [500_000], [1_000_000], side, 499_999);
+
+      expect(result.newOrders).toEqual([]);
+    },
+  );
 });

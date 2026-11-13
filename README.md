@@ -97,8 +97,12 @@ environment injection for the wallet and API credentials.
 ### Prices, sizes, and modes
 
 Prices use GammaSwap protocol units: `1,000` is $0.001 and `999,000` is
-$0.999. Contract sizes use one million protocol units per contract. The bot
-does not convert ordinary dollar amounts for you.
+$0.999. Contract sizes use one million protocol units per contract. Orders
+require whole-unit sizes: the minimum and lot increment are both `1,000,000`
+protocol units (one contract, representing 1 USDC at settlement). Size caps
+`maxOrderSize` and `aggression.maxAggressQty` must also be multiples of
+`1,000,000`. Prices and collateral amounts can still be fractional USDC. The
+bot does not convert ordinary dollar amounts for you.
 
 The bot operates in one of two mutually exclusive modes. `isTaker: false`
 (the default) runs maker mode: passive ALO quote maintenance only. Setting
@@ -365,8 +369,13 @@ w_i = (1 + u_i)^QUOTE_SIZE_CONCAVITY
 size_i = totalSideSize * w_i / sum(w_i)
 ```
 
-Allocation is rounded to whole protocol lots using largest-remainder
-rounding, preserving the requested side total whenever usable prices exist.
+Side totals are rounded down to whole-unit lots (`1,000,000` protocol units
+per lot) before allocation. Largest-remainder rounding preserves that rounded
+total whenever usable prices exist. Totals below one unit produce no orders;
+when there are fewer lots than price levels, some levels receive zero size.
+The order planner rounds requested sizes up to whole lots, then rounds down
+when capping them to available collateral. An order is skipped if collateral
+cannot fund one whole unit.
 
 The quote price risk settings are:
 

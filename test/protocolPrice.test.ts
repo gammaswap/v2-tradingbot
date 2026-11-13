@@ -35,7 +35,17 @@ describe("protocol price validation", () => {
     expect(() => assertProtocolSize(PROTOCOL_MAX_SIZE + 1)).toThrow();
   });
 
-  it("checks the minimum order margin with exact arithmetic", () => {
+  it.each([10_000, 990_000, 1_010_000, 1_250_000])(
+    "rejects fractional size %i in protocol units",
+    (size) => {
+      expect(() => assertProtocolSize(size)).toThrow();
+      expect(() => assertProtocolSize(BigInt(size))).toThrow();
+      expect(() => assertProtocolOrder("buy", size, 500_000)).toThrow();
+      expect(() => assertProtocolOrder("sell", size, 500_000)).toThrow();
+    },
+  );
+
+  it("accepts whole-unit sizes with fractional USDC collateral at boundary prices", () => {
     expect(() => assertProtocolOrder("buy", PROTOCOL_MIN_SIZE, PROTOCOL_MIN_PRICE)).not.toThrow();
     expect(() => assertProtocolOrder("sell", PROTOCOL_MIN_SIZE, PROTOCOL_MAX_PRICE)).not.toThrow();
   });

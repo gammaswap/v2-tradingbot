@@ -113,8 +113,6 @@ describe("price configuration validation", () => {
 
   it("rejects order sizes outside the protocol limits", () => {
     const errors = validateOrderSizeConfiguration({
-      QUOTE_BASE_SIZE_MIN: 10_000,
-      QUOTE_BASE_SIZE_MAX: 100_000_000_000,
       MAX_AGGRESS_QTY: 100_000_000_001,
       MAX_ORDER_SIZE: 1,
     } as never);
@@ -125,6 +123,18 @@ describe("price configuration validation", () => {
         expect.stringContaining("MAX_ORDER_SIZE"),
       ]),
     );
+  });
+
+  it("rejects fractional-unit order caps within the size limits", () => {
+    expect(
+      validateOrderSizeConfiguration({
+        MAX_AGGRESS_QTY: 1_250_000,
+        MAX_ORDER_SIZE: 2_500_000,
+      } as never),
+    ).toEqual([
+      "MAX_AGGRESS_QTY must be a multiple of 1000000",
+      "MAX_ORDER_SIZE must be a multiple of 1000000",
+    ]);
   });
 
   it("rejects an invalid capital exposure percentage", () => {
