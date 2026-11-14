@@ -74,9 +74,6 @@ export type RuntimeState = {
   };
   account: string;
   lastTradeTime: number;
-  // Epoch whose resting quotes were cancelled because the reference price went
-  // stale. Cleared once quoting resumes.
-  staleCancelEpoch: bigint | null;
 };
 
 export function createInitialState(config = CFG): RuntimeState {
@@ -106,7 +103,6 @@ export function createInitialState(config = CFG): RuntimeState {
     },
     account: "",
     lastTradeTime: 0,
-    staleCancelEpoch: null,
   };
 }
 

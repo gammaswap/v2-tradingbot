@@ -67,7 +67,6 @@ export async function hasPendingOrders(epoch: bigint = STATE.epoch) {
   const pending = await apiGetPending(STATE.account, epoch);
   const count = pending.buys.length + pending.sells.length;
   logger.info("cleanUpAllOrders:resting orders", { epoch: epoch.toString(), count });
-  await sleep(1000 * 2);
   return count > 0;
 }
 
@@ -76,6 +75,7 @@ export async function cleanUpAllOrders(wallet: Wallet) {
   let tryCount = 0;
   while (!done) {
     if (await hasPendingOrders()) {
+      await sleep(1000);
       logger.info("cleanUpAllOrders:cancel all orders >> tryCount:", tryCount);
       await cancelAllOrders(wallet);
       tryCount++;
@@ -87,6 +87,7 @@ export async function cleanUpAllOrders(wallet: Wallet) {
       logger.info("cleanUpAllOrders:cancel all orders >> max tryCount reached");
       done = true;
     }
+    await sleep(1000 * 2);
   }
 }
 
@@ -298,15 +299,18 @@ function applyPendingResponse(pendingResp: Awaited<ReturnType<typeof apiGetPendi
  * retried on the next call.
  */
 export async function cancelQuotesWhileStale(wallet: Wallet) {
-  if (STATE.staleCancelEpoch === STATE.epoch) return;
   try {
-    await apiCancelOrder(wallet, STATE.epoch, ZeroHash);
-    STATE.staleCancelEpoch = STATE.epoch;
-    logger.warn("reference price stale: cancelled resting quotes", {
-      epoch: STATE.epoch.toString(),
-    });
+    if(await hasPendingOrders()) {
+      await sleep(1000);
+      await apiCancelOrder(wallet, STATE.epoch, ZeroHash);
+      logger.warn("reference price stale: cancelled resting quotes", {
+        epoch: STATE.epoch.toString(),
+      });
+    }
   } catch (e: unknown) {
     logger.warn("reference price stale: cancel-all failed, will retry", errorMessage(e));
+  } finally {
+    await sleep(1000 * 2);
   }
 }
 
@@ -327,7 +331,6 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     await cancelQuotesWhileStale(wallet);
     return;
   }
-  STATE.staleCancelEpoch = null;
 
   await reconcileCancelReplaceIntents(wallet);
   await reconcilePlaceIntents(wallet);

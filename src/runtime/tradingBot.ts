@@ -356,6 +356,7 @@ export class TradingBot {
     if (await hasPendingOrders()) {
       throw new Error(`resting orders remain after cleanup at epoch ${STATE.epoch}`);
     }
+    await sleep(1000 * 2);
     const balance = await apiGetBalance();
     const position = await apiGetPosition(STATE.epoch);
     STATE.invBase =

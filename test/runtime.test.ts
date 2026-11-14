@@ -66,7 +66,6 @@ beforeEach(() => {
   STATE.fairValue = null;
   STATE.quoteModel = null;
   STATE.oracle.price = null;
-  STATE.staleCancelEpoch = null;
   apiGetAsset.mockReset();
   apiGetBalance.mockReset();
   apiGetPending.mockReset();
@@ -199,34 +198,107 @@ describe("graceful shutdown order cancellation", () => {
 
 
 describe("stale reference price", () => {
-  it("cancels resting quotes when quote maintenance pauses", async () => {
-    await runQuoteMaintenance({} as never);
+  const emptyPending = { buys: [], sells: [] };
+  const openPending = { buys: [{ id: "open-order" }], sells: [] };
 
+  async function cancelAndAdvanceTimers() {
+    const promise = cancelQuotesWhileStale({} as never);
+    await vi.runAllTimersAsync();
+    await promise;
+  }
+
+  it("cancels resting quotes when quote maintenance pauses", async () => {
+    apiGetPending.mockResolvedValue(openPending);
+
+    const promise = runQuoteMaintenance({} as never);
+    await vi.runAllTimersAsync();
+    await promise;
+
+    expect(apiGetPending).toHaveBeenCalledWith(STATE.account, 4n);
     expect(apiCancelOrder).toHaveBeenCalledOnce();
     expect(apiCancelOrder).toHaveBeenCalledWith(expect.anything(), 4n, ZeroHash);
     expect(apiSendOrder).not.toHaveBeenCalled();
+    expect(apiCancelReplaceOrder).not.toHaveBeenCalled();
   });
 
-  it("cancels once per stale episode and again after the epoch rolls", async () => {
-    await cancelQuotesWhileStale({} as never);
-    await cancelQuotesWhileStale({} as never);
-    expect(apiCancelOrder).toHaveBeenCalledOnce();
+  it.each(["buys", "sells"] as const)(
+    "keeps cancelling while pending %s remain, including after an epoch change",
+    async (side) => {
+      apiGetPending.mockResolvedValue({ ...emptyPending, [side]: [{ id: "open-order" }] });
 
-    STATE.epoch = 5n;
-    await cancelQuotesWhileStale({} as never);
+      await cancelAndAdvanceTimers();
+      await cancelAndAdvanceTimers();
+      expect(apiGetPending).toHaveBeenCalledTimes(2);
+      expect(apiCancelOrder).toHaveBeenCalledTimes(2);
+
+      STATE.epoch = 5n;
+      await cancelAndAdvanceTimers();
+      expect(apiGetPending).toHaveBeenLastCalledWith(STATE.account, 5n);
+      expect(apiCancelOrder).toHaveBeenCalledTimes(3);
+      expect(apiCancelOrder).toHaveBeenLastCalledWith(expect.anything(), 5n, ZeroHash);
+    },
+  );
+
+  it("skips cancellation when empty but cancels orders appearing later in the same epoch", async () => {
+    apiGetPending
+      .mockResolvedValueOnce(openPending)
+      .mockResolvedValueOnce(emptyPending)
+      .mockResolvedValueOnce(openPending);
+
+    await cancelAndAdvanceTimers();
+    expect(apiCancelOrder).toHaveBeenCalledTimes(1);
+    await cancelAndAdvanceTimers();
+    expect(apiCancelOrder).toHaveBeenCalledTimes(1);
+    await cancelAndAdvanceTimers();
     expect(apiCancelOrder).toHaveBeenCalledTimes(2);
-    expect(apiCancelOrder).toHaveBeenLastCalledWith(expect.anything(), 5n, ZeroHash);
+    expect(apiGetPending).toHaveBeenCalledTimes(3);
   });
 
-  it("retries a failed cancel on the next call", async () => {
+  it("throttles checks even when there are no pending orders", async () => {
+    apiGetPending.mockResolvedValue(emptyPending);
+    let finished = false;
+    const promise = cancelQuotesWhileStale({} as never).then(() => {
+      finished = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(finished).toBe(false);
+    expect(apiCancelOrder).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await promise;
+    expect(finished).toBe(true);
+  });
+
+  it("retries a failed cancel on the next call while orders remain", async () => {
+    apiGetPending.mockResolvedValue(openPending);
     apiCancelOrder.mockRejectedValueOnce(new Error("network")).mockResolvedValue(undefined);
 
-    await cancelQuotesWhileStale({} as never);
-    await cancelQuotesWhileStale({} as never);
-    await cancelQuotesWhileStale({} as never);
-
+    await cancelAndAdvanceTimers();
+    expect(apiCancelOrder).toHaveBeenCalledTimes(1);
+    await cancelAndAdvanceTimers();
+    expect(apiGetPending).toHaveBeenCalledTimes(2);
     expect(apiCancelOrder).toHaveBeenCalledTimes(2);
-    expect(STATE.staleCancelEpoch).toBe(4n);
+  });
+
+  it("throttles a failed pending lookup and checks again on the next call", async () => {
+    apiGetPending
+      .mockRejectedValueOnce(new Error("lookup unavailable"))
+      .mockResolvedValue(openPending);
+    let finished = false;
+    const promise = cancelQuotesWhileStale({} as never).then(() => {
+      finished = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(finished).toBe(false);
+    expect(apiCancelOrder).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await promise;
+    expect(finished).toBe(true);
+
+    await cancelAndAdvanceTimers();
+    expect(apiGetPending).toHaveBeenCalledTimes(2);
+    expect(apiCancelOrder).toHaveBeenCalledOnce();
   });
 });
 
