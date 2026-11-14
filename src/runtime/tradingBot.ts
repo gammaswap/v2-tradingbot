@@ -6,7 +6,7 @@ import {
   type AggressionModel,
 } from "../config/config.js";
 import { apiGetAsset, apiGetBalance, apiGetPosition } from "../api/api.js";
-import { cancelAllOpenOrdersOnShutdown, cleanUpAllOrders } from "./loops.js";
+import { cancelAllOpenOrdersOnShutdown, cleanUpAllOrders, hasPendingOrders } from "./loops.js";
 import { initializePeriodLength } from "./state.js";
 import { RuntimeEventQueue } from "./events.js";
 import { startOracleFeed, type OracleFeed } from "./oracle.js";
@@ -353,10 +353,10 @@ export class TradingBot {
     await cleanUpAllOrders(this.wallet);
     await sleep(3_000);
 
-    const balance = await apiGetBalance();
-    if (balance.pending >= CFG.DUST_BALANCE) {
-      throw new Error(`account has pending balance: ${balance.pending}`);
+    if (await hasPendingOrders()) {
+      throw new Error(`resting orders remain after cleanup at epoch ${STATE.epoch}`);
     }
+    const balance = await apiGetBalance();
     const position = await apiGetPosition(STATE.epoch);
     STATE.invBase =
       protocolValueToSafeNumber(position.balance, "position balance") * (position.bSide ? -1 : 1);
