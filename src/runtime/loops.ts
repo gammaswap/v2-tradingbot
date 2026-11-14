@@ -58,12 +58,17 @@ import { Logger } from "../utils/logger.js";
 
 const logger = new Logger("loops");
 
-export async function hasPendingOrders() {
-  const resp = await apiGetBalance();
-  logger.info("cleanUpAllOrders:cancel all orders >> pending", resp.pending);
-  const hasPendingBalance = resp.pending >= CFG.DUST_BALANCE;
+/**
+ * Whether this bot's asset has resting orders in `epoch`. The account's
+ * pending balance is not used because it includes orders from every asset
+ * traded on the account.
+ */
+export async function hasPendingOrders(epoch: bigint = STATE.epoch) {
+  const pending = await apiGetPending(STATE.account, epoch);
+  const count = pending.buys.length + pending.sells.length;
+  logger.info("cleanUpAllOrders:resting orders", { epoch: epoch.toString(), count });
   await sleep(1000 * 2);
-  return hasPendingBalance;
+  return count > 0;
 }
 
 export async function cleanUpAllOrders(wallet: Wallet) {
@@ -85,11 +90,23 @@ export async function cleanUpAllOrders(wallet: Wallet) {
   }
 }
 
+// Orders are only placed at STATE.epoch, so resting orders can only be in the
+// bot's recent epochs. The scans below otherwise stop only when the account's
+// pending balance clears, which never happens while another asset on the same
+// account is quoting.
+const CANCEL_SCAN_LOOKBACK_EPOCHS = 3n;
+
+function cancelScanFloor(startingEpoch: bigint): bigint {
+  const lowest = STATE.epoch < startingEpoch ? STATE.epoch : startingEpoch;
+  return lowest > CANCEL_SCAN_LOOKBACK_EPOCHS ? lowest - CANCEL_SCAN_LOOKBACK_EPOCHS : 0n;
+}
+
 export async function cancelAllOrders(wallet: Wallet, startingEpoch: bigint = STATE.epoch) {
   let epoch = startingEpoch;
+  const floor = cancelScanFloor(startingEpoch);
   let done = false;
   logger.info("==============cancelAllOrders:start", epoch, "========================");
-  while (!done && epoch >= 0n) {
+  while (!done && epoch >= floor) {
     logger.info("cancelAllOrders:epoch:", epoch);
     // look for pending orders
     const pending = await apiGetPending(STATE.account, epoch);
@@ -147,7 +164,8 @@ export async function cancelAllOpenOrdersOnShutdown(
     return;
   }
 
-  for (let epoch = startingEpoch; epoch >= 0n; epoch--) {
+  const floor = cancelScanFloor(startingEpoch);
+  for (let epoch = startingEpoch; epoch >= floor; epoch--) {
     let pending = await apiGetPending(STATE.account, epoch);
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -274,6 +292,24 @@ function applyPendingResponse(pendingResp: Awaited<ReturnType<typeof apiGetPendi
   STATE.pending = next;
 }
 
+/**
+ * Pausing alone leaves existing quotes resting at prices derived from the last
+ * reference price. Cancel them once per stale episode; a failed cancel is
+ * retried on the next call.
+ */
+export async function cancelQuotesWhileStale(wallet: Wallet) {
+  if (STATE.staleCancelEpoch === STATE.epoch) return;
+  try {
+    await apiCancelOrder(wallet, STATE.epoch, ZeroHash);
+    STATE.staleCancelEpoch = STATE.epoch;
+    logger.warn("reference price stale: cancelled resting quotes", {
+      epoch: STATE.epoch.toString(),
+    });
+  } catch (e: unknown) {
+    logger.warn("reference price stale: cancel-all failed, will retry", errorMessage(e));
+  }
+}
+
 export async function runQuoteMaintenance(wallet: Wallet) {
   if (CFG.IS_TAKER) {
     logger.debug("quote maintenance skipped: bot is configured as taker");
@@ -288,8 +324,10 @@ export async function runQuoteMaintenance(wallet: Wallet) {
   }
   if (shouldPauseForFairValue(book)) {
     logger.warn("quote maintenance skipped: reference price is stale or unavailable");
+    await cancelQuotesWhileStale(wallet);
     return;
   }
+  STATE.staleCancelEpoch = null;
 
   await reconcileCancelReplaceIntents(wallet);
   await reconcilePlaceIntents(wallet);
