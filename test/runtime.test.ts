@@ -26,6 +26,7 @@ vi.mock("../src/api/api.js", () => ({
 
 const { STATE } = await import("../src/runtime/state.js");
 const {
+  cancelAllOrders,
   cancelAllOpenOrdersOnShutdown,
   cancelQuotesWhileStale,
   reconcileOrderIntents,
@@ -108,7 +109,7 @@ describe("asset epoch lifecycle", () => {
       }),
     );
     apiGetClaimable.mockResolvedValue({ claimable: 1n });
-    apiGetBalance.mockResolvedValue({ pending: 0n });
+    apiGetPending.mockResolvedValue({ buys: [], sells: [] });
 
     const promise = runAssetEpochCheck({} as never);
     await vi.advanceTimersByTimeAsync(2_000);
@@ -118,6 +119,38 @@ describe("asset epoch lifecycle", () => {
     expect(apiClaim).toHaveBeenCalledWith(expect.anything(), 4n);
     expect(STATE.epoch).toBe(5n);
     expect(STATE.asset?.strikePrice).toBe(700_000n);
+  });
+
+  it("advances the epoch while another asset on the account holds pending balance", async () => {
+    apiGetAsset.mockResolvedValue(asset(5n));
+    apiGetClaimable.mockResolvedValue({ claimable: 0n });
+    apiGetBalance.mockResolvedValue({ pending: 50_000_000n });
+    apiGetPending.mockResolvedValue({ buys: [], sells: [] });
+
+    const promise = runAssetEpochCheck({} as never);
+    await vi.advanceTimersByTimeAsync(2_000);
+    const result = await promise;
+
+    expect(result).toEqual({ changed: true, resolved: false });
+    expect(apiGetPending).toHaveBeenCalledWith(expect.any(String), 4n);
+    expect(apiCancelOrder).not.toHaveBeenCalled();
+    expect(STATE.epoch).toBe(5n);
+  });
+
+  it("cancels before advancing when this asset still has resting orders", async () => {
+    apiGetAsset.mockResolvedValue(asset(5n));
+    apiGetClaimable.mockResolvedValue({ claimable: 0n });
+    apiGetBalance.mockResolvedValue({ pending: 0n });
+    apiGetPending
+      .mockResolvedValueOnce({ buys: [{ id: "order" }], sells: [] })
+      .mockResolvedValue({ buys: [], sells: [] });
+
+    const promise = runAssetEpochCheck({} as never);
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    expect(result).toEqual({ changed: false, resolved: false });
+    expect(STATE.epoch).toBe(4n);
   });
 
   it("marks a resolved current epoch as resolved even when its price is zero", async () => {
@@ -164,6 +197,7 @@ describe("graceful shutdown order cancellation", () => {
   });
 });
 
+
 describe("stale reference price", () => {
   it("cancels resting quotes when quote maintenance pauses", async () => {
     await runQuoteMaintenance({} as never);
@@ -193,6 +227,48 @@ describe("stale reference price", () => {
 
     expect(apiCancelOrder).toHaveBeenCalledTimes(2);
     expect(STATE.staleCancelEpoch).toBe(4n);
+  });
+});
+
+describe("cancel scan bounds", () => {
+  const scannedEpochs = () => apiGetPending.mock.calls.map(([, epoch]) => epoch);
+
+  it("stops the shutdown scan at the lookback when account pending never clears", async () => {
+    STATE.epoch = 100n;
+    apiGetBalance.mockResolvedValue({ pending: 50_000_000n });
+    apiGetPending.mockResolvedValue({ buys: [], sells: [] });
+
+    const promise = cancelAllOpenOrdersOnShutdown({} as never, 100n);
+    await vi.runAllTimersAsync();
+    await promise;
+
+    expect(scannedEpochs()).toEqual([100n, 99n, 98n, 97n]);
+  });
+
+  it("stops cancelAllOrders at the lookback when account pending never clears", async () => {
+    STATE.epoch = 100n;
+    apiGetBalance.mockResolvedValue({ pending: 50_000_000n });
+    apiGetPending.mockResolvedValue({ buys: [], sells: [] });
+
+    const promise = cancelAllOrders({} as never);
+    await vi.runAllTimersAsync();
+    await promise;
+
+    expect(scannedEpochs()).toEqual([100n, 99n, 98n, 97n]);
+  });
+
+  it("still reaches the bot's own epoch when starting from a newer one", async () => {
+    STATE.epoch = 90n;
+    apiGetBalance.mockResolvedValue({ pending: 50_000_000n });
+    apiGetPending.mockResolvedValue({ buys: [], sells: [] });
+
+    const promise = cancelAllOrders({} as never, 100n);
+    await vi.runAllTimersAsync();
+    await promise;
+
+    expect(scannedEpochs()[0]).toBe(100n);
+    expect(scannedEpochs().at(-1)).toBe(87n);
+    expect(scannedEpochs()).toContain(90n);
   });
 });
 
