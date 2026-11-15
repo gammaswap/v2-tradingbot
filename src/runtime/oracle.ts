@@ -1,8 +1,9 @@
 import { createOracleWebSocketClient, type Unsubscribe } from "@gammaswap/v2-exchange-sdk";
-import { RUNTIME_CFG as CFG, RUNTIME_STATE as STATE } from "./context.js";
+import { getBotContext, RUNTIME_CFG as CFG, RUNTIME_STATE as STATE, runWithBotContext } from "./context.js";
 import { RuntimeEventQueue } from "./events.js";
 import { Logger } from "../utils/logger.js";
 import { errorMessage } from "../utils/utils.js";
+import { markFairValueStale, updateFairValueFromOracle } from "./fairValue.js";
 
 const logger = new Logger("oracle");
 
@@ -45,19 +46,32 @@ export async function startOracleFeed(queue: RuntimeEventQueue): Promise<OracleF
     throw new Error("cannot start oracle feed before the asset symbol ID is initialized");
   }
 
+  const botContext = getBotContext();
+
   unsubscribe = await client.subscribePrice(symbolId, {
     onPrice: (update) => {
-      notifyFirstPrice();
-      logger.debug("oracle price update:", {
-        symbolId: update.symbolId.toString(),
-        price: update.price.toString(),
-        ts: update.ts.toString(),
-      });
-      queue.publish({ type: "oracle-price", update });
+      runWithBotContext(botContext, () => {
+        STATE.oracle.connected = true;
+
+        // Immediately updates oracle price, receipt time, and fair value.
+        updateFairValueFromOracle(update.price, update.ts);
+
+        notifyFirstPrice();
+        logger.debug("oracle price update:", {
+          symbolId: update.symbolId.toString(),
+          price: update.price.toString(),
+          ts: update.ts.toString(),
+        });
+        queue.publish({ type: "oracle-state-changed" });
+      })
     },
     onStale: (symbolId) => {
-      logger.warn("oracle stream stale:", symbolId);
-      queue.publish({ type: "oracle-stale", symbolId });
+      runWithBotContext(botContext, () => {
+        STATE.oracle.connected = false;
+        markFairValueStale();
+        logger.warn("oracle stream stale:", symbolId);
+        queue.publish({ type: "oracle-state-changed" });
+      })
     },
     onError: (error) => logger.warn("oracle subscription error:", error),
   });

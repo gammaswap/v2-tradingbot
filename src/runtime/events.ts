@@ -1,10 +1,9 @@
-import type { OraclePriceUpdate, WebSocketMarketUpdate } from "@gammaswap/v2-exchange-sdk";
+import type { WebSocketMarketUpdate } from "@gammaswap/v2-exchange-sdk";
 
 export type RuntimeEvent =
   | { type: "market"; update: WebSocketMarketUpdate }
   | { type: "market-resync"; reason: string }
-  | { type: "oracle-price"; update: OraclePriceUpdate }
-  | { type: "oracle-stale"; symbolId: string };
+  | { type: "oracle-state-changed" }
 
 export class RuntimeEventQueue {
   private readonly events: RuntimeEvent[] = [];

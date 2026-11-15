@@ -7,7 +7,6 @@ import {
   type BotContext,
 } from "./context.js";
 import { apiGetBook } from "../api/api.js";
-import { markFairValueStale, updateFairValueFromOracle } from "./fairValue.js";
 import {
   cancelQuotesWhileStale,
   refreshPrivateState,
@@ -200,20 +199,7 @@ function processEvents(
       continue;
     }
 
-    if (event.type === "oracle-price") {
-      STATE.oracle.connected = true;
-      const estimate = updateFairValueFromOracle(event.update.price, event.update.ts);
-      logger.debug("oracle state updated", {
-        symbolId: event.update.symbolId.toString(),
-        price: event.update.price.toString(),
-        fairValue: estimate?.protocolPrice,
-      });
-      continue;
-    }
-
-    if (event.type === "oracle-stale") {
-      STATE.oracle.connected = false;
-      markFairValueStale();
+    if (event.type === "oracle-state-changed") { // price update or stale
       continue;
     }
 
