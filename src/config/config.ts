@@ -352,6 +352,10 @@ function buildConfig() {
     // ORACLE_STALE_PRICE_TIMEOUT_MS, which detects an inactive websocket.
     FAIR_VALUE_STALE_MS: envNum("FAIR_VALUE_STALE_MS", 45000),
 
+    ORACLE_NOTIFY_MIN_CHANGE_TICKS: envNum("ORACLE_NOTIFY_MIN_CHANGE_TICKS", 2),
+
+    ORACLE_NOTIFY_INTERVAL_MS: envNum("ORACLE_NOTIFY_INTERVAL_MS", 500),
+
     // ===============Aggression logic=================
     // Selects how a taker bot chooses IOC aggression trades. This setting is
     // used only when IS_TAKER=true; IS_TAKER=false disables aggression and
