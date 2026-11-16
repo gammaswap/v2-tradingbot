@@ -39,7 +39,7 @@ import {
   calculateTotalSizes,
 } from "./strategy.js";
 import { Wallet, ZeroHash } from "ethers";
-import { markFairValueStale, updateFairValueFromOracle } from "./fairValue.js";
+import { markFairValueStale, refreshFairValueFromCachedOracle } from "./fairValue.js";
 import { PendingOrder, AssetEpochCheckResult } from "../utils/types.js";
 import { TimeInForce } from "@gammaswap/v2-exchange-sdk";
 import { makeQuoteSlot, planOrders } from "./orderPlanner.js";
@@ -216,8 +216,7 @@ export async function runAssetEpochCheck(wallet: Wallet): Promise<AssetEpochChec
     hasPendingOrders,
     cancelAllOrders,
     refreshFairValue: () => {
-      if (STATE.oracle.price != null)
-        updateFairValueFromOracle(STATE.oracle.price, STATE.oracle.ts);
+      refreshFairValueFromCachedOracle();
     },
     markResolved: markFairValueStale,
   });

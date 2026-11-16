@@ -35,6 +35,7 @@ const {
   runQuoteMaintenance,
 } = await import("../src/runtime/loops.js");
 const { ORDER_INTENTS } = await import("../src/runtime/orderIntent.js");
+const { markFairValueStale, updateFairValueFromOracle } = await import("../src/runtime/fairValue.js");
 
 function asset(epoch: bigint, overrides: Partial<ApiAssetResponse> = {}): ApiAssetResponse {
   return {
@@ -82,6 +83,41 @@ afterEach(() => {
 });
 
 describe("asset epoch lifecycle", () => {
+  it.each([false, true])(
+    "preserves oracle freshness across an epoch change with stale=%s",
+    async (stale) => {
+      const receivedAtMs = 1_700_000_000_000;
+      vi.setSystemTime(receivedAtMs);
+      updateFairValueFromOracle(500_500n, 1_700_000_000n);
+      if (stale) markFairValueStale();
+      vi.setSystemTime(receivedAtMs + 20_000);
+      const oracleBefore = { ...STATE.oracle };
+      apiGetAsset.mockResolvedValue(
+        asset(5n, {
+          strikePrice: 500_600n,
+          expiration: 1_700_001_800n,
+        }),
+      );
+      apiGetClaimable.mockResolvedValue({ claimable: 0n });
+      apiGetPending.mockResolvedValue({ buys: [], sells: [] });
+
+      const result = await runAssetEpochCheck({} as never);
+
+      expect(result.changed).toBe(true);
+      expect(STATE.epoch).toBe(5n);
+      expect(STATE.oracle).toEqual(oracleBefore);
+      if (stale) {
+        expect(STATE.fairValue).toBeNull();
+      } else {
+        expect(STATE.fairValue).toMatchObject({
+          strike: 500_600n,
+          expiresInSec: 1_780,
+          updatedAtMs: receivedAtMs,
+        });
+      }
+    },
+  );
+
   it("refreshes the current asset without deriving values from resolution", async () => {
     const current = asset(4n, {
       strikePrice: 612_345n,
