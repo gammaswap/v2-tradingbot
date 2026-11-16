@@ -15,7 +15,7 @@ import {
   runQuoteMaintenance,
 } from "./loops.js";
 import type { RuntimeEvent, RuntimeEventQueue } from "./events.js";
-import { midPrice, shouldPauseForFairValue } from "./strategy.js";
+import { hasFreshFairValue, midPrice, shouldPauseForFairValue } from "./strategy.js";
 import {
   applyMarketUpdate,
   buildBookSnapshot,
@@ -129,10 +129,12 @@ export async function runCoordinatorStep(context: CoordinatorStepContext): Promi
   const tradingEnabled =
     context.bookReady && context.assetReady && STATE.asset != null && !STATE.asset.isResolved;
 
+  const oracleRepriceDue = actions.oracleChanged && hasFreshFairValue();
+
   if (
     tradingEnabled &&
     !CFG.IS_TAKER &&
-    (now >= context.nextQuote || actions.tradeOccurred || actions.needsResync)
+    (now >= context.nextQuote || actions.tradeOccurred || actions.needsResync || oracleRepriceDue)
   ) {
     await runQuoteMaintenance(wallet);
     await refreshPrivateState(wallet);
@@ -184,12 +186,14 @@ function processEvents(
   marketChanged: boolean;
   tradeOccurred: boolean;
   ownTradeOccurred: boolean;
+  oracleChanged: boolean;
 } {
   let needsResync = false;
   let skipMarketEvents = false;
   let marketChanged = false;
   let tradeOccurred = false;
   let ownTradeOccurred = false;
+  let oracleChanged = false;
 
   for (const event of events) {
     if (event.type === "market-resync") {
@@ -199,7 +203,9 @@ function processEvents(
       continue;
     }
 
-    if (event.type === "oracle-state-changed") { // price update or stale
+    if (event.type === "oracle-state-changed") {
+      // price update or stale
+      oracleChanged = true;
       continue;
     }
 
@@ -224,7 +230,7 @@ function processEvents(
   }
 
   if (book.needsResync) needsResync = true;
-  return { needsResync, marketChanged, tradeOccurred, ownTradeOccurred };
+  return { needsResync, marketChanged, tradeOccurred, ownTradeOccurred, oracleChanged };
 }
 
 function applyTradeHint(update: WebSocketTradeUpdate): boolean {

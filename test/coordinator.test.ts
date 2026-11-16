@@ -132,4 +132,33 @@ describe("coordinator step", () => {
     expect(runAggression).toHaveBeenCalledOnce();
     expect(runQuoteMaintenance).not.toHaveBeenCalled();
   });
+
+  it.each([false, true])(
+    "handles an oracle notification before the quote deadline with stale=%s",
+    async (stale) => {
+      STATE.oracle.stale = stale;
+      STATE.fairValue = {
+        protocolPrice: 500_000,
+        probability: 0.5,
+        spot: 500_000n,
+        strike: 500_000n,
+        expiresInSec: 900,
+        updatedAtMs: Date.now(),
+      };
+
+      const stepContext = context();
+      stepContext.nextQuote = Date.now() + 60_000;
+
+      // Multiple notifications in one batch must produce at most one pass.
+      stepContext.queue.publish({ type: "oracle-state-changed" });
+      stepContext.queue.publish({ type: "oracle-state-changed" });
+
+      await runCoordinatorStep(stepContext);
+
+      expect(runQuoteMaintenance).toHaveBeenCalledTimes(stale ? 0 : 1);
+      expect(refreshPrivateState).toHaveBeenCalledTimes(stale ? 0 : 1);
+      expect(cancelQuotesWhileStale).toHaveBeenCalledTimes(stale ? 1 : 0);
+      expect(runAggression).not.toHaveBeenCalled();
+    },
+  );
 });
