@@ -35,7 +35,8 @@ const {
   runQuoteMaintenance,
 } = await import("../src/runtime/loops.js");
 const { ORDER_INTENTS } = await import("../src/runtime/orderIntent.js");
-const { markFairValueStale, updateFairValueFromOracle } = await import("../src/runtime/fairValue.js");
+const { markFairValueStale, updateFairValueFromOracle } =
+  await import("../src/runtime/fairValue.js");
 const { createBotContext, runWithBotContext } = await import("../src/runtime/context.js");
 const { getOrderKey } = await import("../src/utils/utils.js");
 
@@ -233,7 +234,6 @@ describe("graceful shutdown order cancellation", () => {
     expect(apiGetBalance).toHaveBeenCalledTimes(2);
   });
 });
-
 
 describe("stale reference price", () => {
   const emptyPending = { buys: [], sells: [] };

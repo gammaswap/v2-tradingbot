@@ -3,7 +3,7 @@ import type { WebSocketMarketUpdate } from "@gammaswap/v2-exchange-sdk";
 export type RuntimeEvent =
   | { type: "market"; update: WebSocketMarketUpdate }
   | { type: "market-resync"; reason: string }
-  | { type: "oracle-state-changed" }
+  | { type: "oracle-state-changed" };
 
 export class RuntimeEventQueue {
   private readonly events: RuntimeEvent[] = [];

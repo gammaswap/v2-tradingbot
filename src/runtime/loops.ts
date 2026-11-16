@@ -299,7 +299,7 @@ function applyPendingResponse(pendingResp: Awaited<ReturnType<typeof apiGetPendi
  */
 export async function cancelQuotesWhileStale(wallet: Wallet) {
   try {
-    if(await hasPendingOrders()) {
+    if (await hasPendingOrders()) {
       await sleep(1000);
       await apiCancelOrder(wallet, STATE.epoch, ZeroHash);
       logger.warn("reference price stale: cancelled resting quotes", {

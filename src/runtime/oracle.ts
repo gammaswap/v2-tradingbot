@@ -1,5 +1,10 @@
 import { createOracleWebSocketClient, type Unsubscribe } from "@gammaswap/v2-exchange-sdk";
-import { getBotContext, RUNTIME_CFG as CFG, RUNTIME_STATE as STATE, runWithBotContext } from "./context.js";
+import {
+  getBotContext,
+  RUNTIME_CFG as CFG,
+  RUNTIME_STATE as STATE,
+  runWithBotContext,
+} from "./context.js";
 import { RuntimeEventQueue } from "./events.js";
 import { Logger } from "../utils/logger.js";
 import { errorMessage } from "../utils/utils.js";
@@ -76,25 +81,23 @@ export async function startOracleFeed(queue: RuntimeEventQueue): Promise<OracleF
         const receivedAtMs = STATE.oracle.receivedAtMs;
         const previous = lastNotification;
 
-        const availabilityChanged =
-            wasFresh !== hasFreshFairValue();
+        const availabilityChanged = wasFresh !== hasFreshFairValue();
 
         const significantChange =
-            previous !== null &&
-            previous.price !== null &&
-            currentPrice !== null &&
-            Math.abs(currentPrice - previous.price) >= minChange;
+          previous !== null &&
+          previous.price !== null &&
+          currentPrice !== null &&
+          Math.abs(currentPrice - previous.price) >= minChange;
 
         const intervalElapsed =
-            previous !== null &&
-            receivedAtMs - previous.atMs >= notificationIntervalMs;
+          previous !== null && receivedAtMs - previous.atMs >= notificationIntervalMs;
 
         const shouldNotify =
-            previous === null ||
-            previous.epoch !== STATE.epoch ||
-            availabilityChanged ||
-            significantChange ||
-            intervalElapsed;
+          previous === null ||
+          previous.epoch !== STATE.epoch ||
+          availabilityChanged ||
+          significantChange ||
+          intervalElapsed;
 
         logger.debug("oracle price update:", {
           symbolId: update.symbolId.toString(),
@@ -112,7 +115,7 @@ export async function startOracleFeed(queue: RuntimeEventQueue): Promise<OracleF
         };
 
         queue.publish({ type: "oracle-state-changed" });
-      })
+      });
     },
     onStale: (symbolId) => {
       runWithBotContext(botContext, () => {
@@ -124,7 +127,7 @@ export async function startOracleFeed(queue: RuntimeEventQueue): Promise<OracleF
 
         logger.warn("oracle stream stale:", symbolId);
         queue.publish({ type: "oracle-state-changed" });
-      })
+      });
     },
     onError: (error) => logger.warn("oracle subscription error:", error),
   });
