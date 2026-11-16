@@ -40,7 +40,7 @@ import {
 } from "./strategy.js";
 import { Wallet, ZeroHash } from "ethers";
 import { markFairValueStale, refreshFairValueFromCachedOracle } from "./fairValue.js";
-import { PendingOrder, AssetEpochCheckResult } from "../utils/types.js";
+import type { PendingOrder, AssetEpochCheckResult, BookSnapshot } from "../utils/types.js";
 import { TimeInForce } from "@gammaswap/v2-exchange-sdk";
 import { makeQuoteSlot, planOrders } from "./orderPlanner.js";
 import { canTradeCurrentAsset } from "./tradingGuards.js";
@@ -313,7 +313,46 @@ export async function cancelQuotesWhileStale(wallet: Wallet) {
   }
 }
 
-export async function runQuoteMaintenance(wallet: Wallet) {
+function calculateMakerQuotePrices(book: BookSnapshot) {
+  const ownOrderIds = new Set(STATE.pending.keys());
+  const bookMid = midPrice(book, ownOrderIds);
+  const refPrice = referencePrice(book, ownOrderIds);
+  const gamma = calculateCurrentRiskAversion(STATE.asset!);
+  const inventorySkew = calculateInventorySkew(gamma, STATE.invBase, refPrice);
+  const calculatedBidAsk = calculateBidAndAsk(refPrice, inventorySkew, CFG.LOGIT_HALF_SPREAD);
+  const calculatedMid = (calculatedBidAsk.bid + calculatedBidAsk.ask) / 2;
+  const calculatedTargets = buildTargetLadderPrices(
+    book,
+    refPrice,
+    calculatedBidAsk.bid,
+    calculatedBidAsk.ask,
+    CFG.LADDER_PRICE_MODEL === LADDER_PRICE_MODEL.GROWTH_SPACE
+      ? LADDER_PRICE_MODEL.GROWTH_SPACE
+      : LADDER_PRICE_MODEL.EQUIDISTANT,
+    ownOrderIds,
+  );
+
+  return {
+    bookMid,
+    refPrice,
+    gamma,
+    inventorySkew,
+    calculatedBidAsk,
+    calculatedMid,
+    calculatedTargets,
+  };
+}
+
+function quotePricesMoved(previous: readonly number[], current: readonly number[]): boolean {
+  // Matches the current default price tolerance in shouldCancelReplace().
+  const tolerance = PROTOCOL_TICK_SIZE * 10; // This could potentially be a config variable
+  return (
+    previous.length !== current.length ||
+    previous.some((price, index) => Math.abs(price - current[index]) > tolerance)
+  );
+}
+
+export async function runQuoteMaintenance(wallet: Wallet): Promise<"reprice" | "paused" | void> {
   if (CFG.IS_TAKER) {
     logger.debug("quote maintenance skipped: bot is configured as taker");
     return;
@@ -334,13 +373,19 @@ export async function runQuoteMaintenance(wallet: Wallet) {
   await reconcileCancelReplaceIntents(wallet);
   await reconcilePlaceIntents(wallet);
 
-  const ownOrderIds = new Set(STATE.pending.keys());
-  const bookMid = midPrice(book, ownOrderIds);
-  const refPrice = referencePrice(book, ownOrderIds);
-  const gamma = calculateCurrentRiskAversion(STATE.asset!);
-  const inventorySkew = calculateInventorySkew(gamma, STATE.invBase, refPrice);
-  const calculatedBidAsk = calculateBidAndAsk(refPrice, inventorySkew, CFG.LOGIT_HALF_SPREAD);
-  const calculatedMid = (calculatedBidAsk.bid + calculatedBidAsk.ask) / 2;
+  if (!canTradeCurrentAsset(STATE)) return;
+  if (shouldPauseForFairValue(book)) return "paused";
+
+  const batchEpoch = STATE.epoch;
+  const {
+    bookMid,
+    refPrice,
+    gamma,
+    inventorySkew,
+    calculatedBidAsk,
+    calculatedMid,
+    calculatedTargets,
+  } = calculateMakerQuotePrices(book);
   logger.debug(
     "book >> bids:",
     book.bids.length,
@@ -364,16 +409,6 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     STATE.fairValue?.protocolPrice,
     "oracleStale:",
     STATE.oracle.stale,
-  );
-  const calculatedTargets = buildTargetLadderPrices(
-    book,
-    refPrice,
-    calculatedBidAsk.bid,
-    calculatedBidAsk.ask,
-    CFG.LADDER_PRICE_MODEL === LADDER_PRICE_MODEL.GROWTH_SPACE
-      ? LADDER_PRICE_MODEL.GROWTH_SPACE
-      : LADDER_PRICE_MODEL.EQUIDISTANT,
-    ownOrderIds,
   );
   logger.debug("calculated target ladder:", calculatedTargets);
   const { bids: targetBidPrices, asks: targetAskPrices } = calculatedTargets;
@@ -415,8 +450,33 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     newOrders: sellNewOrders,
   } = planOrders(pendingSells, targetAskPrices, askSizes, "sell");
 
+  const checkBatch = (): "current" | "reprice" | "paused" => {
+    const currentBook = STATE.book;
+    if (
+      !currentBook ||
+      !canTradeCurrentAsset(STATE) ||
+      STATE.epoch !== batchEpoch ||
+      shouldPauseForFairValue(currentBook)
+    ) {
+      return "paused";
+    }
+
+    const latest = calculateMakerQuotePrices(currentBook);
+    if (
+      quotePricesMoved(targetBidPrices, latest.calculatedTargets.bids) ||
+      quotePricesMoved(targetAskPrices, latest.calculatedTargets.asks)
+    ) {
+      return "reprice";
+    }
+
+    return "current";
+  };
+
   const cancelReplaces = buyCancelReplaces.concat(sellCancelReplaces);
   for (let i = 0; i < cancelReplaces.length; i++) {
+    const beforeSubmit = checkBatch();
+    if (beforeSubmit !== "current") return beforeSubmit;
+
     const instr = cancelReplaces[i];
     const quoteSlot = instr.quoteSlot ?? makeQuoteSlot(instr.side, instr.price);
     const existingReplacement = ORDER_INTENTS.getOutstanding("cancel-replace").find(
@@ -429,6 +489,14 @@ export async function runQuoteMaintenance(wallet: Wallet) {
       continue;
     }
     if (existingReplacement && !ORDER_INTENTS.canAttempt(existingReplacement)) {
+      continue;
+    }
+    if (
+      existingReplacement?.kind === "cancel-replace" &&
+      (existingReplacement.side !== instr.side ||
+        existingReplacement.price !== instr.price ||
+        existingReplacement.size !== instr.size)
+    ) {
       continue;
     }
     const intent =
@@ -471,6 +539,8 @@ export async function runQuoteMaintenance(wallet: Wallet) {
         errorMessage(e),
       );
     }
+    const afterSubmit = checkBatch();
+    if (afterSubmit !== "current") return afterSubmit;
   }
 
   const cancels = buyCancels.concat(sellCancels);
@@ -484,13 +554,20 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     });
   }
 
-  if (!(await reconcileOrderIntents(wallet))) {
+  const cancellationsReady = await reconcileOrderIntents(wallet);
+  const afterCancellations = checkBatch();
+  if (afterCancellations !== "current") return afterCancellations;
+
+  if (!cancellationsReady) {
     logger.warn("quote maintenance paused: unresolved cancellations remain");
     return;
   }
 
   const newOrders = buyNewOrders.concat(sellNewOrders);
   for (let i = 0; i < newOrders.length; i++) {
+    const beforeSubmit = checkBatch();
+    if (beforeSubmit !== "current") return beforeSubmit;
+
     const instr = newOrders[i];
     const slot = instr.quoteSlot ?? makeQuoteSlot(instr.side, instr.price);
     if (
@@ -506,6 +583,14 @@ export async function runQuoteMaintenance(wallet: Wallet) {
       (candidate) =>
         candidate.kind === "place" && candidate.epoch === STATE.epoch && candidate.slot === slot,
     );
+    if (
+      existingPlace?.kind === "place" &&
+      (existingPlace.side !== instr.side ||
+        existingPlace.price !== instr.price ||
+        existingPlace.size !== instr.size)
+    ) {
+      continue;
+    }
     if (
       existingPlace &&
       (existingPlace.status !== "unknown" || !ORDER_INTENTS.canAttempt(existingPlace))
@@ -544,6 +629,8 @@ export async function runQuoteMaintenance(wallet: Wallet) {
         errorMessage(e),
       );
     }
+    const afterSubmit = checkBatch();
+    if (afterSubmit !== "current") return afterSubmit;
   }
 
   logger.info(

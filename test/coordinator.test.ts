@@ -72,6 +72,58 @@ function context() {
 }
 
 describe("coordinator step", () => {
+  it("schedules a new quote pass immediately after refreshing an interrupted batch", async () => {
+    STATE.oracle.stale = false;
+    STATE.fairValue = {
+      protocolPrice: 500_000,
+      probability: 0.5,
+      spot: 500_000n,
+      strike: 500_000n,
+      expiresInSec: 900,
+      updatedAtMs: Date.now(),
+    };
+    runQuoteMaintenance.mockResolvedValueOnce("reprice");
+    refreshPrivateState.mockImplementationOnce(async () => {
+      vi.setSystemTime(Date.now() + 250);
+    });
+    const stepContext = context();
+
+    const promise = runCoordinatorStep(stepContext);
+    await vi.advanceTimersByTimeAsync(0);
+    await promise;
+
+    expect(runQuoteMaintenance).toHaveBeenCalledOnce();
+    expect(refreshPrivateState).toHaveBeenCalledOnce();
+    expect(stepContext.nextQuote).toBe(Date.now());
+    expect(cancelQuotesWhileStale).not.toHaveBeenCalled();
+  });
+
+  it("cancels resting quotes when an active batch loses required pricing", async () => {
+    STATE.oracle.stale = false;
+    STATE.fairValue = {
+      protocolPrice: 500_000,
+      probability: 0.5,
+      spot: 500_000n,
+      strike: 500_000n,
+      expiresInSec: 900,
+      updatedAtMs: Date.now(),
+    };
+    runQuoteMaintenance.mockImplementationOnce(async () => {
+      STATE.oracle.stale = true;
+      STATE.fairValue = null;
+      return "paused";
+    });
+    const stepContext = context();
+
+    const promise = runCoordinatorStep(stepContext);
+    await vi.advanceTimersByTimeAsync(0);
+    await promise;
+
+    expect(cancelQuotesWhileStale).toHaveBeenCalledOnce();
+    expect(refreshPrivateState).toHaveBeenCalledOnce();
+    expect(stepContext.nextQuote).toBeGreaterThan(Date.now());
+  });
+
   it("runs quote maintenance for an active asset", async () => {
     const promise = runCoordinatorStep(context());
     await vi.advanceTimersByTimeAsync(0);

@@ -136,9 +136,13 @@ export async function runCoordinatorStep(context: CoordinatorStepContext): Promi
     !CFG.IS_TAKER &&
     (now >= context.nextQuote || actions.tradeOccurred || actions.needsResync || oracleRepriceDue)
   ) {
-    await runQuoteMaintenance(wallet);
+    const result = await runQuoteMaintenance(wallet);
+    if (result === "paused" && shouldPauseForFairValue(STATE.book)) {
+      await cancelQuotesWhileStale(wallet);
+    }
     await refreshPrivateState(wallet);
-    context.nextQuote = now + jitter(CFG.QUOTE_LOOP_MS, CFG.QUOTE_JITTER_MS);
+    context.nextQuote =
+      result === "reprice" ? nowMs() : now + jitter(CFG.QUOTE_LOOP_MS, CFG.QUOTE_JITTER_MS);
   }
 
   if (tradingEnabled && CFG.IS_TAKER && now >= context.nextAggression) {
