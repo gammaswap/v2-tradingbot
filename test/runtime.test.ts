@@ -480,32 +480,54 @@ describe("active quote batches", () => {
   });
 
   it.each(["place", "cancel-replace"] as const)(
-    "records a pending %s response before abandoning obsolete targets",
+    "settles every concurrent %s submission before requesting a reprice",
     async (kind) => {
       if (kind === "cancel-replace") {
         addPendingBuy("old-buy-1", 300_000);
         addPendingBuy("old-buy-2", 200_000);
       }
-      const response = deferred<typeof accepted>();
-      const started = deferred<void>();
+      const count = kind === "place" ? 4 : 2;
+      const responses = Array.from({ length: count }, () => deferred<typeof accepted>());
+      const allStarted = deferred<void>();
       const submit = kind === "place" ? apiSendOrder : apiCancelReplaceOrder;
-      submit.mockImplementationOnce(() => {
-        started.resolve();
+      let submitted = 0;
+      submit.mockImplementation(() => {
+        const response = responses[submitted++];
+        if (submitted === count) allStarted.resolve();
         return response.promise;
       });
 
-      const batch = runBatch();
-      await started.promise;
-      const intent = botContext.orderIntents.getOutstanding(kind)[0];
-      expect(intent.status).toBe("attempted");
-      setFairValue(600_000);
-      response.resolve(kind === "place" ? accepted : replaced);
+      let finished = false;
+      const batch = runBatch().then((result) => {
+        finished = true;
+        return result;
+      });
 
+      // Every request must start before any response is released.
+      await allStarted.promise;
+      expect(submit).toHaveBeenCalledTimes(count);
+      const intents = botContext.orderIntents.getOutstanding(kind);
+      expect(intents).toHaveLength(count);
+      expect(intents.every((intent) => intent.status === "attempted")).toBe(true);
+      expect(new Set(intents.map((intent) => intent.nonce)).size).toBe(count);
+      setFairValue(600_000);
+
+      // Complete the last request first.
+      responses[count - 1].resolve(kind === "place" ? accepted : replaced);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(intents[count - 1].status).toBe("completed");
+      expect(intents[count - 1].requestHash).toBe(
+        kind === "place" ? "0xaccepted" : "0xreplacement",
+      );
+      expect(intents[0].status).toBe("attempted");
+      expect(finished).toBe(false);
+
+      for (const response of responses.slice(0, -1)) {
+        response.resolve(kind === "place" ? accepted : replaced);
+      }
       expect(await batch).toBe("reprice");
-      expect(submit).toHaveBeenCalledOnce();
       expect(kind === "place" ? apiCancelReplaceOrder : apiSendOrder).not.toHaveBeenCalled();
-      expect(intent.status).toBe("completed");
-      expect(intent.requestHash).toBe(kind === "place" ? "0xaccepted" : "0xreplacement");
+      expect(intents.every((intent) => intent.status === "completed")).toBe(true);
       expect(botContext.orderIntents.getOutstanding()).toEqual([]);
     },
   );
@@ -527,22 +549,25 @@ describe("active quote batches", () => {
     expect(apiSendOrder).toHaveBeenCalledTimes(4);
   });
 
-  it("pauses remaining orders when required pricing becomes unavailable", async () => {
-    const response = deferred<typeof accepted>();
+  it("pauses before placements when pricing becomes unavailable during replacements", async () => {
+    addPendingBuy("old-buy-1", 300_000);
+    addPendingBuy("old-buy-2", 200_000);
+    const response = deferred<typeof replaced>();
     const started = deferred<void>();
-    apiSendOrder.mockImplementationOnce(() => {
+    apiCancelReplaceOrder.mockImplementationOnce(() => {
       started.resolve();
       return response.promise;
     });
 
     const batch = runBatch();
     await started.promise;
-    const intent = botContext.orderIntents.getOutstanding("place")[0];
+    const intent = botContext.orderIntents.getOutstanding("cancel-replace")[0];
     runWithBotContext(botContext, markFairValueStale);
-    response.resolve(accepted);
+    response.resolve(replaced);
 
     expect(await batch).toBe("paused");
-    expect(apiSendOrder).toHaveBeenCalledOnce();
+    expect(apiCancelReplaceOrder).toHaveBeenCalledTimes(2);
+    expect(apiSendOrder).not.toHaveBeenCalled();
     expect(intent.status).toBe("completed");
   });
 
@@ -604,24 +629,36 @@ describe("active quote batches", () => {
     addPendingBuy("old-buy-1", 300_000);
     addPendingBuy("old-buy-2", 200_000);
     const response = deferred<typeof replaced>();
+    const remainingResponse = deferred<typeof replaced>();
     const started = deferred<void>();
-    apiCancelReplaceOrder.mockImplementationOnce(() => {
-      started.resolve();
-      return response.promise;
-    });
+    apiCancelReplaceOrder
+      .mockImplementationOnce(() => {
+        started.resolve();
+        return response.promise;
+      })
+      .mockImplementationOnce(() => remainingResponse.promise);
 
-    const batch = runBatch();
+    let finished = false;
+    const batch = runBatch().then((result) => {
+      finished = true;
+      return result;
+    });
     await started.promise;
     const intent = botContext.orderIntents.getOutstanding("cancel-replace")[0];
     const nonce = intent.nonce;
     setFairValue(600_000);
     response.reject(new Error("network"));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(intent.status).toBe("unknown");
+    expect(finished).toBe(false);
+    expect(botContext.orderIntents.getOutstanding("cancel-replace")[1].status).toBe("attempted");
+    remainingResponse.resolve(replaced);
 
     expect(await batch).toBe("reprice");
     expect(intent.status).toBe("unknown");
     expect(intent.nonce).toBe(nonce);
     expect(botContext.orderIntents.getOutstanding()).toEqual([intent]);
-    expect(apiCancelReplaceOrder).toHaveBeenCalledOnce();
+    expect(apiCancelReplaceOrder).toHaveBeenCalledTimes(2);
     expect(apiSendOrder).not.toHaveBeenCalled();
   });
 

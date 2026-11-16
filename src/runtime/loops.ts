@@ -352,6 +352,19 @@ function quotePricesMoved(previous: readonly number[], current: readonly number[
   );
 }
 
+async function submitQuoteGroup<T>(
+  instructions: readonly T[],
+  submit: (instruction: T) => Promise<void>,
+): Promise<void> {
+  const results = await Promise.allSettled(instructions.map(submit));
+
+  for (const result of results) {
+    if (result.status === "rejected") {
+      throw result.reason instanceof Error ? result.reason : new Error(errorMessage(result.reason));
+    }
+  }
+}
+
 export async function runQuoteMaintenance(wallet: Wallet): Promise<"reprice" | "paused" | void> {
   if (CFG.IS_TAKER) {
     logger.debug("quote maintenance skipped: bot is configured as taker");
@@ -473,23 +486,22 @@ export async function runQuoteMaintenance(wallet: Wallet): Promise<"reprice" | "
   };
 
   const cancelReplaces = buyCancelReplaces.concat(sellCancelReplaces);
-  for (let i = 0; i < cancelReplaces.length; i++) {
-    const beforeSubmit = checkBatch();
-    if (beforeSubmit !== "current") return beforeSubmit;
+  const beforeReplacements = checkBatch();
+  if (beforeReplacements !== "current") return beforeReplacements;
 
-    const instr = cancelReplaces[i];
+  await submitQuoteGroup(cancelReplaces, async (instr) => {
     const quoteSlot = instr.quoteSlot ?? makeQuoteSlot(instr.side, instr.price);
     const existingReplacement = ORDER_INTENTS.getOutstanding("cancel-replace").find(
       (intent) =>
         intent.kind === "cancel-replace" &&
-        intent.epoch === STATE.epoch &&
+        intent.epoch === batchEpoch &&
         intent.targetOrderHash === instr.cancelId,
     );
     if (existingReplacement && existingReplacement.status !== "unknown") {
-      continue;
+      return;
     }
     if (existingReplacement && !ORDER_INTENTS.canAttempt(existingReplacement)) {
-      continue;
+      return;
     }
     if (
       existingReplacement?.kind === "cancel-replace" &&
@@ -497,14 +509,14 @@ export async function runQuoteMaintenance(wallet: Wallet): Promise<"reprice" | "
         existingReplacement.price !== instr.price ||
         existingReplacement.size !== instr.size)
     ) {
-      continue;
+      return;
     }
     const intent =
       existingReplacement ??
       ORDER_INTENTS.getOrCreate({
         kind: "cancel-replace",
         assetId: CFG.ASSET_ID,
-        epoch: STATE.epoch,
+        epoch: batchEpoch,
         slot: quoteSlot,
         side: instr.side,
         price: instr.price,
@@ -514,7 +526,7 @@ export async function runQuoteMaintenance(wallet: Wallet): Promise<"reprice" | "
     ORDER_INTENTS.markAttempted(intent);
     try {
       const response = await apiCancelReplaceOrder(wallet, {
-        epoch: STATE.epoch,
+        epoch: batchEpoch,
         orderHash: instr.cancelId,
         side: instr.side,
         price: instr.price,
@@ -539,9 +551,10 @@ export async function runQuoteMaintenance(wallet: Wallet): Promise<"reprice" | "
         errorMessage(e),
       );
     }
-    const afterSubmit = checkBatch();
-    if (afterSubmit !== "current") return afterSubmit;
-  }
+  });
+
+  const afterReplacements = checkBatch();
+  if (afterReplacements !== "current") return afterReplacements;
 
   const cancels = buyCancels.concat(sellCancels);
   for (const orderHash of cancels) {
@@ -564,24 +577,20 @@ export async function runQuoteMaintenance(wallet: Wallet): Promise<"reprice" | "
   }
 
   const newOrders = buyNewOrders.concat(sellNewOrders);
-  for (let i = 0; i < newOrders.length; i++) {
-    const beforeSubmit = checkBatch();
-    if (beforeSubmit !== "current") return beforeSubmit;
-
-    const instr = newOrders[i];
+  await submitQuoteGroup(newOrders, async (instr) => {
     const slot = instr.quoteSlot ?? makeQuoteSlot(instr.side, instr.price);
     if (
       QUOTE_COOLDOWNS.isCoolingDown({
         assetId: CFG.ASSET_ID,
-        epoch: STATE.epoch,
+        epoch: batchEpoch,
         quoteSlot: slot,
       })
     ) {
-      continue;
+      return;
     }
     const existingPlace = ORDER_INTENTS.getOutstanding("place").find(
       (candidate) =>
-        candidate.kind === "place" && candidate.epoch === STATE.epoch && candidate.slot === slot,
+        candidate.kind === "place" && candidate.epoch === batchEpoch && candidate.slot === slot,
     );
     if (
       existingPlace?.kind === "place" &&
@@ -589,31 +598,31 @@ export async function runQuoteMaintenance(wallet: Wallet): Promise<"reprice" | "
         existingPlace.price !== instr.price ||
         existingPlace.size !== instr.size)
     ) {
-      continue;
+      return;
     }
     if (
       existingPlace &&
       (existingPlace.status !== "unknown" || !ORDER_INTENTS.canAttempt(existingPlace))
     ) {
-      continue;
+      return;
     }
     const intent =
       existingPlace ??
       ORDER_INTENTS.getOrCreate({
         kind: "place",
         assetId: CFG.ASSET_ID,
-        epoch: STATE.epoch,
+        epoch: batchEpoch,
         slot,
         side: instr.side,
         price: instr.price,
         size: instr.size,
         timeInForce: 3n,
       });
-    if (intent.kind !== "place") continue;
+    if (intent.kind !== "place") return;
     ORDER_INTENTS.markAttempted(intent);
     try {
       const response = await apiSendOrder(wallet, {
-        epoch: STATE.epoch,
+        epoch: batchEpoch,
         side: intent.side,
         price: intent.price,
         size: intent.size,
@@ -629,9 +638,10 @@ export async function runQuoteMaintenance(wallet: Wallet): Promise<"reprice" | "
         errorMessage(e),
       );
     }
-    const afterSubmit = checkBatch();
-    if (afterSubmit !== "current") return afterSubmit;
-  }
+  });
+
+  const afterPlacements = checkBatch();
+  if (afterPlacements !== "current") return afterPlacements;
 
   logger.info(
     "=============runQuoteMaintenance:end",
