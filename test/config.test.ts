@@ -56,6 +56,81 @@ describe("oracle notification configuration", () => {
   });
 });
 
+describe("strategy numeric configuration", () => {
+  it.each([
+    "QUOTE_LOOP_MS",
+    "QUOTE_JITTER_MS",
+    "ORDER_FAILURE_COOLDOWN_MS",
+    "AGGRESS_MS",
+    "AGGRESS_JITTER_MS",
+    "BOOK_STALE_MS",
+    "FAIR_VALUE_STALE_MS",
+    "ORACLE_FIRST_PRICE_TIMEOUT_MS",
+    "FAIR_VALUE_VOL",
+    "SLIP_BUFFER",
+    "FAIR_VALUE_MIN_EDGE_TICKS",
+    "MEANREV_K",
+    "INV_SKEW_STRENGTH",
+    "EXTREME_PUSH_PROB",
+    "LEVEL_SPACING_NEAR",
+    "LEVEL_SPACING_GROWTH",
+    "INV_TARGET",
+    "INV_MAX_ABS",
+  ])("rejects malformed and nonfinite values for %s", (name) => {
+    for (const value of ["not-a-number", "NaN", "Infinity", "-Infinity"]) {
+      expect(validateProductionConfig({ [name]: value })).toEqual(
+        expect.arrayContaining([expect.stringContaining(name)]),
+      );
+    }
+  });
+
+  it.each([
+    ["QUOTE_LOOP_MS", "0"],
+    ["AGGRESS_MS", "0"],
+    ["BOOK_STALE_MS", "0"],
+    ["FAIR_VALUE_STALE_MS", "0"],
+    ["ORACLE_FIRST_PRICE_TIMEOUT_MS", "0"],
+    ["LEVEL_SPACING_NEAR", "0"],
+    ["QUOTE_JITTER_MS", "-1"],
+    ["AGGRESS_JITTER_MS", "-1"],
+    ["ORDER_FAILURE_COOLDOWN_MS", "-1"],
+    ["FAIR_VALUE_VOL", "-0.1"],
+    ["SLIP_BUFFER", "-0.1"],
+    ["MEANREV_K", "-1"],
+    ["INV_SKEW_STRENGTH", "-0.1"],
+    ["INV_MAX_ABS", "-1"],
+    ["FAIR_VALUE_MIN_EDGE_TICKS", "-1"],
+    ["FAIR_VALUE_MIN_EDGE_TICKS", "1.5"],
+    ["FAIR_VALUE_MIN_EDGE_TICKS", "9007199254740992"],
+    ["EXTREME_PUSH_PROB", "-0.1"],
+    ["EXTREME_PUSH_PROB", "1.1"],
+    ["LEVEL_SPACING_GROWTH", "0.5"],
+  ])("rejects out-of-range %s=%s", (name, value) => {
+    expect(validateProductionConfig({ [name]: value })).toEqual(
+      expect.arrayContaining([expect.stringContaining(name)]),
+    );
+  });
+
+  it.each(["0", "1"])("accepts disabled controls and probability %s", (probability) => {
+    expect(
+      validateProductionConfig({
+        QUOTE_JITTER_MS: "0",
+        AGGRESS_JITTER_MS: "0",
+        ORDER_FAILURE_COOLDOWN_MS: "0",
+        FAIR_VALUE_VOL: "0",
+        SLIP_BUFFER: "0",
+        MEANREV_K: "0",
+        INV_SKEW_STRENGTH: "0",
+        INV_MAX_ABS: "0",
+        FAIR_VALUE_MIN_EDGE_TICKS: "0",
+        LEVEL_SPACING_GROWTH: "1",
+        INV_TARGET: "-1000000",
+        EXTREME_PUSH_PROB: probability,
+      }),
+    ).toEqual([]);
+  });
+});
+
 describe("API timeout configuration", () => {
   it("defaults to 30 seconds", async () => {
     delete process.env.API_TIMEOUT_MS;

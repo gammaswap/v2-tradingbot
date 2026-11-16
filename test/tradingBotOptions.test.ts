@@ -52,6 +52,17 @@ describe("TradingBot options", () => {
     expect(() => new TradingBot(options)).toThrow(configName);
   });
 
+  it.each([
+    [{ quote: { quoteLoopMs: 0 } }, "QUOTE_LOOP_MS"],
+    [{ fairValue: { volatility: -0.1 } }, "FAIR_VALUE_VOL"],
+    [{ risk: { inventoryMaxAbs: NaN } }, "INV_MAX_ABS"],
+    [{ aggression: { extremePushProbability: 1.1 } }, "EXTREME_PUSH_PROB"],
+  ] as const)("rejects invalid strategy overrides %j", (overrides, configName) => {
+    const options = { ...createOptions(1), ...overrides };
+
+    expect(() => new TradingBot(options)).toThrow(configName);
+  });
+
   it("accepts an oracle stale-price timeout override", () => {
     const bot = new TradingBot({
       wallet: Wallet.createRandom() as unknown as Wallet,
