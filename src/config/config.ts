@@ -372,7 +372,7 @@ function buildConfig() {
     // The strategy compares the current time with STATE.bookUpdatedAtMs. If
     // the book is older than this threshold, it is considered stale and the
     // bot pauses quoting until a fresh usable book update arrives.
-    BOOK_STALE_MS: envNum("BOOK_STALE_MS", 45000, false),
+    BOOK_STALE_MS: envNum("BOOK_STALE_MS", 45000),
 
     // ===============Fair Value Parameters===============
     ORACLE_FEED_WS_URL: envStr("ORACLE_FEED_WS_URL", "wss://exchange-api.gammaswap.com/oracle-ws/"),
@@ -386,7 +386,7 @@ function buildConfig() {
     //   P(pays) = 1 - NormalCDF(d2)
     // The resulting probability is converted to protocol price units:
     //   fairValue = roundToTick(P(pays) * 1,000,000)
-    FAIR_VALUE_VOL: envNum("FAIR_VALUE_VOL", 0.8, false),
+    FAIR_VALUE_VOL: envNum("FAIR_VALUE_VOL", 0.8),
     // Weight applied when combining the oracle-derived fair value with the
     // current order-book midpoint. The value is clamped to [0, 1]:
     //   referencePrice = weight * fairValue
@@ -411,7 +411,7 @@ function buildConfig() {
     // Startup timeout for receiving the first oracle price after subscribing.
     // When fresh fair value is required, failure to receive that first price
     // within this interval prevents the bot from starting its coordinator.
-    ORACLE_FIRST_PRICE_TIMEOUT_MS: envNum("ORACLE_FIRST_PRICE_TIMEOUT_MS", 30000, false),
+    ORACLE_FIRST_PRICE_TIMEOUT_MS: envNum("ORACLE_FIRST_PRICE_TIMEOUT_MS", 30000),
     // Only applies when USE_ORACLE_FAIR_VALUE is enabled. If true, trading
     // pauses until a fresh oracle fair value is available; if false, the bot
     // may fall back to a fresh order-book midpoint.
@@ -420,12 +420,12 @@ function buildConfig() {
     // considered stale. A fair value is fresh when the current time minus
     // updatedAtMs is less than or equal to this value. This is separate from
     // ORACLE_STALE_PRICE_TIMEOUT_MS, which detects an inactive websocket.
-    FAIR_VALUE_STALE_MS: envNum("FAIR_VALUE_STALE_MS", 45000, false),
+    FAIR_VALUE_STALE_MS: envNum("FAIR_VALUE_STALE_MS", 45000),
 
     // Notify after this many fair-value ticks or after the interval below.
     // Preserve invalid inputs so startup validation can report them.
-    ORACLE_NOTIFY_MIN_CHANGE_TICKS: envNum("ORACLE_NOTIFY_MIN_CHANGE_TICKS", 2, false),
-    ORACLE_NOTIFY_INTERVAL_MS: envNum("ORACLE_NOTIFY_INTERVAL_MS", 500, false),
+    ORACLE_NOTIFY_MIN_CHANGE_TICKS: envNum("ORACLE_NOTIFY_MIN_CHANGE_TICKS", 2),
+    ORACLE_NOTIFY_INTERVAL_MS: envNum("ORACLE_NOTIFY_INTERVAL_MS", 500),
 
     // ===============Aggression logic=================
     // Selects how a taker bot chooses IOC aggression trades. This setting is
@@ -438,12 +438,12 @@ function buildConfig() {
     // Base delay, in milliseconds, between attempts to run the aggression
     // model. An aggression attempt is only eligible after this delay has
     // elapsed since the previous aggression check.
-    AGGRESS_MS: envNum("AGGRESS_MS", 300000, false),
+    AGGRESS_MS: envNum("AGGRESS_MS", 300000),
     // Maximum random timing adjustment, in milliseconds, applied to the base
     // aggression delay. The next aggression check is scheduled using a
     // jittered delay, which prevents the bot from acting at one perfectly
     // predictable interval.
-    AGGRESS_JITTER_MS: envNum("AGGRESS_JITTER_MS", 12000, false),
+    AGGRESS_JITTER_MS: envNum("AGGRESS_JITTER_MS", 12000),
     // Number of opposite-side order-book levels whose quantities are summed
     // when sizing an aggression order. A buy measures ask-side depth; a sell
     // measures bid-side depth. The value is normalized to at least one level.
@@ -456,10 +456,10 @@ function buildConfig() {
     // Additional quantity buffer applied after summing WIPE_LEVELS:
     //   requested quantity = book depth * (1 + SLIP_BUFFER)
     // This provides room for the book to change before the IOC order arrives.
-    SLIP_BUFFER: envNum("SLIP_BUFFER", 0.15, false),
+    SLIP_BUFFER: envNum("SLIP_BUFFER", 0.15),
     // Edge Aggression model parameter.
     // Number of protocol price ticks required for a fair-value trade edge.
-    FAIR_VALUE_MIN_EDGE_TICKS: envNum("FAIR_VALUE_MIN_EDGE_TICKS", 2, false),
+    FAIR_VALUE_MIN_EDGE_TICKS: envNum("FAIR_VALUE_MIN_EDGE_TICKS", 2),
     // Mean reversion aggression model parameters.
     // The mean-reversion fallback used by chooseAggressionSide() when
     // AGGRESSION_MODEL selects it chooses a buy or sell direction:
@@ -481,10 +481,10 @@ function buildConfig() {
     // Controls mean-reversion strength: higher values make pBuy move more
     // quickly toward buying below AGGRESSION_CENTER_PRICE and selling above it; lower
     // values make the response weaker. At zero, price has no effect.
-    MEANREV_K: envNum("MEANREV_K", 2.0, false),
+    MEANREV_K: envNum("MEANREV_K", 2.0),
     // Controls inventory correction: higher values more strongly favor selling
     // when long and buying when short; zero disables inventory adjustment.
-    INV_SKEW_STRENGTH: envNum("INV_SKEW_STRENGTH", 0.35, false),
+    INV_SKEW_STRENGTH: envNum("INV_SKEW_STRENGTH", 0.35),
     // Probability of reversing the fallback mean-reversion recommendation.
     // A value of 0 disables the outward reversal, so direction comes only
     // from the mean-reversion and inventory-skew model. Values greater than 0
@@ -492,7 +492,7 @@ function buildConfig() {
     // AGGRESSION_CENTER_PRICE the reversal buys instead of sells, and below AGGRESSION_CENTER_PRICE
     // it sells instead of buys. This applies only when no fresh oracle fair
     // value is available; oracle-edge aggression does not use this field.
-    EXTREME_PUSH_PROB: envNum("EXTREME_PUSH_PROB", 0.1, false),
+    EXTREME_PUSH_PROB: envNum("EXTREME_PUSH_PROB", 0.1),
 
     // ============Collateral availability for order placement===============
     // These two settings work together. The available collateral used by the
@@ -569,10 +569,10 @@ function buildConfig() {
     LADDER_PRICE_MODEL: envNum("LADDER_PRICE_MODEL", 1),
     // Base interval, in milliseconds, between passive quote-maintenance
     // passes.
-    QUOTE_LOOP_MS: envNum("QUOTE_LOOP_MS", 10000, false),
+    QUOTE_LOOP_MS: envNum("QUOTE_LOOP_MS", 10000),
     // Maximum random timing adjustment, in milliseconds, applied to the quote
     // loop interval to avoid a perfectly predictable schedule.
-    QUOTE_JITTER_MS: envNum("QUOTE_JITTER_MS", 5000, false),
+    QUOTE_JITTER_MS: envNum("QUOTE_JITTER_MS", 5000),
 
     // HARD_MIN_PRICE is the absolute lower bound for every quote. Prices
     // below it are never submitted, even if the strategy calculates them.
@@ -586,30 +586,30 @@ function buildConfig() {
     // ========Quote Growth Space Ladder Parameters==============
     // Initial ladder distance in protocol price units. The default 2,000
     // equals 0.2 cents ($0.002). Used when choosing growth-space model (model 2)
-    LEVEL_SPACING_NEAR: envNum("LEVEL_SPACING_NEAR", 2000, false),
+    LEVEL_SPACING_NEAR: envNum("LEVEL_SPACING_NEAR", 2000),
     // Multiplicative growth applied to each successive level's spacing in the
     // growth-space ladder model. For example, with LEVEL_SPACING_NEAR = 2,000
     // and growth = 1.5, successive distances are 2,000, 3,000, 4,500, etc.
     // This is a dimensionless strategy parameter, not a price denomination.
     // Used when choosing growth-space model (model 2)
-    LEVEL_SPACING_GROWTH: envNum("LEVEL_SPACING_GROWTH", 1.5, false),
+    LEVEL_SPACING_GROWTH: envNum("LEVEL_SPACING_GROWTH", 1.5),
 
     // Signed inventory level the strategy aims to maintain, expressed in
     // protocol size units. Zero targets a neutral position; positive values
     // target a long position and negative values target a short position.
     // It influences passive quote totals and fallback aggression direction.
-    INV_TARGET: envNum("INV_TARGET", 0, false),
+    INV_TARGET: envNum("INV_TARGET", 0),
     // Maximum absolute signed inventory allowed by passive quoting and
     // aggression checks, expressed in protocol size units. The default is
     // 5,000 contracts (5,000 * 1,000,000 units) in either direction. It also
     // normalizes inventory for the fallback aggression model.
-    INV_MAX_ABS: envNum("INV_MAX_ABS", 5000 * 1000000, false),
+    INV_MAX_ABS: envNum("INV_MAX_ABS", 5000 * 1000000),
 
     // Duration that a quote slot remains paused after a terminal order
     // failure, such as a rejected placement or failed replacement. This
     // prevents the next quote-maintenance pass from immediately resubmitting
     // the same slot while the market or account conditions may still be bad.
-    ORDER_FAILURE_COOLDOWN_MS: envNum("ORDER_FAILURE_COOLDOWN_MS", 5_000, false),
+    ORDER_FAILURE_COOLDOWN_MS: envNum("ORDER_FAILURE_COOLDOWN_MS", 5_000),
     // Minimum pending balance that is treated as non-dust. Pending balances
     // below this threshold are treated as clear; balances at or above it
     // trigger pending-balance handling and prevent normal startup. This is a
