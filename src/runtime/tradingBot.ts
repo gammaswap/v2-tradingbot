@@ -1,5 +1,7 @@
 import { Wallet, ZeroAddress, isAddress } from "ethers";
 import {
+  DEFAULT_CFG,
+  validateOracleNotificationConfiguration,
   validateOrderSizeConfiguration,
   validatePriceConfiguration,
   validateRiskConfiguration,
@@ -86,6 +88,8 @@ export type TradingBotOptions = {
     requireFreshValue?: boolean;
     stalePriceTimeoutMs?: number;
     firstPriceTimeoutMs?: number;
+    notifyMinChangeTicks?: number;
+    notifyIntervalMs?: number;
     volatility?: number;
     weight?: number;
     paysAboveStrike?: boolean;
@@ -217,6 +221,15 @@ export function validateTradingBotOptions(options: TradingBotOptions): string[] 
     }
   }
 
+  errors.push(
+    ...validateOracleNotificationConfiguration({
+      ORACLE_NOTIFY_MIN_CHANGE_TICKS:
+        options.fairValue?.notifyMinChangeTicks ?? DEFAULT_CFG.ORACLE_NOTIFY_MIN_CHANGE_TICKS,
+      ORACLE_NOTIFY_INTERVAL_MS:
+        options.fairValue?.notifyIntervalMs ?? DEFAULT_CFG.ORACLE_NOTIFY_INTERVAL_MS,
+    }),
+  );
+
   return errors;
 }
 
@@ -278,6 +291,8 @@ function getOptionOverrides(options: TradingBotOptions): Record<string, unknown>
     REQUIRE_FRESH_FAIR_VALUE: options.fairValue?.requireFreshValue,
     ORACLE_STALE_PRICE_TIMEOUT_MS: options.fairValue?.stalePriceTimeoutMs,
     ORACLE_FIRST_PRICE_TIMEOUT_MS: options.fairValue?.firstPriceTimeoutMs,
+    ORACLE_NOTIFY_MIN_CHANGE_TICKS: options.fairValue?.notifyMinChangeTicks,
+    ORACLE_NOTIFY_INTERVAL_MS: options.fairValue?.notifyIntervalMs,
     FAIR_VALUE_VOL: options.fairValue?.volatility,
     FAIR_VALUE_WEIGHT:
       options.fairValue?.weight === undefined ? undefined : clamp(options.fairValue.weight, 0, 1),

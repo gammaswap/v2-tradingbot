@@ -13,11 +13,11 @@ const DEFAULT_ASSET_ID = "261336857817713630688382311349658711122006440411137";
 const DEFAULT_TEST_MNEMONIC = "test test test test test test test test test test test junk";
 let activeEnvironment: NodeJS.ProcessEnv = process.env;
 
-function envNum(name: string, def: number): number {
+function envNum(name: string, def: number, fallbackOnInvalid = true): number {
   const v = activeEnvironment[name];
   if (v == null || v.trim() === "") return def;
   const n = Number(v);
-  return Number.isFinite(n) ? n : def;
+  return fallbackOnInvalid && !Number.isFinite(n) ? def : n;
 }
 
 function envStr(name: string, def: string): string {
@@ -70,6 +70,7 @@ export function validateProductionConfig(env: NodeJS.ProcessEnv = process.env): 
   errors.push(...validatePriceConfiguration(config));
   errors.push(...validateOrderSizeConfiguration(config));
   errors.push(...validateRiskConfiguration(config));
+  errors.push(...validateOracleNotificationConfiguration(config));
   const enabled = ["1", "true", "yes", "y", "on"].includes(
     (env.PRODUCTION_MODE ?? "").toLowerCase(),
   );
@@ -91,6 +92,24 @@ export function validateProductionConfig(env: NodeJS.ProcessEnv = process.env): 
     errors.push("EXCHANGE_ADDRESS must be explicitly configured for production");
   if (!env.LEDGER_ADDRESS)
     errors.push("LEDGER_ADDRESS must be explicitly configured for production");
+
+  return errors;
+}
+
+export function validateOracleNotificationConfiguration(
+  config: Pick<typeof CFG, "ORACLE_NOTIFY_MIN_CHANGE_TICKS" | "ORACLE_NOTIFY_INTERVAL_MS"> = CFG,
+): string[] {
+  const errors: string[] = [];
+
+  if (
+    !Number.isSafeInteger(config.ORACLE_NOTIFY_MIN_CHANGE_TICKS) ||
+    config.ORACLE_NOTIFY_MIN_CHANGE_TICKS <= 0
+  ) {
+    errors.push("ORACLE_NOTIFY_MIN_CHANGE_TICKS must be a positive safe integer");
+  }
+  if (!Number.isFinite(config.ORACLE_NOTIFY_INTERVAL_MS) || config.ORACLE_NOTIFY_INTERVAL_MS <= 0) {
+    errors.push("ORACLE_NOTIFY_INTERVAL_MS must be a positive finite number");
+  }
 
   return errors;
 }
@@ -352,9 +371,10 @@ function buildConfig() {
     // ORACLE_STALE_PRICE_TIMEOUT_MS, which detects an inactive websocket.
     FAIR_VALUE_STALE_MS: envNum("FAIR_VALUE_STALE_MS", 45000),
 
-    ORACLE_NOTIFY_MIN_CHANGE_TICKS: envNum("ORACLE_NOTIFY_MIN_CHANGE_TICKS", 2),
-
-    ORACLE_NOTIFY_INTERVAL_MS: envNum("ORACLE_NOTIFY_INTERVAL_MS", 500),
+    // Notify after this many fair-value ticks or after the interval below.
+    // Preserve invalid inputs so startup validation can report them.
+    ORACLE_NOTIFY_MIN_CHANGE_TICKS: envNum("ORACLE_NOTIFY_MIN_CHANGE_TICKS", 2, false),
+    ORACLE_NOTIFY_INTERVAL_MS: envNum("ORACLE_NOTIFY_INTERVAL_MS", 500, false),
 
     // ===============Aggression logic=================
     // Selects how a taker bot chooses IOC aggression trades. This setting is

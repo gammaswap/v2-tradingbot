@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  createConfigFromEnvironment,
   validateOrderSizeConfiguration,
   validatePriceConfiguration,
   validateProductionConfig,
@@ -12,6 +13,47 @@ afterEach(() => {
   if (originalTimeout === undefined) delete process.env.API_TIMEOUT_MS;
   else process.env.API_TIMEOUT_MS = originalTimeout;
   vi.resetModules();
+});
+
+describe("oracle notification configuration", () => {
+  it("uses the same defaults for missing and blank settings", () => {
+    for (const env of [
+      {},
+      { ORACLE_NOTIFY_MIN_CHANGE_TICKS: " ", ORACLE_NOTIFY_INTERVAL_MS: "" },
+    ]) {
+      const config = createConfigFromEnvironment(env);
+      expect(config.ORACLE_NOTIFY_MIN_CHANGE_TICKS).toBe(2);
+      expect(config.ORACLE_NOTIFY_INTERVAL_MS).toBe(500);
+      expect(validateProductionConfig(env)).toEqual([]);
+    }
+  });
+
+  it("accepts a positive tick count and finite positive interval", () => {
+    const env = { ORACLE_NOTIFY_MIN_CHANGE_TICKS: "3", ORACLE_NOTIFY_INTERVAL_MS: "750.5" };
+    const config = createConfigFromEnvironment(env);
+
+    expect(config.ORACLE_NOTIFY_MIN_CHANGE_TICKS).toBe(3);
+    expect(config.ORACLE_NOTIFY_INTERVAL_MS).toBe(750.5);
+    expect(validateProductionConfig(env)).toEqual([]);
+  });
+
+  it.each([
+    ["ORACLE_NOTIFY_MIN_CHANGE_TICKS", "0"],
+    ["ORACLE_NOTIFY_MIN_CHANGE_TICKS", "-1"],
+    ["ORACLE_NOTIFY_MIN_CHANGE_TICKS", "1.5"],
+    ["ORACLE_NOTIFY_MIN_CHANGE_TICKS", "NaN"],
+    ["ORACLE_NOTIFY_MIN_CHANGE_TICKS", "Infinity"],
+    ["ORACLE_NOTIFY_MIN_CHANGE_TICKS", "not-a-number"],
+    ["ORACLE_NOTIFY_INTERVAL_MS", "0"],
+    ["ORACLE_NOTIFY_INTERVAL_MS", "-1"],
+    ["ORACLE_NOTIFY_INTERVAL_MS", "NaN"],
+    ["ORACLE_NOTIFY_INTERVAL_MS", "Infinity"],
+    ["ORACLE_NOTIFY_INTERVAL_MS", "not-a-number"],
+  ])("rejects %s=%s even outside production mode", (name, value) => {
+    expect(validateProductionConfig({ [name]: value })).toEqual(
+      expect.arrayContaining([expect.stringContaining(name)]),
+    );
+  });
 });
 
 describe("API timeout configuration", () => {

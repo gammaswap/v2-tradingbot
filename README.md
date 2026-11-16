@@ -543,6 +543,8 @@ FAIR_VALUE_WEIGHT=1.0
 FAIR_VALUE_PAYS_ABOVE_STRIKE=true
 REQUIRE_FRESH_FAIR_VALUE=true
 FAIR_VALUE_STALE_MS=45000
+ORACLE_NOTIFY_MIN_CHANGE_TICKS=2
+ORACLE_NOTIFY_INTERVAL_MS=500
 MAX_CAPITAL_EXPOSURE_PERCENT=70
 BASE_RESERVE_MIN=1500000000
 ```
@@ -576,6 +578,15 @@ pauses trading when an oracle fair value is required but unavailable.
 `FAIR_VALUE_STALE_MS` defines freshness using the age of
 `STATE.fairValue.updatedAtMs`; increasing it allows older fair values, while
 decreasing it makes the bot pause sooner.
+
+`ORACLE_NOTIFY_MIN_CHANGE_TICKS` must be a positive integer and defaults to 2.
+`ORACLE_NOTIFY_INTERVAL_MS` must be a positive finite number and defaults to
+500 milliseconds. Every oracle price updates fair value immediately; a
+coordinator notification is emitted when fair value moves by the tick threshold
+since the last notification or the interval has elapsed when a new price arrives.
+Significant moves can notify before the interval. First updates, stale/recovery
+transitions, and epoch changes notify immediately. Package consumers configure
+these through `fairValue.notifyMinChangeTicks` and `fairValue.notifyIntervalMs`.
 
 `MAX_CAPITAL_EXPOSURE_PERCENT` limits the percentage of account collateral
 available to the order planner. `BASE_RESERVE_MIN` is an absolute balance floor
