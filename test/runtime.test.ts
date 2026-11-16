@@ -595,7 +595,7 @@ describe("active quote batches", () => {
     runWithBotContext(botContext, markFairValueStale);
     pending.resolve({
       epoch: 4n,
-      buys: Array.from(botContext.state.pendingBuys.values()),
+      buys: Array.from(botContext.state.pendingBuys.values()) as PendingOrder[],
       sells: [],
     });
 

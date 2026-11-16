@@ -69,6 +69,11 @@ export class InMemoryOrderIntentStore implements OrderIntentStore {
     return this.intents.get(intentId);
   }
   set(intent: TrackedOrderIntent): void {
+    if (["completed", "rejected", "unfulfillable"].includes(intent.status)) {
+      this.intents.delete(intent.intentId);
+      return;
+    }
+
     this.intents.set(intent.intentId, intent);
   }
   all(): TrackedOrderIntent[] {
