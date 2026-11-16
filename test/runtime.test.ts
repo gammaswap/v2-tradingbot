@@ -604,6 +604,72 @@ describe("active quote batches", () => {
     expect(apiCancelReplaceOrder).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])(
+    "settles concurrent cancellations before verification (failure=%s)",
+    async (failure) => {
+      const hashes = ["0xcancel-first", "0xcancel-second"];
+      const intents = hashes.map((hash) =>
+        botContext.orderIntents.getOrCreate({
+          kind: "cancel",
+          assetId: "123",
+          epoch: 4n,
+          slot: hash,
+          targetOrderHash: hash,
+        }),
+      );
+      const firstNonce = intents[0].nonce;
+      const first = deferred<{ request: { orderHash: string } }>();
+      const second = deferred<{ data: { status: string } }>();
+      const bothStarted = deferred<void>();
+
+      apiGetPending
+        .mockResolvedValueOnce({
+          epoch: 4n,
+          buys: hashes.map((id) => ({ id })),
+          sells: [],
+        })
+        .mockResolvedValueOnce({
+          epoch: 4n,
+          buys: failure ? [{ id: hashes[0] }] : [],
+          sells: [],
+        });
+
+      apiCancelOrder
+        .mockImplementationOnce(() => first.promise)
+        .mockImplementationOnce(() => {
+          bothStarted.resolve();
+          return second.promise;
+        });
+
+      const reconciliation = runWithBotContext(botContext, () => reconcileOrderIntents(wallet));
+
+      // Both requests start while the first response is still pending.
+      await bothStarted.promise;
+      expect(apiCancelOrder.mock.calls).toEqual(
+        intents.map((intent, i) => [wallet, 4n, hashes[i], intent.nonce]),
+      );
+
+      second.resolve({ data: { status: "CANCELLED" } });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(intents[1].status).toBe("completed");
+      expect(intents[0].status).toBe("attempted");
+      expect(apiGetPending).toHaveBeenCalledTimes(1);
+
+      if (failure) {
+        first.reject(new Error("network"));
+      } else {
+        first.resolve({ request: { orderHash: "0xcancel-request" } });
+      }
+
+      expect(await reconciliation).toBe(!failure);
+      expect(apiGetPending).toHaveBeenCalledTimes(2);
+      expect(intents[0].nonce).toBe(firstNonce);
+      expect(intents[0].status).toBe(failure ? "unknown" : "completed");
+      expect(botContext.orderIntents.getOutstanding("cancel")).toEqual(failure ? [intents[0]] : []);
+    },
+  );
+
   it("rechecks targets after cancellation reconciliation", async () => {
     Object.assign(botContext.config, { LEVELS_PER_SIDE: 1 });
     addPendingBuy("keep-buy", 500_000, 50_000_000);

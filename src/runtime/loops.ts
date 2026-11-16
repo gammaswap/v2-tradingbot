@@ -681,11 +681,11 @@ export async function reconcileOrderIntents(wallet: Wallet): Promise<boolean> {
 
   let attemptedCancellation = false;
 
-  for (const intent of cancellations) {
-    if (intent.kind !== "cancel") continue;
+  await submitQuoteGroup(cancellations, async (intent) => {
+    if (intent.kind !== "cancel") return;
     const pending = pendingByEpoch.get(intent.epoch.toString());
     if (pending?.has(intent.targetOrderHash)) {
-      if (!ORDER_INTENTS.canAttempt(intent)) continue;
+      if (!ORDER_INTENTS.canAttempt(intent)) return;
       attemptedCancellation = true;
       ORDER_INTENTS.markAttempted(intent);
       try {
@@ -707,7 +707,7 @@ export async function reconcileOrderIntents(wallet: Wallet): Promise<boolean> {
     } else {
       ORDER_INTENTS.markCompleted(intent);
     }
-  }
+  });
 
   // Re-read pending state after submitting cancellations. This prevents new
   // orders from being placed merely because the cancellation request was
