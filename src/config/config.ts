@@ -13,7 +13,7 @@ const DEFAULT_ASSET_ID = "261336857817713630688382311349658711122006440411137";
 const DEFAULT_TEST_MNEMONIC = "test test test test test test test test test test test junk";
 let activeEnvironment: NodeJS.ProcessEnv = process.env;
 
-function envNum(name: string, def: number, fallbackOnInvalid = true): number {
+function envNum(name: string, def: number, fallbackOnInvalid = false): number {
   const v = activeEnvironment[name];
   if (v == null || v.trim() === "") return def;
   const n = Number(v);
@@ -395,7 +395,7 @@ function buildConfig() {
     // uses only the book midpoint. The calculation is performed in the
     // protocol's price units, and the result is rounded to the nearest tick.
     // This result is the reference price used for quoting.
-    FAIR_VALUE_WEIGHT: envNum("FAIR_VALUE_WEIGHT", 1.0),
+    FAIR_VALUE_WEIGHT: envNum("FAIR_VALUE_WEIGHT", 1.0, true),
     // When true means contract wins when price above strike
     FAIR_VALUE_PAYS_ABOVE_STRIKE: envBool("FAIR_VALUE_PAYS_ABOVE_STRIKE", true),
     // When enabled, the oracle price is used to estimate fair value and can
@@ -447,7 +447,7 @@ function buildConfig() {
     // Number of opposite-side order-book levels whose quantities are summed
     // when sizing an aggression order. A buy measures ask-side depth; a sell
     // measures bid-side depth. The value is normalized to at least one level.
-    WIPE_LEVELS: Math.max(1, Math.floor(envNum("WIPE_LEVELS", 2))),
+    WIPE_LEVELS: Math.max(1, Math.floor(envNum("WIPE_LEVELS", 2, true))),
     // Maximum quantity for one aggression order, expressed in protocol size
     // units. The final quantity is capped by this value, rounded to the
     // protocol lot size, and also limited by collateral and inventory checks.

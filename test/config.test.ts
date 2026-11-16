@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createInfoClient } from "@gammaswap/v2-exchange-sdk";
 import {
   createConfigFromEnvironment,
   validateOrderSizeConfiguration,
@@ -148,13 +149,34 @@ describe("API timeout configuration", () => {
     expect(CFG.API_TIMEOUT_MS).toBe(10_000);
   });
 
-  it("falls back when the environment value is invalid", async () => {
-    process.env.API_TIMEOUT_MS = "not-a-number";
-    vi.resetModules();
+  it.each(["not-a-number", "NaN", "Infinity", "-Infinity"])(
+    "preserves invalid timeout %s for SDK validation",
+    async (value) => {
+      process.env.API_TIMEOUT_MS = value;
+      vi.resetModules();
 
-    const { CFG } = await import("../src/config/config.js");
-    expect(CFG.API_TIMEOUT_MS).toBe(30_000);
-  });
+      const { CFG } = await import("../src/config/config.js");
+      expect(Number.isFinite(CFG.API_TIMEOUT_MS)).toBe(false);
+      expect(() =>
+        createInfoClient({ apiUrl: "https://example.com/api", timeoutMs: CFG.API_TIMEOUT_MS }),
+      ).toThrow("positive integer");
+    },
+  );
+});
+
+describe("numeric fallback exceptions", () => {
+  it.each(["not-a-number", "NaN", "Infinity", "-Infinity"])(
+    "retains defaults before normalization for %s",
+    (value) => {
+      const config = createConfigFromEnvironment({
+        FAIR_VALUE_WEIGHT: value,
+        WIPE_LEVELS: value,
+      });
+
+      expect(config.FAIR_VALUE_WEIGHT).toBe(1);
+      expect(config.WIPE_LEVELS).toBe(2);
+    },
+  );
 });
 
 describe("production configuration validation", () => {
