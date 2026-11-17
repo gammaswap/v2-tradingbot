@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RuntimeEventQueue } from "../src/runtime/events.js";
-import { createLocalOrderBookState } from "../src/runtime/orderbookReducer.js";
+import {
+  buildBookSnapshot,
+  createLocalOrderBookState,
+  installBookSnapshot,
+} from "../src/runtime/orderbookReducer.js";
 import { createInitialState } from "../src/runtime/state.js";
 import type { Asset } from "../src/utils/types.js";
 
@@ -21,6 +25,7 @@ vi.mock("../src/runtime/loops.js", () => ({
 }));
 
 const { runCoordinatorStep } = await import("../src/runtime/coordinator.js");
+const { runMarketDataLoop } = await import("../src/runtime/marketData.js");
 const { STATE } = await import("../src/runtime/state.js");
 const { RUNTIME_CFG } = await import("../src/runtime/context.js");
 
@@ -59,10 +64,21 @@ afterEach(() => {
 });
 
 function context() {
+  const localBook = createLocalOrderBookState(1n);
+  installBookSnapshot(localBook, {
+    assetId: 1n,
+    epoch: STATE.epoch,
+    seqId: 10n,
+    ts: 0n,
+    bids: [],
+    asks: [],
+  });
+  STATE.book = buildBookSnapshot(localBook);
+
   return {
     wallet: {} as never,
     queue: new RuntimeEventQueue(),
-    localBook: createLocalOrderBookState(1n),
+    localBook,
     nextEpochCheck: 2_000_000_000_000,
     nextQuote: 0,
     nextAggression: 2_000_000_000_000,
@@ -72,6 +88,73 @@ function context() {
 }
 
 describe("coordinator step", () => {
+  it.each(["quotes", "account"] as const)(
+    "keeps updating the book while %s work is pending",
+    async (stage) => {
+      const stepContext = context();
+      const marketQueue = new RuntimeEventQueue();
+      const controller = new AbortController();
+
+      let release!: () => void;
+      const pending = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+
+      const operation = stage === "quotes" ? runQuoteMaintenance : refreshPrivateState;
+      operation.mockImplementationOnce(() => pending);
+
+      const marketTask = runMarketDataLoop(
+        stepContext,
+        marketQueue,
+        stepContext.queue,
+        controller.signal,
+      );
+
+      let finished = false;
+      const step = runCoordinatorStep(stepContext).then(() => {
+        finished = true;
+      });
+
+      try {
+        await vi.advanceTimersByTimeAsync(0);
+        expect(operation).toHaveBeenCalledOnce();
+
+        marketQueue.publish({
+          type: "market",
+          update: {
+            type: "order",
+            assetId: 1n,
+            epoch: 1n,
+            seqId: 11n,
+            data: {
+              orderId: "market-order",
+              assetId: 1n,
+              epoch: 1n,
+              side: "buy",
+              price: 400_000n,
+              size: 1_000_000n,
+              arrivalTime: 1n,
+              tif: "GTC",
+              type: "LIMIT",
+            },
+          },
+        });
+
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(finished).toBe(false);
+        expect(STATE.book?.seqId).toBe(11n);
+        expect(STATE.book?.bids[0]?.price).toBe(400_000);
+        expect(runQuoteMaintenance).toHaveBeenCalledOnce();
+      } finally {
+        release();
+        controller.abort();
+        marketQueue.wake();
+        await Promise.all([step, marketTask]);
+      }
+    },
+  );
+
   it("schedules a new quote pass immediately after refreshing an interrupted batch", async () => {
     STATE.oracle.stale = false;
     STATE.fairValue = {

@@ -6,7 +6,6 @@ import {
   runWithBotContext,
   type BotContext,
 } from "./context.js";
-import { apiGetBook } from "../api/api.js";
 import {
   cancelQuotesWhileStale,
   refreshPrivateState,
@@ -14,15 +13,10 @@ import {
   runAssetEpochCheck,
   runQuoteMaintenance,
 } from "./loops.js";
-import type { RuntimeEvent, RuntimeEventQueue } from "./events.js";
-import { hasFreshFairValue, midPrice, shouldPauseForFairValue } from "./strategy.js";
-import {
-  applyMarketUpdate,
-  buildBookSnapshot,
-  createLocalOrderBookState,
-  installBookSnapshot,
-  type LocalOrderBookState,
-} from "./orderbookReducer.js";
+import { RuntimeEventQueue, type RuntimeEvent } from "./events.js";
+import { resyncBook, runMarketDataLoop } from "./marketData.js";
+import { hasFreshFairValue, shouldPauseForFairValue } from "./strategy.js";
+import { createLocalOrderBookState, type LocalOrderBookState } from "./orderbookReducer.js";
 import { errorMessage, jitter, nowMs } from "../utils/utils.js";
 import { protocolValueToSafeNumber } from "../utils/protocolMath.js";
 import { Logger } from "../utils/logger.js";
@@ -40,6 +34,7 @@ export type CoordinatorStepContext = {
   nextAggression: number;
   bookReady: boolean;
   assetReady: boolean;
+  signal?: AbortSignal;
 };
 
 export async function runRuntimeCoordinator(
@@ -59,26 +54,63 @@ async function runCoordinatorLoop(
   queue: RuntimeEventQueue,
   signal?: AbortSignal,
 ): Promise<void> {
-  const localBook = createLocalOrderBookState(BigInt(CFG.ASSET_ID));
-  const initialBookReady = await resyncBook(localBook);
-  if (!initialBookReady) {
-    throw new Error("unable to initialize the local orderbook");
-  }
-  await refreshPrivateState(wallet);
-
+  const controller = new AbortController();
+  const tradingQueue = new RuntimeEventQueue();
   const context: CoordinatorStepContext = {
     wallet,
-    queue,
-    localBook,
-    nextEpochCheck: nowMs(),
-    nextQuote: nowMs(),
-    nextAggression: nowMs() + jitter(CFG.AGGRESS_MS, CFG.AGGRESS_JITTER_MS),
-    bookReady: true,
+    queue: tradingQueue,
+    localBook: createLocalOrderBookState(BigInt(CFG.ASSET_ID)),
+    nextEpochCheck: 0,
+    nextQuote: 0,
+    nextAggression: 0,
+    bookReady: false,
     assetReady: true,
+    signal: controller.signal,
   };
 
-  while (!signal?.aborted) {
-    await runCoordinatorStep(context);
+  const stop = () => {
+    controller.abort();
+    context.bookReady = false;
+    STATE.book = null;
+    queue.wake();
+    tradingQueue.wake();
+  };
+
+  signal?.addEventListener("abort", stop, { once: true });
+  if (signal?.aborted) stop();
+
+  let marketFailure: Error | undefined;
+  const marketTask = runMarketDataLoop(context, queue, tradingQueue, controller.signal).catch(
+    (error: unknown) => {
+      marketFailure = error instanceof Error ? error : new Error(errorMessage(error));
+      stop();
+    },
+  );
+
+  try {
+    if (controller.signal.aborted) return;
+
+    const ready = await resyncBook(context.localBook, controller.signal);
+    if (controller.signal.aborted) {
+      if (marketFailure) throw marketFailure;
+      return;
+    }
+    if (!ready) throw new Error("unable to initialize the local orderbook");
+
+    context.bookReady = !context.localBook.needsResync;
+    await refreshPrivateState(wallet);
+    context.nextEpochCheck = nowMs();
+    context.nextQuote = nowMs();
+    context.nextAggression = nowMs() + jitter(CFG.AGGRESS_MS, CFG.AGGRESS_JITTER_MS);
+
+    while (!controller.signal.aborted) {
+      await runCoordinatorStep(context);
+    }
+    if (marketFailure) throw marketFailure;
+  } finally {
+    stop();
+    await marketTask;
+    signal?.removeEventListener("abort", stop);
   }
 }
 
@@ -86,6 +118,8 @@ export async function runCoordinatorStep(context: CoordinatorStepContext): Promi
   const { queue, localBook, wallet } = context;
   const nextAction = Math.min(context.nextEpochCheck, context.nextQuote, context.nextAggression);
   await queue.wait(Math.max(0, nextAction - nowMs()));
+
+  if (context.signal?.aborted) return;
 
   const events = queue.drain();
   const actions = processEvents(localBook, events);
@@ -97,10 +131,8 @@ export async function runCoordinatorStep(context: CoordinatorStepContext): Promi
   }
   let bookReady = context.bookReady && !localBook.needsResync;
 
-  if (actions.needsResync) {
-    bookReady = await resyncBook(localBook);
-  } else if (actions.marketChanged) {
-    publishLocalBook(localBook);
+  if (actions.needsResync && localBook.needsResync) {
+    bookReady = await resyncBook(localBook, context.signal);
   }
 
   if (actions.needsResync || actions.ownTradeOccurred) {
@@ -114,7 +146,8 @@ export async function runCoordinatorStep(context: CoordinatorStepContext): Promi
       const epochStatus = await runAssetEpochCheck(wallet);
       context.assetReady = true;
       if (epochStatus.changed || STATE.epoch !== epochBefore) {
-        bookReady = await resyncBook(localBook);
+        context.bookReady = false;
+        bookReady = await resyncBook(localBook, context.signal);
         await refreshPrivateState(wallet);
       }
     } catch (error: unknown) {
@@ -125,9 +158,13 @@ export async function runCoordinatorStep(context: CoordinatorStepContext): Promi
     context.nextEpochCheck = now + EPOCH_CHECK_MS;
   }
 
-  context.bookReady = bookReady && !localBook.needsResync;
+  context.bookReady = bookReady && !localBook.needsResync && STATE.book?.epoch === STATE.epoch;
   const tradingEnabled =
-    context.bookReady && context.assetReady && STATE.asset != null && !STATE.asset.isResolved;
+    !context.signal?.aborted &&
+    context.bookReady &&
+    context.assetReady &&
+    STATE.asset != null &&
+    !STATE.asset.isResolved;
 
   const oracleRepriceDue = actions.oracleChanged && hasFreshFairValue();
 
@@ -152,49 +189,16 @@ export async function runCoordinatorStep(context: CoordinatorStepContext): Promi
   }
 }
 
-async function resyncBook(state: LocalOrderBookState): Promise<boolean> {
-  try {
-    const snapshot = await apiGetBook(STATE.epoch);
-    const ready = installBookSnapshot(state, snapshot);
-    if (!ready) {
-      logger.warn(
-        "REST book snapshot did not cover buffered websocket events; another resync is required",
-      );
-      return false;
-    }
-
-    publishLocalBook(state);
-    logger.info("local orderbook resynced", {
-      seqId: state.seqId?.toString(),
-      bids: STATE.book?.bids.length,
-      asks: STATE.book?.asks.length,
-    });
-    return true;
-  } catch (error: unknown) {
-    logger.warn("orderbook resync failed:", errorMessage(error));
-    return false;
-  }
-}
-
-function publishLocalBook(state: LocalOrderBookState): void {
-  STATE.book = buildBookSnapshot(state);
-  STATE.lastMid = midPrice(STATE.book);
-  STATE.bookUpdatedAtMs = nowMs();
-}
-
 function processEvents(
   book: LocalOrderBookState,
   events: RuntimeEvent[],
 ): {
   needsResync: boolean;
-  marketChanged: boolean;
   tradeOccurred: boolean;
   ownTradeOccurred: boolean;
   oracleChanged: boolean;
 } {
-  let needsResync = false;
-  let skipMarketEvents = false;
-  let marketChanged = false;
+  let needsResync = book.needsResync;
   let tradeOccurred = false;
   let ownTradeOccurred = false;
   let oracleChanged = false;
@@ -202,39 +206,19 @@ function processEvents(
   for (const event of events) {
     if (event.type === "market-resync") {
       needsResync = true;
-      skipMarketEvents = true;
-      logger.warn("market resync requested:", event.reason);
-      continue;
-    }
-
-    if (event.type === "oracle-state-changed") {
-      // price update or stale
+    } else if (event.type === "oracle-state-changed") {
       oracleChanged = true;
-      continue;
-    }
-
-    if (skipMarketEvents) continue;
-
-    const result = applyMarketUpdate(book, event.update);
-    if (result === "ignored" || result === "ignored-epoch" || result === "duplicate") {
-      continue;
-    }
-
-    marketChanged = true;
-    if (result === "buffered" || result === "invalid") {
-      needsResync = true;
-      skipMarketEvents = true;
-      continue;
-    }
-
-    if (event.update.type === "trade") {
+    } else if (
+      event.type === "market-trade" &&
+      event.update.assetId === book.assetId &&
+      event.update.epoch === STATE.epoch
+    ) {
       tradeOccurred = true;
       ownTradeOccurred = applyTradeHint(event.update) || ownTradeOccurred;
     }
   }
 
-  if (book.needsResync) needsResync = true;
-  return { needsResync, marketChanged, tradeOccurred, ownTradeOccurred, oracleChanged };
+  return { needsResync, tradeOccurred, ownTradeOccurred, oracleChanged };
 }
 
 function applyTradeHint(update: WebSocketTradeUpdate): boolean {
