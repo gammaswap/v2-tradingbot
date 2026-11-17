@@ -75,8 +75,13 @@ describe("API client configuration", () => {
 });
 
 describe("existing API value conversions", () => {
-  it("preserves the SDK input conversions used by orders", () => {
+  it("converts whole-unit order sizes and fractional prices for the SDK", () => {
     expect(protocolPriceToSdkInput(500000n)).toBe("50.0");
+    expect(protocolAmountToSdkInput(1_000_000n)).toBe("1");
+    expect(protocolAmountToSdkInput(2_000_000n)).toBe("2");
+  });
+
+  it("retains fractional amount conversion independently of order-size validation", () => {
     expect(protocolAmountToSdkInput(1_250_000n)).toBe("1.25");
   });
 });

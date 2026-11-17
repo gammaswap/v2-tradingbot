@@ -528,12 +528,14 @@ export function buildTargetLadderPrices(
  * the distribution flatter.
  *
  * Example with a buy ladder:
- *   totalSize = 1,000,000 contracts, lotSize = 10,000, and prices are
+ *   totalSize = 100,000,000 protocol units (100 contracts), lotSize =
+ *   1,000,000 (one contract), and prices are
  *   [490,000, 480,000, 460,000]. The best bid is 490,000, so the distances
  *   are [0, 10,000, 30,000]. With concavity = 1, the weights are approximately
  *   [1.00, 1.33, 2.00]. This produces approximately [23.08, 30.77, 46.15]
  *   lots. Largest-remainder rounding converts that to [23, 31, 46] lots,
- *   or [230,000, 310,000, 460,000] contracts, preserving the 1,000,000 total.
+ *   or [23,000,000, 31,000,000, 46,000,000] protocol units, preserving the
+ *   100-contract total.
  *
  * For asks, the lowest ask is treated as the best price and the same logic is
  * applied outward toward higher asks. If no target prices are available,

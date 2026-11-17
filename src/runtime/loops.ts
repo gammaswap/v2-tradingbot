@@ -39,8 +39,8 @@ import {
   calculateTotalSizes,
 } from "./strategy.js";
 import { Wallet, ZeroHash } from "ethers";
-import { markFairValueStale, updateFairValueFromOracle } from "./fairValue.js";
-import { PendingOrder, AssetEpochCheckResult } from "../utils/types.js";
+import { markFairValueStale, refreshFairValueFromCachedOracle } from "./fairValue.js";
+import type { PendingOrder, AssetEpochCheckResult, BookSnapshot } from "../utils/types.js";
 import { TimeInForce } from "@gammaswap/v2-exchange-sdk";
 import { makeQuoteSlot, planOrders } from "./orderPlanner.js";
 import { canTradeCurrentAsset } from "./tradingGuards.js";
@@ -67,7 +67,6 @@ export async function hasPendingOrders(epoch: bigint = STATE.epoch) {
   const pending = await apiGetPending(STATE.account, epoch);
   const count = pending.buys.length + pending.sells.length;
   logger.info("cleanUpAllOrders:resting orders", { epoch: epoch.toString(), count });
-  await sleep(1000 * 2);
   return count > 0;
 }
 
@@ -76,6 +75,7 @@ export async function cleanUpAllOrders(wallet: Wallet) {
   let tryCount = 0;
   while (!done) {
     if (await hasPendingOrders()) {
+      await sleep(1000);
       logger.info("cleanUpAllOrders:cancel all orders >> tryCount:", tryCount);
       await cancelAllOrders(wallet);
       tryCount++;
@@ -87,6 +87,7 @@ export async function cleanUpAllOrders(wallet: Wallet) {
       logger.info("cleanUpAllOrders:cancel all orders >> max tryCount reached");
       done = true;
     }
+    await sleep(1000 * 2);
   }
 }
 
@@ -215,8 +216,7 @@ export async function runAssetEpochCheck(wallet: Wallet): Promise<AssetEpochChec
     hasPendingOrders,
     cancelAllOrders,
     refreshFairValue: () => {
-      if (STATE.oracle.price != null)
-        updateFairValueFromOracle(STATE.oracle.price, STATE.oracle.ts);
+      refreshFairValueFromCachedOracle();
     },
     markResolved: markFairValueStale,
   });
@@ -298,19 +298,74 @@ function applyPendingResponse(pendingResp: Awaited<ReturnType<typeof apiGetPendi
  * retried on the next call.
  */
 export async function cancelQuotesWhileStale(wallet: Wallet) {
-  if (STATE.staleCancelEpoch === STATE.epoch) return;
   try {
-    await apiCancelOrder(wallet, STATE.epoch, ZeroHash);
-    STATE.staleCancelEpoch = STATE.epoch;
-    logger.warn("reference price stale: cancelled resting quotes", {
-      epoch: STATE.epoch.toString(),
-    });
+    if (await hasPendingOrders()) {
+      await sleep(1000);
+      await apiCancelOrder(wallet, STATE.epoch, ZeroHash);
+      logger.warn("reference price stale: cancelled resting quotes", {
+        epoch: STATE.epoch.toString(),
+      });
+    }
   } catch (e: unknown) {
     logger.warn("reference price stale: cancel-all failed, will retry", errorMessage(e));
+  } finally {
+    await sleep(1000 * 2);
   }
 }
 
-export async function runQuoteMaintenance(wallet: Wallet) {
+function calculateMakerQuotePrices(book: BookSnapshot) {
+  const ownOrderIds = new Set(STATE.pending.keys());
+  const bookMid = midPrice(book, ownOrderIds);
+  const refPrice = referencePrice(book, ownOrderIds);
+  const gamma = calculateCurrentRiskAversion(STATE.asset!);
+  const inventorySkew = calculateInventorySkew(gamma, STATE.invBase, refPrice);
+  const calculatedBidAsk = calculateBidAndAsk(refPrice, inventorySkew, CFG.LOGIT_HALF_SPREAD);
+  const calculatedMid = (calculatedBidAsk.bid + calculatedBidAsk.ask) / 2;
+  const calculatedTargets = buildTargetLadderPrices(
+    book,
+    refPrice,
+    calculatedBidAsk.bid,
+    calculatedBidAsk.ask,
+    CFG.LADDER_PRICE_MODEL === LADDER_PRICE_MODEL.GROWTH_SPACE
+      ? LADDER_PRICE_MODEL.GROWTH_SPACE
+      : LADDER_PRICE_MODEL.EQUIDISTANT,
+    ownOrderIds,
+  );
+
+  return {
+    bookMid,
+    refPrice,
+    gamma,
+    inventorySkew,
+    calculatedBidAsk,
+    calculatedMid,
+    calculatedTargets,
+  };
+}
+
+function quotePricesMoved(previous: readonly number[], current: readonly number[]): boolean {
+  // Matches the current default price tolerance in shouldCancelReplace().
+  const tolerance = PROTOCOL_TICK_SIZE * 10; // This could potentially be a config variable
+  return (
+    previous.length !== current.length ||
+    previous.some((price, index) => Math.abs(price - current[index]) > tolerance)
+  );
+}
+
+async function submitQuoteGroup<T>(
+  instructions: readonly T[],
+  submit: (instruction: T) => Promise<void>,
+): Promise<void> {
+  const results = await Promise.allSettled(instructions.map(submit));
+
+  for (const result of results) {
+    if (result.status === "rejected") {
+      throw result.reason instanceof Error ? result.reason : new Error(errorMessage(result.reason));
+    }
+  }
+}
+
+export async function runQuoteMaintenance(wallet: Wallet): Promise<"reprice" | "paused" | void> {
   if (CFG.IS_TAKER) {
     logger.debug("quote maintenance skipped: bot is configured as taker");
     return;
@@ -327,18 +382,23 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     await cancelQuotesWhileStale(wallet);
     return;
   }
-  STATE.staleCancelEpoch = null;
 
   await reconcileCancelReplaceIntents(wallet);
   await reconcilePlaceIntents(wallet);
 
-  const ownOrderIds = new Set(STATE.pending.keys());
-  const bookMid = midPrice(book, ownOrderIds);
-  const refPrice = referencePrice(book, ownOrderIds);
-  const gamma = calculateCurrentRiskAversion(STATE.asset!);
-  const inventorySkew = calculateInventorySkew(gamma, STATE.invBase, refPrice);
-  const calculatedBidAsk = calculateBidAndAsk(refPrice, inventorySkew, CFG.LOGIT_HALF_SPREAD);
-  const calculatedMid = (calculatedBidAsk.bid + calculatedBidAsk.ask) / 2;
+  if (!canTradeCurrentAsset(STATE)) return;
+  if (shouldPauseForFairValue(book)) return "paused";
+
+  const batchEpoch = STATE.epoch;
+  const {
+    bookMid,
+    refPrice,
+    gamma,
+    inventorySkew,
+    calculatedBidAsk,
+    calculatedMid,
+    calculatedTargets,
+  } = calculateMakerQuotePrices(book);
   logger.debug(
     "book >> bids:",
     book.bids.length,
@@ -362,16 +422,6 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     STATE.fairValue?.protocolPrice,
     "oracleStale:",
     STATE.oracle.stale,
-  );
-  const calculatedTargets = buildTargetLadderPrices(
-    book,
-    refPrice,
-    calculatedBidAsk.bid,
-    calculatedBidAsk.ask,
-    CFG.LADDER_PRICE_MODEL === LADDER_PRICE_MODEL.GROWTH_SPACE
-      ? LADDER_PRICE_MODEL.GROWTH_SPACE
-      : LADDER_PRICE_MODEL.EQUIDISTANT,
-    ownOrderIds,
   );
   logger.debug("calculated target ladder:", calculatedTargets);
   const { bids: targetBidPrices, asks: targetAskPrices } = calculatedTargets;
@@ -413,28 +463,60 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     newOrders: sellNewOrders,
   } = planOrders(pendingSells, targetAskPrices, askSizes, "sell");
 
+  const checkBatch = (): "current" | "reprice" | "paused" => {
+    const currentBook = STATE.book;
+    if (
+      !currentBook ||
+      !canTradeCurrentAsset(STATE) ||
+      STATE.epoch !== batchEpoch ||
+      shouldPauseForFairValue(currentBook)
+    ) {
+      return "paused";
+    }
+
+    const latest = calculateMakerQuotePrices(currentBook);
+    if (
+      quotePricesMoved(targetBidPrices, latest.calculatedTargets.bids) ||
+      quotePricesMoved(targetAskPrices, latest.calculatedTargets.asks)
+    ) {
+      return "reprice";
+    }
+
+    return "current";
+  };
+
   const cancelReplaces = buyCancelReplaces.concat(sellCancelReplaces);
-  for (let i = 0; i < cancelReplaces.length; i++) {
-    const instr = cancelReplaces[i];
+  const beforeReplacements = checkBatch();
+  if (beforeReplacements !== "current") return beforeReplacements;
+
+  await submitQuoteGroup(cancelReplaces, async (instr) => {
     const quoteSlot = instr.quoteSlot ?? makeQuoteSlot(instr.side, instr.price);
     const existingReplacement = ORDER_INTENTS.getOutstanding("cancel-replace").find(
       (intent) =>
         intent.kind === "cancel-replace" &&
-        intent.epoch === STATE.epoch &&
+        intent.epoch === batchEpoch &&
         intent.targetOrderHash === instr.cancelId,
     );
     if (existingReplacement && existingReplacement.status !== "unknown") {
-      continue;
+      return;
     }
     if (existingReplacement && !ORDER_INTENTS.canAttempt(existingReplacement)) {
-      continue;
+      return;
+    }
+    if (
+      existingReplacement?.kind === "cancel-replace" &&
+      (existingReplacement.side !== instr.side ||
+        existingReplacement.price !== instr.price ||
+        existingReplacement.size !== instr.size)
+    ) {
+      return;
     }
     const intent =
       existingReplacement ??
       ORDER_INTENTS.getOrCreate({
         kind: "cancel-replace",
         assetId: CFG.ASSET_ID,
-        epoch: STATE.epoch,
+        epoch: batchEpoch,
         slot: quoteSlot,
         side: instr.side,
         price: instr.price,
@@ -444,7 +526,7 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     ORDER_INTENTS.markAttempted(intent);
     try {
       const response = await apiCancelReplaceOrder(wallet, {
-        epoch: STATE.epoch,
+        epoch: batchEpoch,
         orderHash: instr.cancelId,
         side: instr.side,
         price: instr.price,
@@ -469,7 +551,10 @@ export async function runQuoteMaintenance(wallet: Wallet) {
         errorMessage(e),
       );
     }
-  }
+  });
+
+  const afterReplacements = checkBatch();
+  if (afterReplacements !== "current") return afterReplacements;
 
   const cancels = buyCancels.concat(sellCancels);
   for (const orderHash of cancels) {
@@ -482,51 +567,62 @@ export async function runQuoteMaintenance(wallet: Wallet) {
     });
   }
 
-  if (!(await reconcileOrderIntents(wallet))) {
+  const cancellationsReady = await reconcileOrderIntents(wallet);
+  const afterCancellations = checkBatch();
+  if (afterCancellations !== "current") return afterCancellations;
+
+  if (!cancellationsReady) {
     logger.warn("quote maintenance paused: unresolved cancellations remain");
     return;
   }
 
   const newOrders = buyNewOrders.concat(sellNewOrders);
-  for (let i = 0; i < newOrders.length; i++) {
-    const instr = newOrders[i];
+  await submitQuoteGroup(newOrders, async (instr) => {
     const slot = instr.quoteSlot ?? makeQuoteSlot(instr.side, instr.price);
     if (
       QUOTE_COOLDOWNS.isCoolingDown({
         assetId: CFG.ASSET_ID,
-        epoch: STATE.epoch,
+        epoch: batchEpoch,
         quoteSlot: slot,
       })
     ) {
-      continue;
+      return;
     }
     const existingPlace = ORDER_INTENTS.getOutstanding("place").find(
       (candidate) =>
-        candidate.kind === "place" && candidate.epoch === STATE.epoch && candidate.slot === slot,
+        candidate.kind === "place" && candidate.epoch === batchEpoch && candidate.slot === slot,
     );
+    if (
+      existingPlace?.kind === "place" &&
+      (existingPlace.side !== instr.side ||
+        existingPlace.price !== instr.price ||
+        existingPlace.size !== instr.size)
+    ) {
+      return;
+    }
     if (
       existingPlace &&
       (existingPlace.status !== "unknown" || !ORDER_INTENTS.canAttempt(existingPlace))
     ) {
-      continue;
+      return;
     }
     const intent =
       existingPlace ??
       ORDER_INTENTS.getOrCreate({
         kind: "place",
         assetId: CFG.ASSET_ID,
-        epoch: STATE.epoch,
+        epoch: batchEpoch,
         slot,
         side: instr.side,
         price: instr.price,
         size: instr.size,
         timeInForce: 3n,
       });
-    if (intent.kind !== "place") continue;
+    if (intent.kind !== "place") return;
     ORDER_INTENTS.markAttempted(intent);
     try {
       const response = await apiSendOrder(wallet, {
-        epoch: STATE.epoch,
+        epoch: batchEpoch,
         side: intent.side,
         price: intent.price,
         size: intent.size,
@@ -542,7 +638,10 @@ export async function runQuoteMaintenance(wallet: Wallet) {
         errorMessage(e),
       );
     }
-  }
+  });
+
+  const afterPlacements = checkBatch();
+  if (afterPlacements !== "current") return afterPlacements;
 
   logger.info(
     "=============runQuoteMaintenance:end",
@@ -582,11 +681,11 @@ export async function reconcileOrderIntents(wallet: Wallet): Promise<boolean> {
 
   let attemptedCancellation = false;
 
-  for (const intent of cancellations) {
-    if (intent.kind !== "cancel") continue;
+  await submitQuoteGroup(cancellations, async (intent) => {
+    if (intent.kind !== "cancel") return;
     const pending = pendingByEpoch.get(intent.epoch.toString());
     if (pending?.has(intent.targetOrderHash)) {
-      if (!ORDER_INTENTS.canAttempt(intent)) continue;
+      if (!ORDER_INTENTS.canAttempt(intent)) return;
       attemptedCancellation = true;
       ORDER_INTENTS.markAttempted(intent);
       try {
@@ -608,7 +707,7 @@ export async function reconcileOrderIntents(wallet: Wallet): Promise<boolean> {
     } else {
       ORDER_INTENTS.markCompleted(intent);
     }
-  }
+  });
 
   // Re-read pending state after submitting cancellations. This prevents new
   // orders from being placed merely because the cancellation request was

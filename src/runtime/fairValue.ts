@@ -67,6 +67,30 @@ export function updateFairValueFromOracle(
   return estimate;
 }
 
+export function refreshFairValueFromCachedOracle(): FairValueEstimate | null {
+  const calculatedAtMs = nowMs();
+  const asset = STATE.asset;
+  const { price, receivedAtMs, stale } = STATE.oracle;
+
+  if (
+    !asset ||
+    asset.isResolved ||
+    price === null ||
+    stale ||
+    calculatedAtMs - receivedAtMs > CFG.FAIR_VALUE_STALE_MS
+  ) {
+    STATE.fairValue = null;
+    return null;
+  }
+
+  // Use the current time for the new asset's remaining lifetime.
+  const estimate = computeFairValueEstimate(price, asset, calculatedAtMs);
+
+  // Freshness still belongs to the original oracle receipt.
+  STATE.fairValue = estimate ? { ...estimate, updatedAtMs: receivedAtMs } : null;
+  return STATE.fairValue;
+}
+
 export function markFairValueStale() {
   STATE.oracle.stale = true;
   STATE.fairValue = null;

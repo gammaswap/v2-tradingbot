@@ -1,21 +1,67 @@
 import { describe, expect, it } from "vitest";
 import { Wallet } from "ethers";
-import { TradingBot } from "../src/runtime/tradingBot.js";
+import {
+  TradingBot,
+  validateTradingBotOptions,
+  type TradingBotOptions,
+} from "../src/runtime/tradingBot.js";
 
 describe("TradingBot options", () => {
-  const createBot = (weight: number) =>
-    new TradingBot({
-      wallet: Wallet.createRandom() as unknown as Wallet,
-      apiUrl: "https://example.com/api",
-      assetId: "1",
-      chainId: 1,
-      contracts: {
-        exchange: "0x1111111111111111111111111111111111111111",
-        ledger: "0x2222222222222222222222222222222222222222",
-        settlementToken: "0x3333333333333333333333333333333333333333",
-      },
-      fairValue: { weight },
-    });
+  const createOptions = (
+    weight: number,
+    fairValue: TradingBotOptions["fairValue"] = {},
+  ): TradingBotOptions => ({
+    wallet: Wallet.createRandom() as unknown as Wallet,
+    apiUrl: "https://example.com/api",
+    assetId: "1",
+    chainId: 1,
+    contracts: {
+      exchange: "0x1111111111111111111111111111111111111111",
+      ledger: "0x2222222222222222222222222222222222222222",
+      settlementToken: "0x3333333333333333333333333333333333333333",
+    },
+    fairValue: { weight, ...fairValue },
+  });
+
+  const createBot = (weight: number) => new TradingBot(createOptions(weight));
+
+  it("uses the default oracle notification threshold and interval", () => {
+    const bot = createBot(1);
+
+    expect((bot as any).context.config.ORACLE_NOTIFY_MIN_CHANGE_TICKS).toBe(2);
+    expect((bot as any).context.config.ORACLE_NOTIFY_INTERVAL_MS).toBe(500);
+  });
+
+  it.each([
+    ["notifyMinChangeTicks", 0, "ORACLE_NOTIFY_MIN_CHANGE_TICKS"],
+    ["notifyMinChangeTicks", -1, "ORACLE_NOTIFY_MIN_CHANGE_TICKS"],
+    ["notifyMinChangeTicks", 1.5, "ORACLE_NOTIFY_MIN_CHANGE_TICKS"],
+    ["notifyMinChangeTicks", NaN, "ORACLE_NOTIFY_MIN_CHANGE_TICKS"],
+    ["notifyMinChangeTicks", Infinity, "ORACLE_NOTIFY_MIN_CHANGE_TICKS"],
+    ["notifyMinChangeTicks", Number.MAX_SAFE_INTEGER + 1, "ORACLE_NOTIFY_MIN_CHANGE_TICKS"],
+    ["notifyIntervalMs", 0, "ORACLE_NOTIFY_INTERVAL_MS"],
+    ["notifyIntervalMs", -1, "ORACLE_NOTIFY_INTERVAL_MS"],
+    ["notifyIntervalMs", NaN, "ORACLE_NOTIFY_INTERVAL_MS"],
+    ["notifyIntervalMs", Infinity, "ORACLE_NOTIFY_INTERVAL_MS"],
+  ] as const)("rejects %s=%s before startup", (name, value, configName) => {
+    const options = createOptions(1, { [name]: value });
+
+    expect(validateTradingBotOptions(options)).toEqual(
+      expect.arrayContaining([expect.stringContaining(configName)]),
+    );
+    expect(() => new TradingBot(options)).toThrow(configName);
+  });
+
+  it.each([
+    [{ quote: { quoteLoopMs: 0 } }, "QUOTE_LOOP_MS"],
+    [{ fairValue: { volatility: -0.1 } }, "FAIR_VALUE_VOL"],
+    [{ risk: { inventoryMaxAbs: NaN } }, "INV_MAX_ABS"],
+    [{ aggression: { extremePushProbability: 1.1 } }, "EXTREME_PUSH_PROB"],
+  ] as const)("rejects invalid strategy overrides %j", (overrides, configName) => {
+    const options = { ...createOptions(1), ...overrides };
+
+    expect(() => new TradingBot(options)).toThrow(configName);
+  });
 
   it("accepts an oracle stale-price timeout override", () => {
     const bot = new TradingBot({
@@ -47,6 +93,8 @@ describe("TradingBot options", () => {
         requireFreshValue: true,
         stalePriceTimeoutMs: 23_456,
         firstPriceTimeoutMs: 34_567,
+        notifyMinChangeTicks: 4,
+        notifyIntervalMs: 1_250,
         fairValueStaleMs: 45_678,
         volatility: 0.9,
         weight: 0.8,
@@ -95,6 +143,8 @@ describe("TradingBot options", () => {
     expect((bot as any).context.config.DUST_BALANCE).toBe(654_321n);
     expect((bot as any).context.config.MAX_ORDER_SIZE).toBe(80_000_000_000);
     expect((bot as any).context.config.ORACLE_STALE_PRICE_TIMEOUT_MS).toBe(23_456);
+    expect((bot as any).context.config.ORACLE_NOTIFY_MIN_CHANGE_TICKS).toBe(4);
+    expect((bot as any).context.config.ORACLE_NOTIFY_INTERVAL_MS).toBe(1_250);
     expect((bot as any).context.config.FAIR_VALUE_STALE_MS).toBe(45_678);
     expect((bot as any).context.config.ORACLE_FEED_WS_URL).toBe("wss://example.com/oracle");
     expect((bot as any).context.config.FAIR_VALUE_VOL).toBe(0.9);

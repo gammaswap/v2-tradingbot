@@ -73,14 +73,16 @@ describe("order intent idempotency", () => {
   });
 
   it("allocates a fresh nonce after the prior intent is completed", () => {
+    const store = new InMemoryOrderIntentStore();
     const manager = new OrderIntentManager(
-      new InMemoryOrderIntentStore(),
+      store,
       new NonceManager({ initialTimestampMs: 1_700_000_000_000n, now: () => 1_700_000_000_000 }),
     );
     const first = manager.getOrCreate(input);
     manager.markAccepted(first, "0xorder");
     manager.markCompleted(first);
 
+    expect(store.get(first.intentId)).toBeUndefined();
     const next = manager.getOrCreate(input);
     expect(next.nonce).not.toBe(first.nonce);
     expect(next.status).toBe("reserved");
@@ -104,4 +106,45 @@ describe("order intent idempotency", () => {
     expect(cancel.nonce).not.toBe(place.nonce);
     expect(manager.getOutstanding("cancel")).toHaveLength(1);
   });
+});
+
+describe("order intent retention", () => {
+  it.each(["completed", "rejected", "unfulfillable"] as const)(
+    "removes %s intents from the store",
+    (status) => {
+      const store = new InMemoryOrderIntentStore();
+      const manager = new OrderIntentManager(store);
+      const intent = manager.getOrCreate(input);
+
+      store.set({ ...intent, status });
+
+      expect(store.get(intent.intentId)).toBeUndefined();
+      expect(store.all()).toEqual([]);
+    },
+  );
+
+  it.each(["reserved", "attempted", "accepted", "unknown"] as const)(
+    "preserves a %s intent and its nonce while other intents complete",
+    (status) => {
+      const store = new InMemoryOrderIntentStore();
+      const manager = new OrderIntentManager(store);
+      const intent = manager.getOrCreate(input);
+      if (status === "attempted" || status === "unknown") manager.markAttempted(intent);
+      if (status === "accepted") manager.markAccepted(intent, "0xorder");
+      if (status === "unknown") manager.markUnknown(intent);
+      const nonce = intent.nonce;
+
+      for (let i = 0; i < 1_000; i++) {
+        const completed = manager.getOrCreate({ ...input, slot: `completed-${i}` });
+        manager.markCompleted(completed);
+      }
+
+      expect(store.all()).toEqual([intent]);
+      expect(manager.getOutstanding()).toEqual([intent]);
+      const retry = manager.getOrCreate(input);
+      expect(retry).toBe(intent);
+      expect(retry.status).toBe(status);
+      expect(retry.nonce).toBe(nonce);
+    },
+  );
 });

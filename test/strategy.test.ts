@@ -375,44 +375,60 @@ describe("quote midpoint excluding own orders", () => {
 describe("total size ladder distribution", () => {
   it("allocates more contracts to prices farther from the best bid", () => {
     (CFG as any).QUOTE_SIZE_CONCAVITY = 1;
-    const sizes = distributeTotalSizeAcrossLadder(1_000_000, [490_000, 480_000, 460_000], "buy");
+    const sizes = distributeTotalSizeAcrossLadder(100_000_000, [490_000, 480_000, 460_000], "buy");
 
-    expect(sizes.reduce((sum, size) => sum + size, 0)).toBe(1_000_000);
+    expect(sizes.reduce((sum, size) => sum + size, 0)).toBe(100_000_000);
     expect(sizes[2]).toBeGreaterThan(sizes[1]);
     expect(sizes[1]).toBeGreaterThan(sizes[0]);
   });
 
   it("allocates more contracts to prices farther from the best ask", () => {
-    const sizes = distributeTotalSizeAcrossLadder(1_000_000, [510_000, 520_000, 540_000], "sell");
+    const sizes = distributeTotalSizeAcrossLadder(100_000_000, [510_000, 520_000, 540_000], "sell");
 
-    expect(sizes.reduce((sum, size) => sum + size, 0)).toBe(1_000_000);
+    expect(sizes.reduce((sum, size) => sum + size, 0)).toBe(100_000_000);
     expect(sizes[2]).toBeGreaterThan(sizes[1]);
     expect(sizes[1]).toBeGreaterThan(sizes[0]);
   });
 
   it("allocates independently when the sides have different level counts", () => {
-    const bidSizes = distributeTotalSizeAcrossLadder(500_000, [490_000, 480_000, 460_000], "buy");
-    const askSizes = distributeTotalSizeAcrossLadder(500_000, [510_000, 540_000], "sell");
+    const bidSizes = distributeTotalSizeAcrossLadder(
+      50_000_000,
+      [490_000, 480_000, 460_000],
+      "buy",
+    );
+    const askSizes = distributeTotalSizeAcrossLadder(50_000_000, [510_000, 540_000], "sell");
 
-    expect(bidSizes.reduce((sum, size) => sum + size, 0)).toBe(500_000);
-    expect(askSizes.reduce((sum, size) => sum + size, 0)).toBe(500_000);
+    expect(bidSizes.reduce((sum, size) => sum + size, 0)).toBe(50_000_000);
+    expect(askSizes.reduce((sum, size) => sum + size, 0)).toBe(50_000_000);
   });
 
   it("returns no allocations when there are no target prices", () => {
-    expect(distributeTotalSizeAcrossLadder(1_000_000, [], "buy")).toEqual([]);
+    expect(distributeTotalSizeAcrossLadder(100_000_000, [], "buy")).toEqual([]);
   });
 
   it("changes the concentration using the concavity parameter", () => {
     (CFG as any).QUOTE_SIZE_CONCAVITY = 1;
-    const linear = distributeTotalSizeAcrossLadder(1_000_000, [490_000, 480_000, 460_000], "buy");
+    const linear = distributeTotalSizeAcrossLadder(100_000_000, [490_000, 480_000, 460_000], "buy");
     (CFG as any).QUOTE_SIZE_CONCAVITY = 3;
     const concentrated = distributeTotalSizeAcrossLadder(
-      1_000_000,
+      100_000_000,
       [490_000, 480_000, 460_000],
       "buy",
     );
 
     expect(concentrated[2]).toBeGreaterThan(linear[2]);
+  });
+  it("allocates a single whole unit without creating fractional orders", () => {
+    expect(distributeTotalSizeAcrossLadder(1_000_000, [490_000, 480_000, 460_000], "buy")).toEqual([
+      0, 0, 1_000_000,
+    ]);
+  });
+
+  it("drops totals below one unit and floors fractional totals before allocation", () => {
+    expect(distributeTotalSizeAcrossLadder(990_000, [490_000, 480_000], "buy")).toEqual([0, 0]);
+    const sizes = distributeTotalSizeAcrossLadder(3_750_000, [490_000, 480_000, 460_000], "buy");
+    expect(sizes.reduce((sum, size) => sum + size, 0)).toBe(3_000_000);
+    expect(sizes.every((size) => size % 1_000_000 === 0)).toBe(true);
   });
 });
 
@@ -450,7 +466,7 @@ describe("total quote sizes", () => {
     });
   });
 
-  it("uses signed inventory to bias total size toward the reducing side", () => {
+  it("uses signed inventory to bias total size and drops the side below one unit", () => {
     STATE.periodLength = 100;
     STATE.invBase = 200_000;
     (CFG as any).INV_TARGET = 0;
@@ -462,7 +478,7 @@ describe("total quote sizes", () => {
     (CFG as any).TOTAL_SIZE_TIME_BUCKET_SECONDS = 5;
 
     expect(calculateTotalSizes(asset, 1_000_000)).toEqual({
-      bidSize: 800_000,
+      bidSize: 0,
       askSize: 1_000_000,
     });
   });

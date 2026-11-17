@@ -51,6 +51,8 @@ export function createBotOptionsFromEnvironment(): TradingBotOptions {
       requireFreshValue: CFG.REQUIRE_FRESH_FAIR_VALUE,
       stalePriceTimeoutMs: CFG.ORACLE_STALE_PRICE_TIMEOUT_MS,
       firstPriceTimeoutMs: CFG.ORACLE_FIRST_PRICE_TIMEOUT_MS,
+      notifyMinChangeTicks: CFG.ORACLE_NOTIFY_MIN_CHANGE_TICKS,
+      notifyIntervalMs: CFG.ORACLE_NOTIFY_INTERVAL_MS,
       fairValueStaleMs: CFG.FAIR_VALUE_STALE_MS,
       volatility: CFG.FAIR_VALUE_VOL,
       weight: CFG.FAIR_VALUE_WEIGHT,

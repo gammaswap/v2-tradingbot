@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createInfoClient } from "@gammaswap/v2-exchange-sdk";
 import {
+  createConfigFromEnvironment,
   validateOrderSizeConfiguration,
   validatePriceConfiguration,
   validateProductionConfig,
@@ -12,6 +14,122 @@ afterEach(() => {
   if (originalTimeout === undefined) delete process.env.API_TIMEOUT_MS;
   else process.env.API_TIMEOUT_MS = originalTimeout;
   vi.resetModules();
+});
+
+describe("oracle notification configuration", () => {
+  it("uses the same defaults for missing and blank settings", () => {
+    for (const env of [
+      {},
+      { ORACLE_NOTIFY_MIN_CHANGE_TICKS: " ", ORACLE_NOTIFY_INTERVAL_MS: "" },
+    ]) {
+      const config = createConfigFromEnvironment(env);
+      expect(config.ORACLE_NOTIFY_MIN_CHANGE_TICKS).toBe(2);
+      expect(config.ORACLE_NOTIFY_INTERVAL_MS).toBe(500);
+      expect(validateProductionConfig(env)).toEqual([]);
+    }
+  });
+
+  it("accepts a positive tick count and finite positive interval", () => {
+    const env = { ORACLE_NOTIFY_MIN_CHANGE_TICKS: "3", ORACLE_NOTIFY_INTERVAL_MS: "750.5" };
+    const config = createConfigFromEnvironment(env);
+
+    expect(config.ORACLE_NOTIFY_MIN_CHANGE_TICKS).toBe(3);
+    expect(config.ORACLE_NOTIFY_INTERVAL_MS).toBe(750.5);
+    expect(validateProductionConfig(env)).toEqual([]);
+  });
+
+  it.each([
+    ["ORACLE_NOTIFY_MIN_CHANGE_TICKS", "0"],
+    ["ORACLE_NOTIFY_MIN_CHANGE_TICKS", "-1"],
+    ["ORACLE_NOTIFY_MIN_CHANGE_TICKS", "1.5"],
+    ["ORACLE_NOTIFY_MIN_CHANGE_TICKS", "NaN"],
+    ["ORACLE_NOTIFY_MIN_CHANGE_TICKS", "Infinity"],
+    ["ORACLE_NOTIFY_MIN_CHANGE_TICKS", "not-a-number"],
+    ["ORACLE_NOTIFY_INTERVAL_MS", "0"],
+    ["ORACLE_NOTIFY_INTERVAL_MS", "-1"],
+    ["ORACLE_NOTIFY_INTERVAL_MS", "NaN"],
+    ["ORACLE_NOTIFY_INTERVAL_MS", "Infinity"],
+    ["ORACLE_NOTIFY_INTERVAL_MS", "not-a-number"],
+  ])("rejects %s=%s even outside production mode", (name, value) => {
+    expect(validateProductionConfig({ [name]: value })).toEqual(
+      expect.arrayContaining([expect.stringContaining(name)]),
+    );
+  });
+});
+
+describe("strategy numeric configuration", () => {
+  it.each([
+    "QUOTE_LOOP_MS",
+    "QUOTE_JITTER_MS",
+    "ORDER_FAILURE_COOLDOWN_MS",
+    "AGGRESS_MS",
+    "AGGRESS_JITTER_MS",
+    "BOOK_STALE_MS",
+    "FAIR_VALUE_STALE_MS",
+    "ORACLE_FIRST_PRICE_TIMEOUT_MS",
+    "FAIR_VALUE_VOL",
+    "SLIP_BUFFER",
+    "FAIR_VALUE_MIN_EDGE_TICKS",
+    "MEANREV_K",
+    "INV_SKEW_STRENGTH",
+    "EXTREME_PUSH_PROB",
+    "LEVEL_SPACING_NEAR",
+    "LEVEL_SPACING_GROWTH",
+    "INV_TARGET",
+    "INV_MAX_ABS",
+  ])("rejects malformed and nonfinite values for %s", (name) => {
+    for (const value of ["not-a-number", "NaN", "Infinity", "-Infinity"]) {
+      expect(validateProductionConfig({ [name]: value })).toEqual(
+        expect.arrayContaining([expect.stringContaining(name)]),
+      );
+    }
+  });
+
+  it.each([
+    ["QUOTE_LOOP_MS", "0"],
+    ["AGGRESS_MS", "0"],
+    ["BOOK_STALE_MS", "0"],
+    ["FAIR_VALUE_STALE_MS", "0"],
+    ["ORACLE_FIRST_PRICE_TIMEOUT_MS", "0"],
+    ["LEVEL_SPACING_NEAR", "0"],
+    ["QUOTE_JITTER_MS", "-1"],
+    ["AGGRESS_JITTER_MS", "-1"],
+    ["ORDER_FAILURE_COOLDOWN_MS", "-1"],
+    ["FAIR_VALUE_VOL", "-0.1"],
+    ["SLIP_BUFFER", "-0.1"],
+    ["MEANREV_K", "-1"],
+    ["INV_SKEW_STRENGTH", "-0.1"],
+    ["INV_MAX_ABS", "-1"],
+    ["FAIR_VALUE_MIN_EDGE_TICKS", "-1"],
+    ["FAIR_VALUE_MIN_EDGE_TICKS", "1.5"],
+    ["FAIR_VALUE_MIN_EDGE_TICKS", "9007199254740992"],
+    ["EXTREME_PUSH_PROB", "-0.1"],
+    ["EXTREME_PUSH_PROB", "1.1"],
+    ["LEVEL_SPACING_GROWTH", "0.5"],
+  ])("rejects out-of-range %s=%s", (name, value) => {
+    expect(validateProductionConfig({ [name]: value })).toEqual(
+      expect.arrayContaining([expect.stringContaining(name)]),
+    );
+  });
+
+  it.each(["0", "1"])("accepts disabled controls and probability %s", (probability) => {
+    expect(
+      validateProductionConfig({
+        QUOTE_JITTER_MS: "0",
+        AGGRESS_JITTER_MS: "0",
+        ORDER_FAILURE_COOLDOWN_MS: "0",
+        FAIR_VALUE_VOL: "0",
+        SLIP_BUFFER: "0",
+        MEANREV_K: "0",
+        INV_SKEW_STRENGTH: "0",
+        INV_MAX_ABS: "0",
+        FAIR_VALUE_MIN_EDGE_TICKS: "0",
+        LEVEL_SPACING_GROWTH: "1",
+        INV_TARGET: "-1000000",
+        EXTREME_PUSH_PROB: probability,
+      }),
+    ).toEqual([]);
+  });
 });
 
 describe("API timeout configuration", () => {
@@ -31,13 +149,34 @@ describe("API timeout configuration", () => {
     expect(CFG.API_TIMEOUT_MS).toBe(10_000);
   });
 
-  it("falls back when the environment value is invalid", async () => {
-    process.env.API_TIMEOUT_MS = "not-a-number";
-    vi.resetModules();
+  it.each(["not-a-number", "NaN", "Infinity", "-Infinity"])(
+    "preserves invalid timeout %s for SDK validation",
+    async (value) => {
+      process.env.API_TIMEOUT_MS = value;
+      vi.resetModules();
 
-    const { CFG } = await import("../src/config/config.js");
-    expect(CFG.API_TIMEOUT_MS).toBe(30_000);
-  });
+      const { CFG } = await import("../src/config/config.js");
+      expect(Number.isFinite(CFG.API_TIMEOUT_MS)).toBe(false);
+      expect(() =>
+        createInfoClient({ apiUrl: "https://example.com/api", timeoutMs: CFG.API_TIMEOUT_MS }),
+      ).toThrow("positive integer");
+    },
+  );
+});
+
+describe("numeric fallback exceptions", () => {
+  it.each(["not-a-number", "NaN", "Infinity", "-Infinity"])(
+    "retains defaults before normalization for %s",
+    (value) => {
+      const config = createConfigFromEnvironment({
+        FAIR_VALUE_WEIGHT: value,
+        WIPE_LEVELS: value,
+      });
+
+      expect(config.FAIR_VALUE_WEIGHT).toBe(1);
+      expect(config.WIPE_LEVELS).toBe(2);
+    },
+  );
 });
 
 describe("production configuration validation", () => {
@@ -113,8 +252,6 @@ describe("price configuration validation", () => {
 
   it("rejects order sizes outside the protocol limits", () => {
     const errors = validateOrderSizeConfiguration({
-      QUOTE_BASE_SIZE_MIN: 10_000,
-      QUOTE_BASE_SIZE_MAX: 100_000_000_000,
       MAX_AGGRESS_QTY: 100_000_000_001,
       MAX_ORDER_SIZE: 1,
     } as never);
@@ -125,6 +262,18 @@ describe("price configuration validation", () => {
         expect.stringContaining("MAX_ORDER_SIZE"),
       ]),
     );
+  });
+
+  it("rejects fractional-unit order caps within the size limits", () => {
+    expect(
+      validateOrderSizeConfiguration({
+        MAX_AGGRESS_QTY: 1_250_000,
+        MAX_ORDER_SIZE: 2_500_000,
+      } as never),
+    ).toEqual([
+      "MAX_AGGRESS_QTY must be a multiple of 1000000",
+      "MAX_ORDER_SIZE must be a multiple of 1000000",
+    ]);
   });
 
   it("rejects an invalid capital exposure percentage", () => {

@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RuntimeEventQueue } from "../src/runtime/events.js";
-import { createLocalOrderBookState } from "../src/runtime/orderbookReducer.js";
+import {
+  buildBookSnapshot,
+  createLocalOrderBookState,
+  installBookSnapshot,
+} from "../src/runtime/orderbookReducer.js";
 import { createInitialState } from "../src/runtime/state.js";
 import type { Asset } from "../src/utils/types.js";
 
@@ -21,6 +25,7 @@ vi.mock("../src/runtime/loops.js", () => ({
 }));
 
 const { runCoordinatorStep } = await import("../src/runtime/coordinator.js");
+const { runMarketDataLoop } = await import("../src/runtime/marketData.js");
 const { STATE } = await import("../src/runtime/state.js");
 const { RUNTIME_CFG } = await import("../src/runtime/context.js");
 
@@ -59,10 +64,21 @@ afterEach(() => {
 });
 
 function context() {
+  const localBook = createLocalOrderBookState(1n);
+  installBookSnapshot(localBook, {
+    assetId: 1n,
+    epoch: STATE.epoch,
+    seqId: 10n,
+    ts: 0n,
+    bids: [],
+    asks: [],
+  });
+  STATE.book = buildBookSnapshot(localBook);
+
   return {
     wallet: {} as never,
     queue: new RuntimeEventQueue(),
-    localBook: createLocalOrderBookState(1n),
+    localBook,
     nextEpochCheck: 2_000_000_000_000,
     nextQuote: 0,
     nextAggression: 2_000_000_000_000,
@@ -72,6 +88,125 @@ function context() {
 }
 
 describe("coordinator step", () => {
+  it.each(["quotes", "account"] as const)(
+    "keeps updating the book while %s work is pending",
+    async (stage) => {
+      const stepContext = context();
+      const marketQueue = new RuntimeEventQueue();
+      const controller = new AbortController();
+
+      let release!: () => void;
+      const pending = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+
+      const operation = stage === "quotes" ? runQuoteMaintenance : refreshPrivateState;
+      operation.mockImplementationOnce(() => pending);
+
+      const marketTask = runMarketDataLoop(
+        stepContext,
+        marketQueue,
+        stepContext.queue,
+        controller.signal,
+      );
+
+      let finished = false;
+      const step = runCoordinatorStep(stepContext).then(() => {
+        finished = true;
+      });
+
+      try {
+        await vi.advanceTimersByTimeAsync(0);
+        expect(operation).toHaveBeenCalledOnce();
+
+        marketQueue.publish({
+          type: "market",
+          update: {
+            type: "order",
+            assetId: 1n,
+            epoch: 1n,
+            seqId: 11n,
+            data: {
+              orderId: "market-order",
+              assetId: 1n,
+              epoch: 1n,
+              side: "buy",
+              price: 400_000n,
+              size: 1_000_000n,
+              arrivalTime: 1n,
+              tif: "GTC",
+              type: "LIMIT",
+            },
+          },
+        });
+
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(finished).toBe(false);
+        expect(STATE.book?.seqId).toBe(11n);
+        expect(STATE.book?.bids[0]?.price).toBe(400_000);
+        expect(runQuoteMaintenance).toHaveBeenCalledOnce();
+      } finally {
+        release();
+        controller.abort();
+        marketQueue.wake();
+        await Promise.all([step, marketTask]);
+      }
+    },
+  );
+
+  it("schedules a new quote pass immediately after refreshing an interrupted batch", async () => {
+    STATE.oracle.stale = false;
+    STATE.fairValue = {
+      protocolPrice: 500_000,
+      probability: 0.5,
+      spot: 500_000n,
+      strike: 500_000n,
+      expiresInSec: 900,
+      updatedAtMs: Date.now(),
+    };
+    runQuoteMaintenance.mockResolvedValueOnce("reprice");
+    refreshPrivateState.mockImplementationOnce(async () => {
+      vi.setSystemTime(Date.now() + 250);
+    });
+    const stepContext = context();
+
+    const promise = runCoordinatorStep(stepContext);
+    await vi.advanceTimersByTimeAsync(0);
+    await promise;
+
+    expect(runQuoteMaintenance).toHaveBeenCalledOnce();
+    expect(refreshPrivateState).toHaveBeenCalledOnce();
+    expect(stepContext.nextQuote).toBe(Date.now());
+    expect(cancelQuotesWhileStale).not.toHaveBeenCalled();
+  });
+
+  it("cancels resting quotes when an active batch loses required pricing", async () => {
+    STATE.oracle.stale = false;
+    STATE.fairValue = {
+      protocolPrice: 500_000,
+      probability: 0.5,
+      spot: 500_000n,
+      strike: 500_000n,
+      expiresInSec: 900,
+      updatedAtMs: Date.now(),
+    };
+    runQuoteMaintenance.mockImplementationOnce(async () => {
+      STATE.oracle.stale = true;
+      STATE.fairValue = null;
+      return "paused";
+    });
+    const stepContext = context();
+
+    const promise = runCoordinatorStep(stepContext);
+    await vi.advanceTimersByTimeAsync(0);
+    await promise;
+
+    expect(cancelQuotesWhileStale).toHaveBeenCalledOnce();
+    expect(refreshPrivateState).toHaveBeenCalledOnce();
+    expect(stepContext.nextQuote).toBeGreaterThan(Date.now());
+  });
+
   it("runs quote maintenance for an active asset", async () => {
     const promise = runCoordinatorStep(context());
     await vi.advanceTimersByTimeAsync(0);
@@ -132,4 +267,33 @@ describe("coordinator step", () => {
     expect(runAggression).toHaveBeenCalledOnce();
     expect(runQuoteMaintenance).not.toHaveBeenCalled();
   });
+
+  it.each([false, true])(
+    "handles an oracle notification before the quote deadline with stale=%s",
+    async (stale) => {
+      STATE.oracle.stale = stale;
+      STATE.fairValue = {
+        protocolPrice: 500_000,
+        probability: 0.5,
+        spot: 500_000n,
+        strike: 500_000n,
+        expiresInSec: 900,
+        updatedAtMs: Date.now(),
+      };
+
+      const stepContext = context();
+      stepContext.nextQuote = Date.now() + 60_000;
+
+      // Multiple notifications in one batch must produce at most one pass.
+      stepContext.queue.publish({ type: "oracle-state-changed" });
+      stepContext.queue.publish({ type: "oracle-state-changed" });
+
+      await runCoordinatorStep(stepContext);
+
+      expect(runQuoteMaintenance).toHaveBeenCalledTimes(stale ? 0 : 1);
+      expect(refreshPrivateState).toHaveBeenCalledTimes(stale ? 0 : 1);
+      expect(cancelQuotesWhileStale).toHaveBeenCalledTimes(stale ? 1 : 0);
+      expect(runAggression).not.toHaveBeenCalled();
+    },
+  );
 });

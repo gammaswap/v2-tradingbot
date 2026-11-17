@@ -13,11 +13,11 @@ const DEFAULT_ASSET_ID = "261336857817713630688382311349658711122006440411137";
 const DEFAULT_TEST_MNEMONIC = "test test test test test test test test test test test junk";
 let activeEnvironment: NodeJS.ProcessEnv = process.env;
 
-function envNum(name: string, def: number): number {
+function envNum(name: string, def: number, fallbackOnInvalid = false): number {
   const v = activeEnvironment[name];
   if (v == null || v.trim() === "") return def;
   const n = Number(v);
-  return Number.isFinite(n) ? n : def;
+  return fallbackOnInvalid && !Number.isFinite(n) ? def : n;
 }
 
 function envStr(name: string, def: string): string {
@@ -70,6 +70,7 @@ export function validateProductionConfig(env: NodeJS.ProcessEnv = process.env): 
   errors.push(...validatePriceConfiguration(config));
   errors.push(...validateOrderSizeConfiguration(config));
   errors.push(...validateRiskConfiguration(config));
+  errors.push(...validateOracleNotificationConfiguration(config));
   const enabled = ["1", "true", "yes", "y", "on"].includes(
     (env.PRODUCTION_MODE ?? "").toLowerCase(),
   );
@@ -91,6 +92,24 @@ export function validateProductionConfig(env: NodeJS.ProcessEnv = process.env): 
     errors.push("EXCHANGE_ADDRESS must be explicitly configured for production");
   if (!env.LEDGER_ADDRESS)
     errors.push("LEDGER_ADDRESS must be explicitly configured for production");
+
+  return errors;
+}
+
+export function validateOracleNotificationConfiguration(
+  config: Pick<typeof CFG, "ORACLE_NOTIFY_MIN_CHANGE_TICKS" | "ORACLE_NOTIFY_INTERVAL_MS"> = CFG,
+): string[] {
+  const errors: string[] = [];
+
+  if (
+    !Number.isSafeInteger(config.ORACLE_NOTIFY_MIN_CHANGE_TICKS) ||
+    config.ORACLE_NOTIFY_MIN_CHANGE_TICKS <= 0
+  ) {
+    errors.push("ORACLE_NOTIFY_MIN_CHANGE_TICKS must be a positive safe integer");
+  }
+  if (!Number.isFinite(config.ORACLE_NOTIFY_INTERVAL_MS) || config.ORACLE_NOTIFY_INTERVAL_MS <= 0) {
+    errors.push("ORACLE_NOTIFY_INTERVAL_MS must be a positive finite number");
+  }
 
   return errors;
 }
@@ -244,6 +263,57 @@ export function validateRiskConfiguration(config = CFG): string[] {
     errors.push("TOTAL_SIZE_TIME_BUCKET_SECONDS must be an integer between 1 and 30");
   }
 
+  for (const name of [
+    "QUOTE_LOOP_MS",
+    "AGGRESS_MS",
+    "BOOK_STALE_MS",
+    "FAIR_VALUE_STALE_MS",
+    "ORACLE_FIRST_PRICE_TIMEOUT_MS",
+    "LEVEL_SPACING_NEAR",
+  ] as const) {
+    if (!Number.isFinite(config[name]) || config[name] <= 0) {
+      errors.push(`${name} must be a positive finite number`);
+    }
+  }
+
+  for (const name of [
+    "QUOTE_JITTER_MS",
+    "AGGRESS_JITTER_MS",
+    "ORDER_FAILURE_COOLDOWN_MS",
+    "FAIR_VALUE_VOL",
+    "SLIP_BUFFER",
+    "MEANREV_K",
+    "INV_SKEW_STRENGTH",
+    "INV_MAX_ABS",
+  ] as const) {
+    if (!Number.isFinite(config[name]) || config[name] < 0) {
+      errors.push(`${name} must be a non-negative finite number`);
+    }
+  }
+
+  if (
+    !Number.isSafeInteger(config.FAIR_VALUE_MIN_EDGE_TICKS) ||
+    config.FAIR_VALUE_MIN_EDGE_TICKS < 0
+  ) {
+    errors.push("FAIR_VALUE_MIN_EDGE_TICKS must be a non-negative safe integer");
+  }
+
+  if (
+    !Number.isFinite(config.EXTREME_PUSH_PROB) ||
+    config.EXTREME_PUSH_PROB < 0 ||
+    config.EXTREME_PUSH_PROB > 1
+  ) {
+    errors.push("EXTREME_PUSH_PROB must be between 0 and 1");
+  }
+
+  if (!Number.isFinite(config.LEVEL_SPACING_GROWTH) || config.LEVEL_SPACING_GROWTH < 1) {
+    errors.push("LEVEL_SPACING_GROWTH must be a finite number at least 1");
+  }
+
+  if (!Number.isFinite(config.INV_TARGET)) {
+    errors.push("INV_TARGET must be a finite number");
+  }
+
   return errors;
 }
 
@@ -325,7 +395,7 @@ function buildConfig() {
     // uses only the book midpoint. The calculation is performed in the
     // protocol's price units, and the result is rounded to the nearest tick.
     // This result is the reference price used for quoting.
-    FAIR_VALUE_WEIGHT: envNum("FAIR_VALUE_WEIGHT", 1.0),
+    FAIR_VALUE_WEIGHT: envNum("FAIR_VALUE_WEIGHT", 1.0, true),
     // When true means contract wins when price above strike
     FAIR_VALUE_PAYS_ABOVE_STRIKE: envBool("FAIR_VALUE_PAYS_ABOVE_STRIKE", true),
     // When enabled, the oracle price is used to estimate fair value and can
@@ -352,6 +422,11 @@ function buildConfig() {
     // ORACLE_STALE_PRICE_TIMEOUT_MS, which detects an inactive websocket.
     FAIR_VALUE_STALE_MS: envNum("FAIR_VALUE_STALE_MS", 45000),
 
+    // Notify after this many fair-value ticks or after the interval below.
+    // Preserve invalid inputs so startup validation can report them.
+    ORACLE_NOTIFY_MIN_CHANGE_TICKS: envNum("ORACLE_NOTIFY_MIN_CHANGE_TICKS", 2),
+    ORACLE_NOTIFY_INTERVAL_MS: envNum("ORACLE_NOTIFY_INTERVAL_MS", 500),
+
     // ===============Aggression logic=================
     // Selects how a taker bot chooses IOC aggression trades. This setting is
     // used only when IS_TAKER=true; IS_TAKER=false disables aggression and
@@ -372,7 +447,7 @@ function buildConfig() {
     // Number of opposite-side order-book levels whose quantities are summed
     // when sizing an aggression order. A buy measures ask-side depth; a sell
     // measures bid-side depth. The value is normalized to at least one level.
-    WIPE_LEVELS: Math.max(1, Math.floor(envNum("WIPE_LEVELS", 2))),
+    WIPE_LEVELS: Math.max(1, Math.floor(envNum("WIPE_LEVELS", 2, true))),
     // Maximum quantity for one aggression order, expressed in protocol size
     // units. The final quantity is capped by this value, rounded to the
     // protocol lot size, and also limited by collateral and inventory checks.
