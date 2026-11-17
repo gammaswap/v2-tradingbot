@@ -1,6 +1,6 @@
 {
   "name": "@gammaswap/v2-tradingbot",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Configurable GammaSwap V2 maker and taker trading bot for Node.js",
   "keywords": [
     "gammaswap",
